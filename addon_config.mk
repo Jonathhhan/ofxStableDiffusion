@@ -36,8 +36,8 @@ linuxarmv7l:
 msys2:
 
 vs:
-	ADDON_LIBS += libs/stable-diffusion.cpp/lib/vs/stable-diffusion.lib;
-	ADDON_LIBS += libs/stable-diffusion.cpp/lib/vs/ggml.lib;
+	ADDON_LIBS += libs/stable-diffusion.cpp/lib/vs/stable-diffusion.lib
+	ADDON_LIBS += libs/stable-diffusion.cpp/lib/vs/ggml.lib
 
 android/armeabi:
 
