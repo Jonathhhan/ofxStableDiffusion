@@ -16,7 +16,7 @@ void ofApp::setup() {
 //--------------------------------------------------------------
 void ofApp::update() {
 	if (thread.diffused) {
-		texture.loadData(&thread.stableDiffusionPixelVector[0], width, height, GL_RGB);
+		texture.loadData(&thread.stableDiffusionPixelVector[0][0], width, height, GL_RGB);
 		texture.readToPixels(pixels);
 		ofSaveImage(pixels, "output/image_of_" + thread.prompt + "_" + ofGetTimestampString("%Y-%m-%d-%H-%M-%S") + ".png");
 		thread.diffused = false;	
@@ -41,8 +41,9 @@ void ofApp::keyPressed(int key) {
 			thread.width = width;
 			thread.height = height;
 			thread.sampleMethod = DPMPP2Mv2;
-			thread.sampleSteps = 20;
+			thread.sampleSteps = 10;
 			thread.seed = -1;
+			thread.batch_count = 1;
 			thread.startThread();
 		}
 	} else if (key == 8 && prompt.size() > 0) {
