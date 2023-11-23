@@ -1,8 +1,6 @@
 #ifndef __STABLE_DIFFUSION_H__
 #define __STABLE_DIFFUSION_H__
 
-#define SD_USE_CUBLAS
-
 #include <memory>
 #include <vector>
 
