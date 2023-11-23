@@ -42,13 +42,13 @@ private:
     std::shared_ptr<StableDiffusionGGML> sd;
 
 public:
-    StableDiffusion(int n_threads                = -1,
+    StableDiffusion(int n_threads                = 8,
                     bool vae_decode_only         = false,
                     bool free_params_immediately = false,
                     std::string lora_model_dir   = "",
                     sd_rng_type rng_type = STD_DEFAULT_RNG);
     bool load_from_file(const std::string& file_path, sd_sample_schedule d = DEFAULT);
-    std::vector<uint8_t> txt2img(
+    std::vector<uint8_t*> txt2img(
         std::string prompt,
         std::string negative_prompt,
         float cfg_scale,
@@ -56,10 +56,11 @@ public:
         int height,
         sd_sample_method sample_method,
         int sample_steps,
-        int64_t seed);
+        int64_t seed,
+        int batch_count);
 
-    std::vector<uint8_t> img2img(
-        const std::vector<uint8_t>& init_img,
+    std::vector<uint8_t*> img2img(
+        const uint8_t* init_img_data,
         std::string prompt,
         std::string negative_prompt,
         float cfg_scale,
