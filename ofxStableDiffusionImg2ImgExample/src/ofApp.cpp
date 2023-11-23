@@ -21,7 +21,7 @@ void ofApp::setup() {
 //--------------------------------------------------------------
 void ofApp::update() {
 	if (thread.diffused) {
-		texture.loadData(&thread.stableDiffusionPixelVector[0], width, height, GL_RGB);
+		texture.loadData(&thread.stableDiffusionPixelVector[0][0], width, height, GL_RGB);
 		texture.readToPixels(pixels);
 		ofSaveImage(pixels, "output/image_of_" + thread.prompt + "_" + ofGetTimestampString("%Y-%m-%d-%H-%M-%S") + ".png");
 		thread.diffused = false;	
@@ -41,16 +41,14 @@ void ofApp::keyPressed(int key) {
 	if (key == OF_KEY_RETURN) {
 		if (!thread.isThreadRunning()) {
 			fbo.getTexture().readToPixels(pixels);
-			uint8_t* uint8Array = (uint8_t*)pixels.getData();
-			std::vector<uint8_t> uint8Vector(&uint8Array[0], &uint8Array[width * height * 3]);
-			thread.pixels = uint8Vector;
+			thread.pixels = pixels.getData();
 			thread.prompt = prompt;
 			thread.negativePrompt = "";
 			thread.cfgScale = 7.0;
 			thread.width = width;
 			thread.height = height;
 			thread.sampleMethod = DPMPP2Mv2;
-			thread.sampleSteps = 20;
+			thread.sampleSteps = 10;
 			thread.strength = 0.9;
 			thread.seed = -1;
 			thread.startThread();
