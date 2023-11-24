@@ -45,7 +45,7 @@ public:
     StableDiffusion(int n_threads                = -1,
                     bool vae_decode_only         = false,
                     bool free_params_immediately = false,
-                    std::string lora_model_dir   = "",
+                    std::string lora_model_dir   = "data/models/lora/",
                     sd_rng_type rng_type = STD_DEFAULT_RNG);
     bool load_from_file(const std::string& file_path, sd_sample_schedule d = DEFAULT);
     std::vector<uint8_t*> txt2img(
