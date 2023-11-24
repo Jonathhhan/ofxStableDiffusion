@@ -4,7 +4,7 @@
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionTxt2ImgExample");
 	printf("%s", sd_get_system_info().c_str());
-	set_sd_log_level(DEBUG);
+	set_sd_log_level(INFO);
 	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
 	width = 512;
 	height = 512;
