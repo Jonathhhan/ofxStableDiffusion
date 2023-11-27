@@ -7,7 +7,6 @@ class stableDiffusionThread : public ofThread {
 public:
 	StableDiffusion stableDiffusion;
 	const uint8_t* pixels;
-	std::vector<uint8_t*> stableDiffusionPixelVectorTemp;
 	std::vector<uint8_t*> stableDiffusionPixelVector;
 	std::string prompt;
 	std::string negativePrompt;
@@ -21,4 +20,4 @@ public:
 	bool diffused;
 private:
 	void threadedFunction();
-};
+}
