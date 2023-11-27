@@ -44,9 +44,9 @@ private:
 public:
     StableDiffusion(int n_threads                = -1,
                     bool vae_decode_only         = false,
-                    bool tiny_autoencoder        = true,
+                    std::string taesd_path       = "data/models/taesd/taesd-decoder.gguf",
                     bool free_params_immediately = false,
-                    std::string lora_model_dir = "data/models/lora/",
+                    std::string lora_model_dir   = "data/models/lora/",
                     RNGType rng_type             = STD_DEFAULT_RNG);
     bool load_from_file(const std::string& file_path, Schedule d = DEFAULT);
     std::vector<uint8_t*> txt2img(
