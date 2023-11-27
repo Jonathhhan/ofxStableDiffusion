@@ -4,19 +4,19 @@
 #include <memory>
 #include <vector>
 
-enum sd_log_level {
+enum SDLogLevel {
     DEBUG,
     INFO,
     WARN,
     SD_ERROR
 };
 
-enum sd_rng_type {
+enum RNGType {
     STD_DEFAULT_RNG,
     CUDA_RNG
 };
 
-enum sd_sample_method {
+enum SampleMethod {
     EULER_A,
     EULER,
     HEUN,
@@ -28,7 +28,7 @@ enum sd_sample_method {
     N_SAMPLE_METHODS
 };
 
-enum sd_sample_schedule {
+enum Schedule {
     DEFAULT,
     DISCRETE,
     KARRAS,
@@ -44,17 +44,18 @@ private:
 public:
     StableDiffusion(int n_threads                = -1,
                     bool vae_decode_only         = false,
+                    bool tiny_autoencoder        = true,
                     bool free_params_immediately = false,
-                    std::string lora_model_dir   = "data/models/lora/",
-                    sd_rng_type rng_type = STD_DEFAULT_RNG);
-    bool load_from_file(const std::string& file_path, sd_sample_schedule d = DEFAULT);
+                    std::string lora_model_dir = "data/models/lora/",
+                    RNGType rng_type             = STD_DEFAULT_RNG);
+    bool load_from_file(const std::string& file_path, Schedule d = DEFAULT);
     std::vector<uint8_t*> txt2img(
         std::string prompt,
         std::string negative_prompt,
         float cfg_scale,
         int width,
         int height,
-        sd_sample_method sample_method,
+        SampleMethod sample_method,
         int sample_steps,
         int64_t seed,
         int batch_count);
@@ -66,13 +67,13 @@ public:
         float cfg_scale,
         int width,
         int height,
-        sd_sample_method sample_method,
+        SampleMethod sample_method,
         int sample_steps,
         float strength,
         int64_t seed);
 };
 
-void set_sd_log_level(sd_log_level level);
+void set_sd_log_level(SDLogLevel level);
 std::string sd_get_system_info();
 
 #endif  // __STABLE_DIFFUSION_H__
