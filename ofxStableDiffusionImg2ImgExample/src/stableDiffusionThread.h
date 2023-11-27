@@ -14,7 +14,7 @@ public:
 	float cfgScale;
 	int width;
 	int height;
-	sd_sample_method sampleMethod;
+	SampleMethod sampleMethod;
 	int sampleSteps;
 	float strength;
 	int seed;
