@@ -44,7 +44,7 @@ private:
 public:
     StableDiffusion(int n_threads                = -1,
                     bool vae_decode_only         = false,
-                    std::string taesd_path       = "data/models/taesd/taesd-model.gguf",
+                    std::string taesd_path       = "",
                     bool free_params_immediately = false,
                     std::string lora_model_dir   = "data/models/lora/",
                     RNGType rng_type             = STD_DEFAULT_RNG);
