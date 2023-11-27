@@ -19,4 +19,4 @@ public:
 	bool diffused;
 private:
 	void threadedFunction();
-};
+}
