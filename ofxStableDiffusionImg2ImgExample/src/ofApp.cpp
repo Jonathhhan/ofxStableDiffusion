@@ -5,6 +5,7 @@ void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionImg2ImgExample");
 	printf("%s", sd_get_system_info().c_str());
 	set_sd_log_level(INFO);
+	thread.stableDiffusion.setup(-1, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
 	width = 512;
 	height = 512;
