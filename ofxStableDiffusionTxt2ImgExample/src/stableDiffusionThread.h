@@ -6,7 +6,6 @@
 class stableDiffusionThread : public ofThread {
 public:
 	StableDiffusion stableDiffusion;
-	std::vector<uint8_t*> stableDiffusionPixelVectorTemp;
 	std::vector<uint8_t*> stableDiffusionPixelVector;
 	std::string prompt;
 	std::string negativePrompt;
