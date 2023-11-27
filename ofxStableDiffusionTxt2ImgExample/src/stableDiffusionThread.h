@@ -13,7 +13,7 @@ public:
 	float cfgScale;
 	int width;
 	int height;
-	sd_sample_method sampleMethod;
+	SampleMethod sampleMethod;
 	int sampleSteps;
 	int seed;
 	int batch_count;
