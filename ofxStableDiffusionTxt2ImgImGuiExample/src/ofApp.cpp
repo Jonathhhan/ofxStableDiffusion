@@ -66,7 +66,7 @@ void ofApp::draw() {
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Stable Diffusion", &log_open, flags | ImGuiWindowFlags_NoCollapse);
-	ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(512, 512));
+	ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(width, height));
 	ImGui::End();
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(INFINITY, -1.f));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
