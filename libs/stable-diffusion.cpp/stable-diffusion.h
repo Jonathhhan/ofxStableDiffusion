@@ -1,6 +1,7 @@
 #ifndef __STABLE_DIFFUSION_H__
 #define __STABLE_DIFFUSION_H__
 
+#include <string>
 #include <memory>
 #include <vector>
 
@@ -46,7 +47,7 @@ public:
                     bool vae_decode_only         = false,
                     std::string taesd_path       = "",
                     bool free_params_immediately = false,
-                    std::string lora_model_dir   = "data/models/lora/",
+                    std::string lora_model_dir   = "",
                     RNGType rng_type             = STD_DEFAULT_RNG);
     bool load_from_file(const std::string& file_path, Schedule d = DEFAULT);
     std::vector<uint8_t*> txt2img(
