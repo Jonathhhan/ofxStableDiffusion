@@ -75,7 +75,7 @@ void ofApp::draw() {
 	ImGui::SetNextWindowPos(ImVec2(center.x*1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Control", &log_open, flags);
 	if (promptIsEdited) {
-			addSoftReturnsToText(prompt, 492);
+			addSoftReturnsToText(prompt, 500);
 			promptIsEdited = false;
 		}
 	if (ImGui::TreeNodeEx("Prompt", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -88,7 +88,7 @@ void ofApp::draw() {
 		promptIsEdited = true;
 	}
 	if (negativePromptIsEdited) {
-		addSoftReturnsToText(negativePrompt, 492);
+		addSoftReturnsToText(negativePrompt, 500);
 		negativePromptIsEdited = false;
 	}
 	if (ImGui::TreeNodeEx("Negative Prompt", ImGuiStyleVar_WindowPadding)) {
