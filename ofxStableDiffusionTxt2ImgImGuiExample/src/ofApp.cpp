@@ -100,7 +100,7 @@ void ofApp::draw() {
 		negativePrompt.erase(std::remove(negativePrompt.begin(), negativePrompt.end(), '\n'), negativePrompt.end());
 		negativePromptIsEdited = true;
 	}
-	if (ImGui::TreeNodeEx("Parameters", ImGuiStyleVar_WindowPadding)) {
+	if (ImGui::TreeNodeEx("Parameters", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::SliderFloat("CFG Scale", &cfgScale, 0, 20);
 		ImGui::SliderInt("Sample Steps", &sampleSteps, 1, 50);
 		if (ImGui::BeginCombo("Width", currentImageWidth)) {
