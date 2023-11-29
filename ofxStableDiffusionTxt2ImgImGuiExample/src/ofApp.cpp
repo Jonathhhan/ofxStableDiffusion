@@ -38,7 +38,7 @@ void ofApp::update() {
 
 //--------------------------------------------------------------
 void ofApp::draw() {
-	ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize;
+	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
 	static bool log_open{ true };
 	struct Funcs
 	{
