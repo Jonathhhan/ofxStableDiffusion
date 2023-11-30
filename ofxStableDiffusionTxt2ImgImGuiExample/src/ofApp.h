@@ -24,13 +24,17 @@ class ofApp : public ofBaseApp {
 		void gotMessage(ofMessage msg);
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
 		stableDiffusionThread thread;
-		ofFbo fbo;
+		std::vector<ofFbo> fboVector;
 		ofPixels pixels;
 		std::string prompt;
 		std::string negativePrompt;
 		int width;
 		int height;
 		float cfgScale;
+		int batchSize;
+		int previewSize;
+		int selectedImage;
+		int previousSelectedImage;
 		const char* imageSizeArray[6] = {"128", "256", "384", "512", "768", "1024"};
 		const char* currentImageWidth;
 		const char* currentImageHeight;

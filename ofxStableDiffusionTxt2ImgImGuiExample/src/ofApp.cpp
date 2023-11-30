@@ -3,6 +3,7 @@
 //--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionTxt2ImgExample");
+	ofSetVerticalSync(true);
 	printf("%s", sd_get_system_info().c_str());
 	set_sd_log_level(DEBUG);
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
@@ -13,32 +14,41 @@ void ofApp::setup() {
 	height = 512;
 	cfgScale = 7.0;
 	sampleSteps = 10;
+	previewSize = batchSize = 4;
+	selectedImage = 0;
 	currentImageWidth = "512";
 	currentImageHeight = "512";
 	currentSampleMethod = "DPMPP2Mv2";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
-	ofFbo::Settings fboSettings;
-	fboSettings.width = width;
-	fboSettings.height = height;
-	fboSettings.internalformat = GL_RGB;
-	fboSettings.textureTarget = GL_TEXTURE_2D;
-	fbo.allocate(fboSettings);
+	for (int i = 0; i < 16; i++) {
+		ofFbo fbo;
+		fboVector.push_back(fbo);
+		ofFbo::Settings fboSettings;
+		fboSettings.width = width;
+		fboSettings.height = height;
+		fboSettings.internalformat = GL_RGB;
+		fboSettings.textureTarget = GL_TEXTURE_2D;
+		fboVector[i].allocate(fboSettings);
+	}
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
 	if (thread.diffused) {
-		fbo.getTexture().loadData(&thread.stableDiffusionPixelVector[0][0], width, height, GL_RGB);
-		fbo.readToPixels(pixels);
-		ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+		for (int i = 0; i < batchSize; i++) {
+			fboVector[i].getTexture().loadData(&thread.stableDiffusionPixelVector[i][0], width, height, GL_RGB);
+		}
+		previousSelectedImage = 0;
+		previewSize = batchSize;
 		thread.diffused = false;
 	}
+	selectedImage = previousSelectedImage;
 }
 
 //--------------------------------------------------------------
 void ofApp::draw() {
-	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
+	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar;
 	static bool log_open{ true };
 	struct Funcs
 	{
@@ -60,28 +70,72 @@ void ofApp::draw() {
 			return ImGui::InputTextMultiline(label, (char*)prompt->c_str(), prompt->capacity() + 1, size, flags | ImGuiInputTextFlags_CallbackResize, Funcs::InputTextCallback, (void*)prompt);
 		}
 	};
+
 	gui.begin();
 	ImGui::StyleColorsDark();
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 10));
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowSizeConstraints(ImVec2(std::max(20 + width, 62 * 8), -1.f), ImVec2(std::max(20 + width, 62 * 8), -1.f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Stable Diffusion", &log_open, flags | ImGuiWindowFlags_NoCollapse);
-	ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(width, height));
+	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+		for (int i = 0; i < previewSize; i++) {
+			if (i == previewSize - previewSize % 4) {
+				ImGui::Indent((ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 - (ImGui::GetWindowSize().x - width) / 2);
+			}
+			ImGui::Image((ImTextureID)(uintptr_t)fboVector[i].getTexture().getTextureData().textureID, ImVec2(width / 4, height / 4));
+			if (i == previewSize - previewSize % 4) {
+				ImGui::Indent(-(ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 + (ImGui::GetWindowSize().x - width) / 2);
+			}
+			if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
+				ImGui::SameLine();
+			}
+			if (ImGui::IsItemClicked()) {
+				selectedImage = i;
+				previousSelectedImage = selectedImage;
+			}
+			if (ImGui::IsItemHovered()) {
+				selectedImage = i;
+			}
+		}
+		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::TreePop();
+	}
+	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Image((ImTextureID)(uintptr_t)fboVector[selectedImage].getTexture().getTextureData().textureID, ImVec2(width, height));
+		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+		ImGui::EndTabItem();
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button("Save")) {
+			fboVector[selectedImage].readToPixels(pixels);
+			ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+		}
+		ImGui::TreePop();
+	}
 	ImGui::End();
-	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(INFINITY, -1.f));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 10));
-	ImGui::SetNextWindowPos(ImVec2(center.x*1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(center.x * 1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Control", &log_open, flags);
 	if (promptIsEdited) {
-			addSoftReturnsToText(prompt, 500);
-			promptIsEdited = false;
-		}
+		addSoftReturnsToText(prompt, 500);
+		promptIsEdited = false;
+	}
 	if (ImGui::TreeNodeEx("Prompt", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Dummy(ImVec2(0, 10));
 		Funcs::MyInputTextMultiline("##MyStr1", &prompt, ImVec2(512, 150), ImGuiInputTextFlags_CallbackResize);
+		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
-	}	
+	}
 	if (ImGui::IsItemDeactivatedAfterEdit()) {
 		prompt.erase(std::remove(prompt.begin(), prompt.end(), '\r'), prompt.end());
 		prompt.erase(std::remove(prompt.begin(), prompt.end(), '\n'), prompt.end());
@@ -92,7 +146,9 @@ void ofApp::draw() {
 		negativePromptIsEdited = false;
 	}
 	if (ImGui::TreeNodeEx("Negative Prompt", ImGuiStyleVar_WindowPadding)) {
+		ImGui::Dummy(ImVec2(0, 10));
 		Funcs::MyInputTextMultiline("##MyStr2", &negativePrompt, ImVec2(512, 150), ImGuiInputTextFlags_CallbackResize);
+		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
 	}
 	if (ImGui::IsItemDeactivatedAfterEdit()) {
@@ -101,36 +157,43 @@ void ofApp::draw() {
 		negativePromptIsEdited = true;
 	}
 	if (ImGui::TreeNodeEx("Parameters", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (thread.isThreadRunning()) {
+			ImGui::BeginDisabled();
+		}
+		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat("CFG Scale", &cfgScale, 0, 20);
+		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderInt("Sample Steps", &sampleSteps, 1, 50);
+		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Width", currentImageWidth)) {
-			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++)
-			{
-				bool is_selected = (currentImageWidth == imageSizeArray[n]); // You can store your selection however you want, outside or inside your objects
+			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
+				bool is_selected = (currentImageWidth == imageSizeArray[n]);
 				if (ImGui::Selectable(imageSizeArray[n], is_selected))
 					currentImageWidth = imageSizeArray[n];
-					if (is_selected)
-						ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
-					if (width != atoi(currentImageWidth)) {
-						width = atoi(currentImageWidth);
-						ofFbo::Settings fboSettings;
-						fboSettings.width = width;
-						fboSettings.height = height;
-						fboSettings.internalformat = GL_RGB;
-						fboSettings.textureTarget = GL_TEXTURE_2D;
-						fbo.allocate(fboSettings);
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+				if (width != atoi(currentImageWidth)) {
+					width = atoi(currentImageWidth);
+					ofFbo::Settings fboSettings;
+					fboSettings.width = width;
+					fboSettings.height = height;
+					fboSettings.internalformat = GL_RGB;
+					fboSettings.textureTarget = GL_TEXTURE_2D;
+					for (int i = 0; i < 16; i++) {
+						fboVector[i].allocate(fboSettings);
 					}
+				}
 			}
 			ImGui::EndCombo();
 		}
+		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Height", currentImageHeight)) {
-			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++)
-			{
-				bool is_selected = (currentImageHeight == imageSizeArray[n]); // You can store your selection however you want, outside or inside your objects
+			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
+				bool is_selected = (currentImageHeight == imageSizeArray[n]);
 				if (ImGui::Selectable(imageSizeArray[n], is_selected))
 					currentImageHeight = imageSizeArray[n];
 				if (is_selected)
-					ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
+					ImGui::SetItemDefaultFocus();
 				if (height != atoi(currentImageHeight)) {
 					height = atoi(currentImageHeight);
 					ofFbo::Settings fboSettings;
@@ -138,40 +201,52 @@ void ofApp::draw() {
 					fboSettings.height = height;
 					fboSettings.internalformat = GL_RGB;
 					fboSettings.textureTarget = GL_TEXTURE_2D;
-					fbo.allocate(fboSettings);
+					for (int i = 0; i < 16; i++) {
+						fboVector[i].allocate(fboSettings);
+					}
 				}
 			}
 			ImGui::EndCombo();
 		}
+		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Sample Method", currentSampleMethod)) {
 			for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++)
 			{
-				bool is_selected = (currentSampleMethod == sampleMethodArray[n]); // You can store your selection however you want, outside or inside your objects
+				bool is_selected = (currentSampleMethod == sampleMethodArray[n]);
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
 					currentSampleMethod = sampleMethodArray[n];
 					currentSampleMethodEnum = n;
 				}
 				if (is_selected)
-					ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
+					ImGui::SetItemDefaultFocus();
 			}
 			ImGui::EndCombo();
 		}
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::SliderInt("Batch Size", &batchSize, 1, 16);
+		ImGui::Dummy(ImVec2(0, 10));
+		if (thread.isThreadRunning()) {
+			ImGui::EndDisabled();
+		}
 		ImGui::TreePop();
 	}
+	if (thread.isThreadRunning()) {
+		ImGui::BeginDisabled();
+	}
 	if (ImGui::Button("Generate")) {
-		if (!thread.isThreadRunning()) {
-			thread.prompt = prompt;
-			thread.negativePrompt = negativePrompt;
-			thread.cfgScale = cfgScale;
-			std::cout << currentImageWidth << std::endl;
-			thread.width = atoi(currentImageWidth);
-			thread.height = atoi(currentImageHeight);
-			thread.sampleMethod = (SampleMethod)currentSampleMethodEnum;
-			thread.sampleSteps = sampleSteps;
-			thread.seed = -1;
-			thread.batch_count = 1;
-			thread.startThread();
-		}
+		thread.prompt = prompt;
+		thread.negativePrompt = negativePrompt;
+		thread.cfgScale = cfgScale;
+		thread.width = width;
+		thread.height = height;
+		thread.sampleMethod = (SampleMethod)currentSampleMethodEnum;
+		thread.sampleSteps = sampleSteps;
+		thread.seed = -1;
+		thread.batch_count = batchSize;
+		thread.startThread();
+	}
+	if (thread.isThreadRunning()) {
+		ImGui::EndDisabled();
 	}
 	ImGui::End();
 	gui.end();
