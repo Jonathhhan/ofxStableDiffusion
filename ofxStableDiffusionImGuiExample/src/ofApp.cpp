@@ -85,7 +85,6 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Stable Diffusion", &log_open, flags | ImGuiWindowFlags_NoCollapse);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
