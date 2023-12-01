@@ -8,7 +8,7 @@ void ofApp::setup() {
 	set_sd_log_level(INFO);
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
-	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
+	gui.setup(nullptr, true, ImGuiConfigFlags_ViewportsEnable, true);
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
 	modelName = "v1-5-pruned-emaonly-f16.gguf";
 	width = 512;
