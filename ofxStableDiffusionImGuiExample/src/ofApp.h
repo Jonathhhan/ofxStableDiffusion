@@ -39,11 +39,11 @@ class ofApp : public ofBaseApp {
 		int selectedImage;
 		int previousSelectedImage;
 		const char* imageSizeArray[6] = {"128", "256", "384", "512", "768", "1024"};
-		const char* currentImageWidth;
-		const char* currentImageHeight;
+		const char* imageWidth;
+		const char* imageHeight;
 		const char* sampleMethodArray[8] = {"EULER_A", "EULER", "HEUN", "DPM2", "DPMPP2S_A", "DPMPP2M", "DPMPP2Mv2", "LCM"};
-		const char* currentSampleMethod;
-		int currentSampleMethodEnum;
+		const char* sampleMethod;
+		int sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
 		bool negativePromptIsEdited;

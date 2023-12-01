@@ -18,9 +18,9 @@ void ofApp::setup() {
 	previewSize = batchSize = 4;
 	selectedImage = 0;
 	strength = 0.5;
-	currentImageWidth = "512";
-	currentImageHeight = "512";
-	currentSampleMethod = "DPMPP2Mv2";
+	imageWidth = "512";
+	imageHeight = "512";
+	sampleMethod = "DPMPP2Mv2";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
@@ -202,16 +202,21 @@ void ofApp::draw() {
 		if (ImGui::RadioButton("Text to Image", &e, 0)) {
 			isTextToImage = true;
 			batchSize = 4;
+			sampleMethod = "DPMPP2Mv2";
 		}
 		ImGui::SameLine(0, 10);
 		if (ImGui::RadioButton("Image to Image", &e, 1)) {
 			isTextToImage = false;
 			batchSize = 1;
+			sampleMethod = "LCM";
 			if (check) {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
 				check = false;
 			}
+		}
+		if (isTextToImage) {
+			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::RadioButton("Load Image", 0)) {
@@ -230,6 +235,9 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Text(&imageName[0]);
+		if (isTextToImage) {
+			ImGui::EndDisabled();
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
 		ImGui::Dummy(ImVec2(0, 10));
@@ -237,15 +245,15 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderInt("Sample Steps", &sampleSteps, 1, 50);
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Width", currentImageWidth)) {
+		if (ImGui::BeginCombo("Width", imageWidth)) {
 			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
-				bool is_selected = (currentImageWidth == imageSizeArray[n]);
+				bool is_selected = (imageWidth == imageSizeArray[n]);
 				if (ImGui::Selectable(imageSizeArray[n], is_selected))
-					currentImageWidth = imageSizeArray[n];
+					imageWidth = imageSizeArray[n];
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
-				if (width != atoi(currentImageWidth)) {
-					width = atoi(currentImageWidth);
+				if (width != atoi(imageWidth)) {
+					width = atoi(imageWidth);
 					ofFbo::Settings fboSettings;
 					fboSettings.width = width;
 					fboSettings.height = height;
@@ -261,15 +269,15 @@ void ofApp::draw() {
 			ImGui::EndCombo();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Height", currentImageHeight)) {
+		if (ImGui::BeginCombo("Height", imageHeight)) {
 			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
-				bool is_selected = (currentImageHeight == imageSizeArray[n]);
+				bool is_selected = (imageHeight == imageSizeArray[n]);
 				if (ImGui::Selectable(imageSizeArray[n], is_selected))
-					currentImageHeight = imageSizeArray[n];
+					imageHeight = imageSizeArray[n];
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
-				if (height != atoi(currentImageHeight)) {
-					height = atoi(currentImageHeight);
+				if (height != atoi(imageHeight)) {
+					height = atoi(imageHeight);
 					ofFbo::Settings fboSettings;
 					fboSettings.width = width;
 					fboSettings.height = height;
@@ -285,23 +293,35 @@ void ofApp::draw() {
 			ImGui::EndCombo();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Sample Method", currentSampleMethod)) {
+		if (ImGui::BeginCombo("Sample Method", sampleMethod)) {
 			for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++)
 			{
-				bool is_selected = (currentSampleMethod == sampleMethodArray[n]);
+				bool is_selected = (sampleMethod == sampleMethodArray[n]);
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
-					currentSampleMethod = sampleMethodArray[n];
-					currentSampleMethodEnum = n;
+					sampleMethod = sampleMethodArray[n];
+					sampleMethodEnum = n;
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
 			ImGui::EndCombo();
+		}
+		if (isTextToImage) {
+			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat("Strength", &strength, 0, 1);
+		if (isTextToImage) {
+			ImGui::EndDisabled();
+		}
+		if (!isTextToImage) {
+			ImGui::BeginDisabled();
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderInt("Batch Size", &batchSize, 1, 16);
+		if (!isTextToImage) {
+			ImGui::EndDisabled();
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (thread.isThreadRunning()) {
 			ImGui::EndDisabled();
@@ -319,7 +339,7 @@ void ofApp::draw() {
 		thread.cfgScale = cfgScale;
 		thread.width = width;
 		thread.height = height;
-		thread.sampleMethod = (SampleMethod)currentSampleMethodEnum;
+		thread.sampleMethod = (SampleMethod)sampleMethodEnum;
 		thread.sampleSteps = sampleSteps;
 		thread.strength = strength;
 		thread.seed = -1;
