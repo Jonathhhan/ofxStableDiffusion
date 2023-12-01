@@ -34,8 +34,6 @@ void ofApp::setup() {
 		fboVector.push_back(fbo);
 		fboVector[i].allocate(fboSettings);
 	}
-	fboSettings.width = width;
-	fboSettings.height = height;
 	fbo.allocate(fboSettings);
 	fbo.begin();
 	image.draw(0, 0, width, height);
