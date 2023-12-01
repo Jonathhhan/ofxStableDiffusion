@@ -243,7 +243,7 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat("CFG Scale", &cfgScale, 0, 20);
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderInt("Sample Steps", &sampleSteps, 1, 50);
+		ImGui::SliderInt("Sample Steps", &sampleSteps, 1, 100);
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Width", imageWidth)) {
 			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
