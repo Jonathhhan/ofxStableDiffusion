@@ -228,7 +228,7 @@ void ofApp::draw() {
 				if (fileExtension == "JPG" || fileExtension == "JPEG" || fileExtension == "PNG") {
 					image.load(result.getPath());
 					fbo.begin();
-					image.draw(0, 0, width, height);
+					image.draw(0, 0, 512, 512);
 					fbo.end();
 				}
 			}
