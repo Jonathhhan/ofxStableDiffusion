@@ -165,7 +165,7 @@ void ofApp::draw() {
 		negativePrompt.erase(std::remove(negativePrompt.begin(), negativePrompt.end(), '\n'), negativePrompt.end());
 		negativePromptIsEdited = true;
 	}
-	if (ImGui::TreeNodeEx("Parameters", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		if (thread.isThreadRunning()) {
 			ImGui::BeginDisabled();
 		}
