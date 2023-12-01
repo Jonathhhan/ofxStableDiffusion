@@ -5,7 +5,7 @@ void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionTxt2ImgExample");
 	ofSetVerticalSync(true);
 	printf("%s", sd_get_system_info().c_str());
-	set_sd_log_level(DEBUG);
+	set_sd_log_level(INFO);
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
@@ -34,8 +34,8 @@ void ofApp::setup() {
 		fboVector.push_back(fbo);
 		fboVector[i].allocate(fboSettings);
 	}
-	fboSettings.width = 512;
-	fboSettings.height = 512;
+	fboSettings.width = width;
+	fboSettings.height = height;
 	fbo.allocate(fboSettings);
 	fbo.begin();
 	image.draw(0, 0, width, height);
@@ -228,7 +228,7 @@ void ofApp::draw() {
 				if (fileExtension == "JPG" || fileExtension == "JPEG" || fileExtension == "PNG") {
 					image.load(result.getPath());
 					fbo.begin();
-					image.draw(0, 0, 512, 512);
+					image.draw(0, 0, width, height);
 					fbo.end();
 				}
 			}
@@ -264,6 +264,10 @@ void ofApp::draw() {
 						fboVector.push_back(fbo);
 						fboVector[i].allocate(fboSettings);
 					}
+					fbo.allocate(fboSettings);
+					fbo.begin();
+					image.draw(0, 0, width, height);
+					fbo.end();
 				}
 			}
 			ImGui::EndCombo();
@@ -288,6 +292,10 @@ void ofApp::draw() {
 						fboVector.push_back(fbo);
 						fboVector[i].allocate(fboSettings);
 					}
+					fbo.allocate(fboSettings);
+					fbo.begin();
+					image.draw(0, 0, width, height);
+					fbo.end();
 				}
 			}
 			ImGui::EndCombo();
