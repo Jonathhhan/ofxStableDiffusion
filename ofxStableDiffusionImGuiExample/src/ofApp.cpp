@@ -34,8 +34,6 @@ void ofApp::setup() {
 		fboVector.push_back(fbo);
 		fboVector[i].allocate(fboSettings);
 	}
-	imageName = "cat.jpg";
-	image.load(imageName);
 	fboSettings.width = 512;
 	fboSettings.height = 512;
 	fbo.allocate(fboSettings);
@@ -181,6 +179,9 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Text(&modelName[0]);
+		if (!isTextToImage) {
+			ImGui::BeginDisabled();
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		static bool check = true;
 		if (ImGui::Checkbox("TAESD", &check)) {
@@ -193,10 +194,14 @@ void ofApp::draw() {
 				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
 			}
 		}
+		if (!isTextToImage) {
+			ImGui::EndDisabled();
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		static int e = 0;
 		if (ImGui::RadioButton("Text to Image", &e, 0)) {
 			isTextToImage = true;
+			batchSize = 4;
 		}
 		ImGui::SameLine(0, 10);
 		if (ImGui::RadioButton("Image to Image", &e, 1)) {
