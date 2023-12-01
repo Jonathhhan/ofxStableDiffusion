@@ -139,13 +139,13 @@ void ofApp::draw() {
 	if (ImGui::TreeNodeEx("Prompt", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		Funcs::MyInputTextMultiline("##MyStr1", &prompt, ImVec2(512, 150), ImGuiInputTextFlags_CallbackResize);
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			prompt.erase(std::remove(prompt.begin(), prompt.end(), '\r'), prompt.end());
+			prompt.erase(std::remove(prompt.begin(), prompt.end(), '\n'), prompt.end());
+			promptIsEdited = true;
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		prompt.erase(std::remove(prompt.begin(), prompt.end(), '\r'), prompt.end());
-		prompt.erase(std::remove(prompt.begin(), prompt.end(), '\n'), prompt.end());
-		promptIsEdited = true;
 	}
 	if (negativePromptIsEdited) {
 		addSoftReturnsToText(negativePrompt, 500);
@@ -154,13 +154,13 @@ void ofApp::draw() {
 	if (ImGui::TreeNodeEx("Negative Prompt", ImGuiStyleVar_WindowPadding)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		Funcs::MyInputTextMultiline("##MyStr2", &negativePrompt, ImVec2(512, 150), ImGuiInputTextFlags_CallbackResize);
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			negativePrompt.erase(std::remove(negativePrompt.begin(), negativePrompt.end(), '\r'), negativePrompt.end());
+			negativePrompt.erase(std::remove(negativePrompt.begin(), negativePrompt.end(), '\n'), negativePrompt.end());
+			negativePromptIsEdited = true;
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		negativePrompt.erase(std::remove(negativePrompt.begin(), negativePrompt.end(), '\r'), negativePrompt.end());
-		negativePrompt.erase(std::remove(negativePrompt.begin(), negativePrompt.end(), '\n'), negativePrompt.end());
-		negativePromptIsEdited = true;
 	}
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		if (thread.isThreadRunning()) {
