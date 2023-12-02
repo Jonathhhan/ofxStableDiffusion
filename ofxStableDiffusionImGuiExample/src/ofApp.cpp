@@ -87,6 +87,7 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Stable Diffusion", &log_open, flags);
@@ -161,7 +162,7 @@ void ofApp::draw() {
 			negativePrompt.erase(std::remove(negativePrompt.begin(), negativePrompt.end(), '\n'), negativePrompt.end());
 			negativePromptIsEdited = true;
 		}
-		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Dummy(ImVec2(0, 5));
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -169,14 +170,14 @@ void ofApp::draw() {
 			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::RadioButton("Load Model", 0)) {
+		if (ImGui::Button("Load Model")) {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
 				modelName = result.getName();
 				thread.stableDiffusion.load_from_file(result.getName());
 			}
 		}
-		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::SameLine(0, 5);
 		ImGui::Text(&modelName[0]);
 		if (!isTextToImage) {
 			ImGui::BeginDisabled();
@@ -218,7 +219,7 @@ void ofApp::draw() {
 			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::RadioButton("Load Image", 0)) {
+		if (ImGui::Button("Load Image")) {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Image", false, "");
 			if (result.bSuccess) {
 				imageName = result.getName();
@@ -232,7 +233,7 @@ void ofApp::draw() {
 				}
 			}
 		}
-		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::SameLine(0, 5);
 		ImGui::Text(&imageName[0]);
 		if (isTextToImage) {
 			ImGui::EndDisabled();
