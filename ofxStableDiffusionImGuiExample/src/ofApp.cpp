@@ -2,8 +2,8 @@
 
 //--------------------------------------------------------------
 void ofApp::setup() {
+	std::cout << ofGetScreenWidth() << std::endl;
 	ofSetWindowTitle("ofxStableDiffusionTxt2ImgExample");
-	ofSetVerticalSync(true);
 	printf("%s", sd_get_system_info().c_str());
 	set_sd_log_level(INFO);
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
@@ -50,13 +50,12 @@ void ofApp::update() {
 		previewSize = batchSize;
 		thread.diffused = false;
 	}
-	selectedImage = previousSelectedImage;
 }
 
 //--------------------------------------------------------------
 void ofApp::draw() {
 	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
-	static bool log_open{ true };
+	static bool log_open{ false };
 	struct Funcs
 	{
 		static int InputTextCallback(ImGuiInputTextCallbackData* data)
@@ -85,8 +84,9 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-	ImGui::Begin("Stable Diffusion", &log_open, flags | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Stable Diffusion", &log_open, flags);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
@@ -118,7 +118,6 @@ void ofApp::draw() {
 		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
 		ImGui::Image((ImTextureID)(uintptr_t)fboVector[selectedImage].getTexture().getTextureData().textureID, ImVec2(width, height));
 		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
-		ImGui::EndTabItem();
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Save")) {
 			fboVector[selectedImage].readToPixels(pixels);
@@ -129,7 +128,7 @@ void ofApp::draw() {
 	ImGui::End();
 
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
-	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
+	//ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowPos(ImVec2(center.x * 1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Control", &log_open, flags);
 	if (promptIsEdited) {
