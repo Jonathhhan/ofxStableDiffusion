@@ -80,7 +80,7 @@ void ofApp::draw() {
 
 	gui.begin();
 	ImGui::StyleColorsDark();
-	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImVec2 center = ImVec2(ofGetScreenWidth() / 2, ofGetScreenHeight() / 2);
 	ImGui::SetNextWindowSizeConstraints(ImVec2(std::max(20 + width, 62 * 8), -1.f), ImVec2(std::max(20 + width, 62 * 8), -1.f));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
