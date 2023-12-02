@@ -2,8 +2,7 @@
 
 //--------------------------------------------------------------
 void ofApp::setup() {
-	std::cout << ofGetScreenWidth() << std::endl;
-	ofSetWindowTitle("ofxStableDiffusionTxt2ImgExample");
+	ofSetWindowTitle("ofxStableDiffusionExample");
 	printf("%s", sd_get_system_info().c_str());
 	set_sd_log_level(INFO);
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
@@ -128,7 +127,7 @@ void ofApp::draw() {
 	ImGui::End();
 
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
-	//ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
+	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowPos(ImVec2(center.x * 1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("Control", &log_open, flags);
 	if (promptIsEdited) {
