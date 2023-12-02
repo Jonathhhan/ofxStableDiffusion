@@ -90,7 +90,7 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-	ImGui::Begin("Stable Diffusion", &log_open, flags);
+	ImGui::Begin("ofxStableDiffusion##foo1", &log_open, flags);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
@@ -134,7 +134,7 @@ void ofApp::draw() {
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowPos(ImVec2(center.x * 1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-	ImGui::Begin("Control", &log_open, flags);
+	ImGui::Begin("ofxStableDiffusion##foo2", &log_open, flags);
 	if (promptIsEdited) {
 		addSoftReturnsToText(prompt, 500);
 		promptIsEdited = false;
