@@ -49,6 +49,7 @@ void ofApp::update() {
 		previewSize = batchSize;
 		thread.diffused = false;
 	}
+	selectedImage = previousSelectedImage;
 }
 
 //--------------------------------------------------------------
