@@ -19,7 +19,7 @@ void ofApp::setup() {
 	strength = 0.5;
 	imageWidth = "512";
 	imageHeight = "512";
-	sampleMethod = "DPMPP2S_A";
+	sampleMethod = "DPMPP2S_Mv2";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
@@ -202,11 +202,13 @@ void ofApp::draw() {
 		if (ImGui::RadioButton("Text to Image", &e, 0)) {
 			isTextToImage = true;
 			batchSize = 4;
+			sampleMethod = "DPMPP2S_Mv2";
 		}
 		ImGui::SameLine(0, 10);
 		if (ImGui::RadioButton("Image to Image", &e, 1)) {
 			isTextToImage = false;
 			batchSize = 1;
+			sampleMethod = "DPMPP2S_A";
 			if (check) {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
