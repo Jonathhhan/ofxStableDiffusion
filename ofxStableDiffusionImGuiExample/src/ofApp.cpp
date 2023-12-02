@@ -55,7 +55,10 @@ void ofApp::update() {
 //--------------------------------------------------------------
 void ofApp::draw() {
 	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
-	static bool log_open{ false };
+	static bool log_open{ true };
+	if (!log_open) {
+		ofExit();
+	}
 	struct Funcs
 	{
 		static int InputTextCallback(ImGuiInputTextCallbackData* data)
