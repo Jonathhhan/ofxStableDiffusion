@@ -23,6 +23,7 @@ void ofApp::setup() {
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
+	showImageWindow = true;
 	ofFbo::Settings fboSettings;
 	fboSettings.width = width;
 	fboSettings.height = height;
@@ -55,10 +56,6 @@ void ofApp::update() {
 //--------------------------------------------------------------
 void ofApp::draw() {
 	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
-	static bool log_open{ true };
-	if (!log_open) {
-		ofExit();
-	}
 	struct Funcs
 	{
 		static int InputTextCallback(ImGuiInputTextCallbackData* data)
@@ -81,60 +78,71 @@ void ofApp::draw() {
 	};
 
 	gui.begin();
-	ImGui::StyleColorsDark();
+	static bool logOpenImage{ true };
+	static bool logOpenSettings{ true };
 	ImVec2 center = ImVec2(ofGetScreenWidth() / 2, ofGetScreenHeight() / 2);
+	ImGui::StyleColorsDark();
 	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
-	ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-	ImGui::Begin("ofxStableDiffusion##foo1", &log_open, flags);
-	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
-		for (int i = 0; i < previewSize; i++) {
-			if (i == previewSize - previewSize % 4) {
-				ImGui::Indent((ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 - (ImGui::GetWindowSize().x - width) / 2);
-			}
-			ImGui::Image((ImTextureID)(uintptr_t)fboVector[i].getTexture().getTextureData().textureID, ImVec2(width / 4, height / 4));
-			if (i == previewSize - previewSize % 4) {
-				ImGui::Indent(-(ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 + (ImGui::GetWindowSize().x - width) / 2);
-			}
-			if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
-				ImGui::SameLine();
-			}
-			if (ImGui::IsItemClicked()) {
-				selectedImage = i;
-				previousSelectedImage = selectedImage;
-			}
-			if (ImGui::IsItemHovered()) {
-				selectedImage = i;
-			}
+
+	if (showImageWindow) {
+		ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+		if (!logOpenImage) {
+			showImageWindow = false;
 		}
-		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::TreePop();
-	}
-	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
-		ImGui::Image((ImTextureID)(uintptr_t)fboVector[selectedImage].getTexture().getTextureData().textureID, ImVec2(width, height));
-		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
-		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Button("Save")) {
-			fboVector[selectedImage].readToPixels(pixels);
-			ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+		ImGui::Begin("ofxStableDiffusion##foo1", &logOpenImage, flags);
+		if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+			for (int i = 0; i < previewSize; i++) {
+				if (i == previewSize - previewSize % 4) {
+					ImGui::Indent((ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 - (ImGui::GetWindowSize().x - width) / 2);
+				}
+				ImGui::Image((ImTextureID)(uintptr_t)fboVector[i].getTexture().getTextureData().textureID, ImVec2(width / 4, height / 4));
+				if (i == previewSize - previewSize % 4) {
+					ImGui::Indent(-(ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 + (ImGui::GetWindowSize().x - width) / 2);
+				}
+				if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
+					ImGui::SameLine();
+				}
+				if (ImGui::IsItemClicked()) {
+					selectedImage = i;
+					previousSelectedImage = selectedImage;
+				}
+				if (ImGui::IsItemHovered()) {
+					selectedImage = i;
+				}
+			}
+			ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TreePop();
 		}
-		ImGui::TreePop();
+		if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+			ImGui::Image((ImTextureID)(uintptr_t)fboVector[selectedImage].getTexture().getTextureData().textureID, ImVec2(width, height));
+			ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::Button("Save")) {
+				fboVector[selectedImage].readToPixels(pixels);
+				ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+			}
+			ImGui::TreePop();
+		}
+		ImGui::End();
 	}
-	ImGui::End();
 
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowPos(ImVec2(center.x * 1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-	ImGui::Begin("ofxStableDiffusion##foo2", &log_open, flags);
+	if (!logOpenSettings) {
+		ofExit();
+	}
+	ImGui::Begin("ofxStableDiffusion##foo2", &logOpenSettings, flags);
 	if (promptIsEdited) {
 		addSoftReturnsToText(prompt, 500);
 		promptIsEdited = false;
@@ -168,6 +176,11 @@ void ofApp::draw() {
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		if (thread.isThreadRunning()) {
 			ImGui::BeginDisabled();
+		}
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button("Open Image Window")) {
+			logOpenImage = true;
+			showImageWindow = true;
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Load Model")) {
