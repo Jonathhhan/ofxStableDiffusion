@@ -94,7 +94,7 @@ void ofApp::draw() {
 		if (!logOpenImage) {
 			showImageWindow = false;
 		}
-		ImGui::Begin("ofxStableDiffusion##foo1", &logOpenImage, flags | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
+		ImGui::Begin("ofxStableDiffusion##foo1", &logOpenImage, flags);
 		if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
