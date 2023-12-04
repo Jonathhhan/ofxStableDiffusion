@@ -5,8 +5,9 @@
 int main( ){
 
 	ofGLFWWindowSettings settings;
-	settings.setSize(1, 1);
-	settings.visible = false;
+	settings.setSize( 1200, 800);
+	settings.setPosition(glm::vec2(0,0));
+	settings.visible = true;
 	settings.windowMode = OF_WINDOW;
 
 	auto window = ofCreateWindow(settings);

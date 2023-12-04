@@ -3,11 +3,13 @@
 //--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
+	ofSetEscapeQuitsApp(false);
 	printf("%s", sd_get_system_info().c_str());
 	set_sd_log_level(INFO);
+	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
-	gui.setup(nullptr, true, ImGuiConfigFlags_ViewportsEnable, true);
+	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
 	modelName = "v1-5-pruned-emaonly-f16.gguf";
 	width = 512;
@@ -23,7 +25,6 @@ void ofApp::setup() {
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
-	showImageWindow = true;
 	ofFbo::Settings fboSettings;
 	fboSettings.width = width;
 	fboSettings.height = height;
@@ -55,7 +56,7 @@ void ofApp::update() {
 
 //--------------------------------------------------------------
 void ofApp::draw() {
-	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar;
 	struct Funcs
 	{
 		static int InputTextCallback(ImGuiInputTextCallbackData* data)
@@ -78,7 +79,6 @@ void ofApp::draw() {
 	};
 
 	gui.begin();
-	static bool logOpenImage{ true };
 	static bool logOpenSettings{ true };
 	ImVec2 center = ImVec2(ofGetScreenWidth() / 2, ofGetScreenHeight() / 2);
 	ImGui::StyleColorsDark();
@@ -88,14 +88,10 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 
-	if (showImageWindow) {
 		ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
-		ImGui::SetNextWindowPos(ImVec2(center.x / 1.5, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-		if (!logOpenImage) {
-			showImageWindow = false;
-		}
-		ImGui::Begin("ofxStableDiffusion##foo1", &logOpenImage, flags);
-		if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding)) {
+		ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+		ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags | ImGuiWindowFlags_NoBringToFrontOnFocus);
+		if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
 			for (int i = 0; i < previewSize; i++) {
@@ -134,11 +130,10 @@ void ofApp::draw() {
 			ImGui::TreePop();
 		}
 		ImGui::End();
-	}
 
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
-	ImGui::SetNextWindowPos(ImVec2(center.x * 1.25, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(center.x * 1.4, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	if (!logOpenSettings) {
 		ofExit();
 	}
@@ -176,11 +171,6 @@ void ofApp::draw() {
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		if (thread.isThreadRunning()) {
 			ImGui::BeginDisabled();
-		}
-		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Button("Open Image Window")) {
-			logOpenImage = true;
-			showImageWindow = true;
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Load Model")) {
