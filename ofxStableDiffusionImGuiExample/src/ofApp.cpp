@@ -9,10 +9,10 @@ void ofApp::setup() {
 	// set_sd_log_level(INFO);
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
-	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
+	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
-	modelName = "data/models/taesd/diffusion_pytorch_model.SAFETENSORS";
+	modelName = "v1-5-pruned-emaonly.safetensors";
 	width = 512;
 	height = 512;
 	cfgScale = 7.0;
