@@ -7,11 +7,11 @@ void ofApp::setup() {
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	printf("%s", sd_get_system_info().c_str());
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
-	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
-	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
-	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
+	modelPath = "v1-5-pruned-emaonly.safetensors";
+	taesdPath = "data/models/taesd/taesd.SAFETENSORS";
+	loraModelDir = "data/models/lora/";
+	vaePath = "data/models/vae/sd-vae-ft-ema.SAFETENSORS";
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
-	modelName = "v1-5-pruned-emaonly.safetensors";
 	width = 512;
 	height = 512;
 	cfgScale = 7.0;
@@ -40,6 +40,9 @@ void ofApp::setup() {
 	fbo.begin();
 	image.draw(0, 0, width, height);
 	fbo.end();
+	thread.stableDiffusion.setup(8, true, taesdPath, false, loraModelDir, STD_DEFAULT_RNG);
+	thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
+	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 }
 
 //--------------------------------------------------------------
@@ -88,9 +91,9 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
-
 	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+
 	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
@@ -201,12 +204,12 @@ void ofApp::draw() {
 		if (ImGui::Button("Load Model")) {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
-				modelName = result.getName();
-				thread.stableDiffusion.load_from_file(result.getName(),"data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
+				modelPath = &result.getName()[0];
+				thread.stableDiffusion.load_from_file(result.getName(),vaePath, GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		ImGui::SameLine(0, 5);
-		ImGui::Text(&modelName[0]);
+		ImGui::Text(modelPath);
 		if (!isTextToImage) {
 			ImGui::BeginDisabled();
 		}
@@ -214,12 +217,12 @@ void ofApp::draw() {
 		static bool check = false;
 		if (ImGui::Checkbox("TAESD", &check)) {
 			if (check) {
-				thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.setup(8, true, taesdPath, false, loraModelDir, STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
-				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.setup(8, false, "", false, loraModelDir, STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		if (!isTextToImage) {
@@ -238,8 +241,8 @@ void ofApp::draw() {
 			batchSize = 1;
 			sampleMethod = "DPMPP2S_A";
 			if (check) {
-				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.setup(8, false, "", false, loraModelDir, STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
 				check = false;
 			}
 		}

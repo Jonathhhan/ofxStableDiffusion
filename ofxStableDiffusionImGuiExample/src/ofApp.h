@@ -43,13 +43,16 @@ class ofApp : public ofBaseApp {
 		const char* imageHeight;
 		const char* sampleMethodArray[8] = {"EULER_A", "EULER", "HEUN", "DPM2", "DPMPP2S_A", "DPMPP2M", "DPMPP2Mv2", "LCM"};
 		const char* sampleMethod;
+		const char* modelPath;
+		const char* taesdPath;
+		const char* loraModelDir;
+		const char* vaePath;
 		int sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
 		bool negativePromptIsEdited;
 		bool isTextToImage;
 		bool isFullScreen;
-		std::string modelName;
 		std::string imageName;
 		ofxImGui::Gui gui;
 };
