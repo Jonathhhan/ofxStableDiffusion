@@ -7,8 +7,8 @@ void ofApp::setup() {
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	printf("%s", sd_get_system_info().c_str());
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
-	thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
-	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
+	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
+	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
 	modelName = "v1-5-pruned-emaonly.safetensors";
@@ -202,7 +202,7 @@ void ofApp::draw() {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
 				modelName = result.getName();
-				thread.stableDiffusion.load_from_file(result.getName(),"", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.load_from_file(result.getName(),"data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		ImGui::SameLine(0, 5);
@@ -214,12 +214,12 @@ void ofApp::draw() {
 		static bool check = false;
 		if (ImGui::Checkbox("TAESD", &check)) {
 			if (check) {
-				thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		if (!isTextToImage) {
@@ -239,7 +239,7 @@ void ofApp::draw() {
 			sampleMethod = "DPMPP2S_A";
 			if (check) {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "data/models/vae/sd-vae-ft-ema.SAFETENSORS", GGML_TYPE_COUNT, DEFAULT);
 				check = false;
 			}
 		}
