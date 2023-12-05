@@ -175,6 +175,16 @@ void ofApp::draw() {
 			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button("Full Screen")) {
+			if (!isFullScreen) {
+				isFullScreen = true;
+				ofSetFullscreen(isFullScreen);
+			} else {
+				isFullScreen = false;
+				ofSetFullscreen(isFullScreen);
+			}
+		}
+		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Load Model")) {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
