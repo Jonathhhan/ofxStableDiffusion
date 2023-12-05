@@ -5,9 +5,12 @@
 int main( ){
 
 	ofGLFWWindowSettings settings;
-	settings.setSize( 1200, 800);
-	settings.setPosition(glm::vec2(0,0));
+	settings.setSize(1280, 720);
+	// settings.setPosition(glm::vec2(0,0));
+	// settings.maximized = true;
 	settings.visible = true;
+	settings.monitor = 0;
+	settings.multiMonitorFullScreen = false;
 	settings.windowMode = OF_WINDOW;
 
 	auto window = ofCreateWindow(settings);
