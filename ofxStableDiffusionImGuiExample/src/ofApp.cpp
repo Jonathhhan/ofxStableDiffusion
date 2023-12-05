@@ -211,7 +211,7 @@ void ofApp::draw() {
 			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		static bool check = true;
+		static bool check = false;
 		if (ImGui::Checkbox("TAESD", &check)) {
 			if (check) {
 				thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
