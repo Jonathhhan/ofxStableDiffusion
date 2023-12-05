@@ -41,8 +41,8 @@ void ofApp::setup() {
 	fbo.begin();
 	image.draw(0, 0, width, height);
 	fbo.end();
-	thread.stableDiffusion.setup(8, true, "", false, loraModelDir, STD_DEFAULT_RNG);
-	thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
+	thread.stableDiffusion.setup(8, true, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+	thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 }
 
@@ -205,9 +205,9 @@ void ofApp::draw() {
 		if (ImGui::Button("Load Model")) {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
-				modelPath = &result.getPath()[0];
+				modelPath = result.getPath();
 				modelName = result.getName();
-				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		ImGui::SameLine(0, 5);
@@ -219,12 +219,12 @@ void ofApp::draw() {
 		static bool check = false;
 		if (ImGui::Checkbox("TAESD", &check)) {
 			if (check) {
-				thread.stableDiffusion.setup(8, true, taesdPath, false, loraModelDir, STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.setup(8, true, &taesdPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
-				thread.stableDiffusion.setup(8, false, "", false, loraModelDir, STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.setup(8, false, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		if (!isTextToImage) {
@@ -243,8 +243,8 @@ void ofApp::draw() {
 			batchSize = 1;
 			sampleMethod = "DPMPP2S_A";
 			if (check) {
-				thread.stableDiffusion.setup(8, false, "", false, loraModelDir, STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.setup(8, false, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 				check = false;
 			}
 		}

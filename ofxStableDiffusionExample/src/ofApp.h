@@ -23,6 +23,7 @@ class ofApp : public ofBaseApp {
 		void dragEvent(ofDragInfo dragInfo);
 		void gotMessage(ofMessage msg);
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
+
 		stableDiffusionThread thread;
 		std::vector<ofFbo> fboVector;
 		ofFbo fbo;
@@ -43,11 +44,11 @@ class ofApp : public ofBaseApp {
 		const char* imageHeight;
 		const char* sampleMethodArray[8] = {"EULER_A", "EULER", "HEUN", "DPM2", "DPMPP2S_A", "DPMPP2M", "DPMPP2Mv2", "LCM"};
 		const char* sampleMethod;
-		const char* modelPath;
+		std::string modelPath;
 		std::string modelName;
-		const char* taesdPath;
-		const char* loraModelDir;
-		const char* vaePath;
+		std::string taesdPath;
+		std::string loraModelDir;
+		std::string vaePath;
 		int sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
