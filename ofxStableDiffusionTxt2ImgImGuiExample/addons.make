@@ -1,2 +1,0 @@
-ofxStableDiffusion
-ofxImGui
