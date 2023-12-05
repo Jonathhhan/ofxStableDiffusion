@@ -41,7 +41,7 @@ void ofApp::setup() {
 	fbo.begin();
 	image.draw(0, 0, width, height);
 	fbo.end();
-	thread.stableDiffusion.setup(8, true, taesdPath, false, loraModelDir, STD_DEFAULT_RNG);
+	thread.stableDiffusion.setup(8, true, "", false, loraModelDir, STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 }
