@@ -4,6 +4,7 @@
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
 	ofSetEscapeQuitsApp(false);
+	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	printf("%s", sd_get_system_info().c_str());
 	set_sd_log_level(INFO);
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
