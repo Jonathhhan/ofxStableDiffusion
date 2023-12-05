@@ -55,6 +55,7 @@ class ofApp : public ofBaseApp {
 		bool negativePromptIsEdited;
 		bool isTextToImage;
 		bool isFullScreen;
+		bool isTAESD;
 		std::string imageName;
 		ofxImGui::Gui gui;
 };

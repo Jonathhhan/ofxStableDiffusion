@@ -207,6 +207,12 @@ void ofApp::draw() {
 			if (result.bSuccess) {
 				modelPath = result.getPath();
 				modelName = result.getName();
+				if (isTAESD) {
+					thread.stableDiffusion.setup(8, true, &taesdPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
+				}
+				else {
+					thread.stableDiffusion.setup(8, true, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+				}
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
@@ -216,14 +222,13 @@ void ofApp::draw() {
 			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		static bool check = false;
-		if (ImGui::Checkbox("TAESD", &check)) {
-			if (check) {
+		if (ImGui::Checkbox("TAESD", &isTAESD)) {
+			if (isTAESD) {
 				thread.stableDiffusion.setup(8, true, &taesdPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
-				thread.stableDiffusion.setup(8, false, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+				thread.stableDiffusion.setup(8, true, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
@@ -242,10 +247,10 @@ void ofApp::draw() {
 			isTextToImage = false;
 			batchSize = 1;
 			sampleMethod = "DPMPP2S_A";
-			if (check) {
+			if (isTAESD) {
 				thread.stableDiffusion.setup(8, false, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
-				check = false;
+				isTAESD = false;
 			}
 		}
 		if (isTextToImage) {
