@@ -140,6 +140,7 @@ void ofApp::draw() {
 		if (!logOpenSettings) {
 		ImGui::OpenPopup("Exit Program?");
 	}
+	ImGui::SetNextWindowPos(ofGetWindowSize() / 2, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	if (ImGui::BeginPopupModal("Exit Program?", NULL, flags)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Yes", ImVec2(50, 17))) {
