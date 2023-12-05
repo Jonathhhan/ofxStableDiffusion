@@ -205,15 +205,13 @@ void ofApp::draw() {
 		if (ImGui::Button("Load Model")) {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
-				std::string path = result.getPath();
-				modelPath = &path[0];
-				std::string name = result.getName();
-				modelName = &name[0];
-				thread.stableDiffusion.load_from_file(modelPath,vaePath, GGML_TYPE_COUNT, DEFAULT);
+				modelPath = &result.getPath()[0];
+				modelName = result.getName();
+				thread.stableDiffusion.load_from_file(modelPath, vaePath, GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		ImGui::SameLine(0, 5);
-		ImGui::Text(modelName);
+		ImGui::Text(&modelName[0]);
 		if (!isTextToImage) {
 			ImGui::BeginDisabled();
 		}

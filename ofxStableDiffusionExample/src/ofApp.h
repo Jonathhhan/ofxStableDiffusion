@@ -44,7 +44,7 @@ class ofApp : public ofBaseApp {
 		const char* sampleMethodArray[8] = {"EULER_A", "EULER", "HEUN", "DPM2", "DPMPP2S_A", "DPMPP2M", "DPMPP2Mv2", "LCM"};
 		const char* sampleMethod;
 		const char* modelPath;
-		const char* modelName;
+		std::string modelName;
 		const char* taesdPath;
 		const char* loraModelDir;
 		const char* vaePath;
