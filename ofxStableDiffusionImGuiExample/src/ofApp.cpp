@@ -136,10 +136,22 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
 	ImGui::SetNextWindowPos(ImVec2(center.x * 1.4, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-	if (!logOpenSettings) {
-		ofExit();
-	}
 	ImGui::Begin("ofxStableDiffusion##foo2", &logOpenSettings, flags);
+		if (!logOpenSettings) {
+		ImGui::OpenPopup("Exit Program?");
+	}
+	if (ImGui::BeginPopupModal("Exit Program?", NULL, flags)) {
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button("Yes", ImVec2(50, 17))) {
+			ofExit();
+		}
+		ImGui::SameLine(0, 10);
+		if (ImGui::Button("No", ImVec2(50, 17))) {
+			ImGui::CloseCurrentPopup();
+			logOpenSettings = true;
+		}
+		ImGui::EndPopup();
+	}
 	if (promptIsEdited) {
 		addSoftReturnsToText(prompt, 500);
 		promptIsEdited = false;
