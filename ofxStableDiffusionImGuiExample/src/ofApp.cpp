@@ -7,7 +7,8 @@ void ofApp::setup() {
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	printf("%s", sd_get_system_info().c_str());
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
-	modelPath = "v1-5-pruned-emaonly.safetensors";
+	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
+	modelName = "v1-5-pruned-emaonly.safetensors";
 	taesdPath = "data/models/taesd/taesd.SAFETENSORS";
 	loraModelDir = "data/models/lora/";
 	vaePath = "data/models/vae/sd-vae-ft-ema.SAFETENSORS";
@@ -204,12 +205,13 @@ void ofApp::draw() {
 		if (ImGui::Button("Load Model")) {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
-				modelPath = &result.getName()[0];
-				thread.stableDiffusion.load_from_file(result.getName(),vaePath, GGML_TYPE_COUNT, DEFAULT);
+				modelPath = &result.getPath()[0];
+				modelName = &result.getName()[0];
+				thread.stableDiffusion.load_from_file(modelPath,vaePath, GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		ImGui::SameLine(0, 5);
-		ImGui::Text(modelPath);
+		ImGui::Text(modelName);
 		if (!isTextToImage) {
 			ImGui::BeginDisabled();
 		}
