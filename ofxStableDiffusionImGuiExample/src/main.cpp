@@ -2,7 +2,7 @@
 #include "ofApp.h"
 
 //========================================================================
-int main( ){
+int main() {
 
 	ofGLFWWindowSettings settings;
 	settings.setSize(1280, 720);
