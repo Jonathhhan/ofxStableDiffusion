@@ -6,7 +6,7 @@ int main() {
 
 	ofGLFWWindowSettings settings;
 	settings.setSize(1280, 720);
-	// settings.maximized = true;
+	settings.maximized = true;
 	settings.visible = true;
 	settings.multiMonitorFullScreen = false;
 	settings.windowMode = OF_WINDOW;

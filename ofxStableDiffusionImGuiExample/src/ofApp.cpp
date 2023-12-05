@@ -6,13 +6,13 @@ void ofApp::setup() {
 	ofSetEscapeQuitsApp(false);
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	printf("%s", sd_get_system_info().c_str());
-	set_sd_log_level(INFO);
+	// set_sd_log_level(INFO);
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
-	thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
-	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
+	thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
+	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
-	modelName = "v1-5-pruned-emaonly-f16.gguf";
+	modelName = "data/models/taesd/diffusion_pytorch_model.SAFETENSORS";
 	width = 512;
 	height = 512;
 	cfgScale = 7.0;
@@ -90,54 +90,54 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 
-		ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
-		ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-		ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags | ImGuiWindowFlags_NoBringToFrontOnFocus);
-		if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
-			for (int i = 0; i < previewSize; i++) {
-				if (i == previewSize - previewSize % 4) {
-					ImGui::Indent((ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 - (ImGui::GetWindowSize().x - width) / 2);
-				}
-				ImGui::Image((ImTextureID)(uintptr_t)fboVector[i].getTexture().getTextureData().textureID, ImVec2(width / 4, height / 4));
-				if (i == previewSize - previewSize % 4) {
-					ImGui::Indent(-(ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 + (ImGui::GetWindowSize().x - width) / 2);
-				}
-				if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
-					ImGui::SameLine();
-				}
-				if (ImGui::IsItemClicked()) {
-					selectedImage = i;
-					previousSelectedImage = selectedImage;
-				}
-				if (ImGui::IsItemHovered()) {
-					selectedImage = i;
-				}
+	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
+	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags | ImGuiWindowFlags_NoBringToFrontOnFocus);
+	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+		for (int i = 0; i < previewSize; i++) {
+			if (i == previewSize - previewSize % 4) {
+				ImGui::Indent((ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 - (ImGui::GetWindowSize().x - width) / 2);
 			}
-			ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TreePop();
-		}
-		if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
-			ImGui::Image((ImTextureID)(uintptr_t)fboVector[selectedImage].getTexture().getTextureData().textureID, ImVec2(width, height));
-			ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
-			ImGui::Dummy(ImVec2(0, 10));
-			if (ImGui::Button("Save")) {
-				fboVector[selectedImage].readToPixels(pixels);
-				ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+			ImGui::Image((ImTextureID)(uintptr_t)fboVector[i].getTexture().getTextureData().textureID, ImVec2(width / 4, height / 4));
+			if (i == previewSize - previewSize % 4) {
+				ImGui::Indent(-(ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 + (ImGui::GetWindowSize().x - width) / 2);
 			}
-			ImGui::TreePop();
+			if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
+				ImGui::SameLine();
+			}
+			if (ImGui::IsItemClicked()) {
+				selectedImage = i;
+				previousSelectedImage = selectedImage;
+			}
+			if (ImGui::IsItemHovered()) {
+				selectedImage = i;
+			}
 		}
-		ImGui::End();
+		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::TreePop();
+	}
+	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Image((ImTextureID)(uintptr_t)fboVector[selectedImage].getTexture().getTextureData().textureID, ImVec2(width, height));
+		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button("Save")) {
+			fboVector[selectedImage].readToPixels(pixels);
+			ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+		}
+		ImGui::TreePop();
+	}
+	ImGui::End();
 
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
 	ImGui::SetNextWindowPos(ImVec2(center.x * 1.4, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("ofxStableDiffusion##foo2", &logOpenSettings, flags);
-		if (!logOpenSettings) {
+	if (!logOpenSettings) {
 		ImGui::OpenPopup("Exit Program?");
 	}
 	ImGui::SetNextWindowPos(ofGetWindowSize() / 2, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
@@ -192,7 +192,8 @@ void ofApp::draw() {
 			if (!isFullScreen) {
 				isFullScreen = true;
 				ofSetFullscreen(isFullScreen);
-			} else {
+			}
+			else {
 				isFullScreen = false;
 				ofSetFullscreen(isFullScreen);
 			}
@@ -202,7 +203,7 @@ void ofApp::draw() {
 			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
 			if (result.bSuccess) {
 				modelName = result.getName();
-				thread.stableDiffusion.load_from_file(result.getName());
+				thread.stableDiffusion.load_from_file(result.getName(),"", GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		ImGui::SameLine(0, 5);
@@ -214,12 +215,12 @@ void ofApp::draw() {
 		static bool check = true;
 		if (ImGui::Checkbox("TAESD", &check)) {
 			if (check) {
-				thread.stableDiffusion.setup(8, true, "data/models/taesd/taesd-model.gguf", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
+				thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		if (!isTextToImage) {
@@ -239,7 +240,7 @@ void ofApp::draw() {
 			sampleMethod = "DPMPP2S_A";
 			if (check) {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly-f16.gguf");
+				// thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
 				check = false;
 			}
 		}
