@@ -23,6 +23,7 @@ class ofApp : public ofBaseApp {
 		void dragEvent(ofDragInfo dragInfo);
 		void gotMessage(ofMessage msg);
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
+
 		stableDiffusionThread thread;
 		std::vector<ofFbo> fboVector;
 		ofFbo fbo;
@@ -48,6 +49,7 @@ class ofApp : public ofBaseApp {
 		bool promptIsEdited;
 		bool negativePromptIsEdited;
 		bool isTextToImage;
+		bool isFullScreen;
 		std::string modelName;
 		std::string imageName;
 		ofxImGui::Gui gui;
