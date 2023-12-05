@@ -6,7 +6,6 @@ void ofApp::setup() {
 	ofSetEscapeQuitsApp(false);
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	printf("%s", sd_get_system_info().c_str());
-	// set_sd_log_level(INFO);
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
 	thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
@@ -216,11 +215,11 @@ void ofApp::draw() {
 		if (ImGui::Checkbox("TAESD", &check)) {
 			if (check) {
 				thread.stableDiffusion.setup(8, true, "data/models/taesd/diffusion_pytorch_model.SAFETENSORS", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
 		if (!isTextToImage) {
@@ -240,7 +239,7 @@ void ofApp::draw() {
 			sampleMethod = "DPMPP2S_A";
 			if (check) {
 				thread.stableDiffusion.setup(8, false, "", false, "data/models/lora/", STD_DEFAULT_RNG);
-				// thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.safetensors", "", GGML_TYPE_COUNT, DEFAULT);
+				thread.stableDiffusion.load_from_file("data/models/v1-5-pruned-emaonly.SAFETENSORS", "", GGML_TYPE_COUNT, DEFAULT);
 				check = false;
 			}
 		}
