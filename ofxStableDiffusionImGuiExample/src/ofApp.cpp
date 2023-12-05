@@ -26,6 +26,12 @@ void ofApp::setup() {
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
+	if (ofGetWindowMode() == OF_FULLSCREEN) {
+		isFullScreen = true;
+	}
+	else {
+		isFullScreen = false;
+	}
 	ofFbo::Settings fboSettings;
 	fboSettings.width = width;
 	fboSettings.height = height;
