@@ -9,7 +9,8 @@ void ofApp::setup() {
 	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
 	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
 	modelName = "v1-5-pruned-emaonly.safetensors";
-	taesdPath = "data/models/taesd/taesd.SAFETENSORS";
+	taesdPath = "";
+	esrganPath = "";
 	loraModelDir = "data/models/lora/";
 	vaePath = "data/models/vae/sd-vae-ft-ema.SAFETENSORS";
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
@@ -27,9 +28,13 @@ void ofApp::setup() {
 	negativePromptIsEdited = true;
 	isTextToImage = true;
 	isFullScreen = false;
+	isTAESD = false;
+	isESRGAN = false;
+	numThreads = 8;
+	esrganMultiplier = 1;
 	ofFbo::Settings fboSettings;
-	fboSettings.width = width;
-	fboSettings.height = height;
+	fboSettings.width = width * esrganMultiplier;
+	fboSettings.height = height * esrganMultiplier;
 	fboSettings.internalformat = GL_RGB;
 	fboSettings.textureTarget = GL_TEXTURE_2D;
 	for (int i = 0; i < 16; i++) {
@@ -41,7 +46,7 @@ void ofApp::setup() {
 	fbo.begin();
 	image.draw(0, 0, width, height);
 	fbo.end();
-	thread.stableDiffusion.setup(8, true, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+	thread.stableDiffusion.setup(numThreads, true, "", &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 }
@@ -50,7 +55,7 @@ void ofApp::setup() {
 void ofApp::update() {
 	if (thread.diffused) {
 		for (int i = 0; i < batchSize; i++) {
-			fboVector[i].getTexture().loadData(&thread.stableDiffusionPixelVector[i][0], width, height, GL_RGB);
+			fboVector[i].getTexture().loadData(&thread.stableDiffusionPixelVector[i][0], width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 		}
 		previousSelectedImage = 0;
 		previewSize = batchSize;
@@ -208,10 +213,10 @@ void ofApp::draw() {
 				modelPath = result.getPath();
 				modelName = result.getName();
 				if (isTAESD) {
-					thread.stableDiffusion.setup(8, true, &taesdPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
+					thread.stableDiffusion.setup(numThreads, true, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				}
 				else {
-					thread.stableDiffusion.setup(8, true, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+					thread.stableDiffusion.setup(numThreads, true, "", &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				}
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
@@ -224,11 +229,48 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
 			if (isTAESD) {
-				thread.stableDiffusion.setup(8, true, &taesdPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
+				taesdPath = "data/models/taesd/taesd.SAFETENSORS";
+				thread.stableDiffusion.setup(numThreads, true, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
-				thread.stableDiffusion.setup(8, true, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+				taesdPath = "";
+				thread.stableDiffusion.setup(numThreads, true, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
+			}
+		}
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Checkbox("ESRGAN", &isESRGAN)) {
+			if (isESRGAN) {
+				esrganMultiplier = 4;
+				ofFbo::Settings fboSettings;
+				fboSettings.width = width * esrganMultiplier;
+				fboSettings.height = height * esrganMultiplier;
+				fboSettings.internalformat = GL_RGB;
+				fboSettings.textureTarget = GL_TEXTURE_2D;
+				for (int i = 0; i < 16; i++) {
+					ofFbo fbo;
+					fboVector.push_back(fbo);
+					fboVector[i].allocate(fboSettings);
+				}
+				esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
+				thread.stableDiffusion.setup(numThreads, true, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
+				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
+			}
+			else {
+				esrganMultiplier = 1;
+				ofFbo::Settings fboSettings;
+				fboSettings.width = width * esrganMultiplier;
+				fboSettings.height = height * esrganMultiplier;
+				fboSettings.internalformat = GL_RGB;
+				fboSettings.textureTarget = GL_TEXTURE_2D;
+				for (int i = 0; i < 16; i++) {
+					ofFbo fbo;
+					fboVector.push_back(fbo);
+					fboVector[i].allocate(fboSettings);
+				}
+				esrganPath = "";
+				thread.stableDiffusion.setup(numThreads, true, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 		}
@@ -248,7 +290,8 @@ void ofApp::draw() {
 			batchSize = 1;
 			sampleMethod = "DPMPP2S_A";
 			if (isTAESD) {
-				thread.stableDiffusion.setup(8, false, "", false, &loraModelDir[0], STD_DEFAULT_RNG);
+				taesdPath = "";
+				thread.stableDiffusion.setup(8, true, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 				isTAESD = false;
 			}
@@ -293,8 +336,8 @@ void ofApp::draw() {
 				if (width != atoi(imageWidth)) {
 					width = atoi(imageWidth);
 					ofFbo::Settings fboSettings;
-					fboSettings.width = width;
-					fboSettings.height = height;
+					fboSettings.width = width * esrganMultiplier;
+					fboSettings.height = height * esrganMultiplier;
 					fboSettings.internalformat = GL_RGB;
 					fboSettings.textureTarget = GL_TEXTURE_2D;
 					for (int i = 0; i < 16; i++) {
@@ -321,8 +364,8 @@ void ofApp::draw() {
 				if (height != atoi(imageHeight)) {
 					height = atoi(imageHeight);
 					ofFbo::Settings fboSettings;
-					fboSettings.width = width;
-					fboSettings.height = height;
+					fboSettings.width = width * esrganMultiplier;
+					fboSettings.height = height * esrganMultiplier;
 					fboSettings.internalformat = GL_RGB;
 					fboSettings.textureTarget = GL_TEXTURE_2D;
 					for (int i = 0; i < 16; i++) {

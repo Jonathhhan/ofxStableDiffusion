@@ -49,6 +49,7 @@ class ofApp : public ofBaseApp {
 		std::string taesdPath;
 		std::string loraModelDir;
 		std::string vaePath;
+		std::string esrganPath;
 		int sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
@@ -56,6 +57,9 @@ class ofApp : public ofBaseApp {
 		bool isTextToImage;
 		bool isFullScreen;
 		bool isTAESD;
+		bool isESRGAN;
+		int numThreads;
+		int esrganMultiplier;
 		std::string imageName;
 		ofxImGui::Gui gui;
 };
