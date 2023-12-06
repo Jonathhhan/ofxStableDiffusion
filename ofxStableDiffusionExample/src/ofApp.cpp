@@ -12,7 +12,7 @@ void ofApp::setup() {
 	taesdPath = "";
 	esrganPath = "";
 	loraModelDir = "data/models/lora/";
-	vaePath = "data/models/vae/sd-vae-ft-ema.SAFETENSORS";
+	vaePath = "data/models/vae/sd-vae-ft-ema.safetensors";
 	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
 	width = 512;
 	height = 512;
