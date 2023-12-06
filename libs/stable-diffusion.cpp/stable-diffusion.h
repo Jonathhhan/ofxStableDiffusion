@@ -6,8 +6,8 @@
 #include <vector>
 
 enum ggml_type {
-    GGML_TYPE_F32 = 0,
-    GGML_TYPE_F16 = 1,
+    GGML_TYPE_F32  = 0,
+    GGML_TYPE_F16  = 1,
     GGML_TYPE_Q4_0 = 2,
     GGML_TYPE_Q4_1 = 3,
     // GGML_TYPE_Q4_2 = 4, support has been removed
@@ -28,8 +28,6 @@ enum ggml_type {
     GGML_TYPE_I32,
     GGML_TYPE_COUNT,
 };
-
-
 
 enum RNGType {
     STD_DEFAULT_RNG,
@@ -64,9 +62,10 @@ private:
 public:
     void setup(int n_threads                = -1,
                     bool vae_decode_only         = false,
-                    std::string taesd_path       = "data/models/taesd/diffusion_pytorch_model.SAFETENSORS",
+                    std::string taesd_path       = "",
+                    std::string esrgan_path      = "",
                     bool free_params_immediately = false,
-                    std::string lora_model_dir   = "data/models/loras/",
+                    std::string lora_model_dir   = "",
                     RNGType rng_type             = STD_DEFAULT_RNG);
     bool load_from_file(const std::string& model_path,
                         const std::string& vae_path,
