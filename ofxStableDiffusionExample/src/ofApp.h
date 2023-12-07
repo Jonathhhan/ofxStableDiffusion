@@ -22,7 +22,9 @@ class ofApp : public ofBaseApp {
 		void windowResized(int w, int h);
 		void dragEvent(ofDragInfo dragInfo);
 		void gotMessage(ofMessage msg);
+
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
+		void fboAllocate();
 
 		stableDiffusionThread thread;
 		std::vector<ofFbo> fboVector;

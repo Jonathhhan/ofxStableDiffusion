@@ -32,20 +32,7 @@ void ofApp::setup() {
 	isESRGAN = false;
 	numThreads = 8;
 	esrganMultiplier = 1;
-	ofFbo::Settings fboSettings;
-	fboSettings.width = width * esrganMultiplier;
-	fboSettings.height = height * esrganMultiplier;
-	fboSettings.internalformat = GL_RGB;
-	fboSettings.textureTarget = GL_TEXTURE_2D;
-	for (int i = 0; i < 16; i++) {
-		ofFbo fbo;
-		fboVector.push_back(fbo);
-		fboVector[i].allocate(fboSettings);
-	}
-	fbo.allocate(fboSettings);
-	fbo.begin();
-	image.draw(0, 0, width, height);
-	fbo.end();
+	fboAllocate();
 	thread.stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 	thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
@@ -243,32 +230,14 @@ void ofApp::draw() {
 		if (ImGui::Checkbox("ESRGAN", &isESRGAN)) {
 			if (isESRGAN) {
 				esrganMultiplier = 4;
-				ofFbo::Settings fboSettings;
-				fboSettings.width = width * esrganMultiplier;
-				fboSettings.height = height * esrganMultiplier;
-				fboSettings.internalformat = GL_RGB;
-				fboSettings.textureTarget = GL_TEXTURE_2D;
-				for (int i = 0; i < 16; i++) {
-					ofFbo fbo;
-					fboVector.push_back(fbo);
-					fboVector[i].allocate(fboSettings);
-				}
+				fboAllocate();
 				esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
 			else {
 				esrganMultiplier = 1;
-				ofFbo::Settings fboSettings;
-				fboSettings.width = width * esrganMultiplier;
-				fboSettings.height = height * esrganMultiplier;
-				fboSettings.internalformat = GL_RGB;
-				fboSettings.textureTarget = GL_TEXTURE_2D;
-				for (int i = 0; i < 16; i++) {
-					ofFbo fbo;
-					fboVector.push_back(fbo);
-					fboVector[i].allocate(fboSettings);
-				}
+				fboAllocate();
 				esrganPath = "";
 				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
@@ -335,20 +304,7 @@ void ofApp::draw() {
 					ImGui::SetItemDefaultFocus();
 				if (width != atoi(imageWidth)) {
 					width = atoi(imageWidth);
-					ofFbo::Settings fboSettings;
-					fboSettings.width = width * esrganMultiplier;
-					fboSettings.height = height * esrganMultiplier;
-					fboSettings.internalformat = GL_RGB;
-					fboSettings.textureTarget = GL_TEXTURE_2D;
-					for (int i = 0; i < 16; i++) {
-						ofFbo fbo;
-						fboVector.push_back(fbo);
-						fboVector[i].allocate(fboSettings);
-					}
-					fbo.allocate(fboSettings);
-					fbo.begin();
-					image.draw(0, 0, width, height);
-					fbo.end();
+					fboAllocate();
 				}
 			}
 			ImGui::EndCombo();
@@ -363,20 +319,7 @@ void ofApp::draw() {
 					ImGui::SetItemDefaultFocus();
 				if (height != atoi(imageHeight)) {
 					height = atoi(imageHeight);
-					ofFbo::Settings fboSettings;
-					fboSettings.width = width * esrganMultiplier;
-					fboSettings.height = height * esrganMultiplier;
-					fboSettings.internalformat = GL_RGB;
-					fboSettings.textureTarget = GL_TEXTURE_2D;
-					for (int i = 0; i < 16; i++) {
-						ofFbo fbo;
-						fboVector.push_back(fbo);
-						fboVector[i].allocate(fboSettings);
-					}
-					fbo.allocate(fboSettings);
-					fbo.begin();
-					image.draw(0, 0, width, height);
-					fbo.end();
+					fboAllocate();
 				}
 			}
 			ImGui::EndCombo();
@@ -443,6 +386,7 @@ void ofApp::draw() {
 	gui.end();
 }
 
+//--------------------------------------------------------------
 void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 	float textSize = 0;
 	std::string tmpStr = "";
@@ -472,6 +416,26 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 	if (tmpStr.size() > 0)
 		finalStr += tmpStr;
 	str = finalStr;
+}
+
+//--------------------------------------------------------------
+void ofApp::fboAllocate() {
+	ofFbo::Settings fboSettings;
+	fboSettings.internalformat = GL_RGB;
+	fboSettings.textureTarget = GL_TEXTURE_2D;
+	fboSettings.width = width * esrganMultiplier;
+	fboSettings.height = height * esrganMultiplier;
+	for (int i = 0; i < 16; i++) {
+		ofFbo fbo;
+		fboVector.push_back(fbo);
+		fboVector[i].allocate(fboSettings);
+	}
+	fboSettings.width = width;
+	fboSettings.height = height;
+	fbo.allocate(fboSettings);
+	fbo.begin();
+	image.draw(0, 0, width, height);
+	fbo.end();
 }
 
 //--------------------------------------------------------------
