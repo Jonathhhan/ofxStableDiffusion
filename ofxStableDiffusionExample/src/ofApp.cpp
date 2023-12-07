@@ -216,7 +216,7 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
 			if (isTAESD) {
-				taesdPath = "data/models/taesd/taesd.SAFETENSORS";
+				taesdPath = "data/models/taesd/taesd.safetensors";
 				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], STD_DEFAULT_RNG);
 				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], GGML_TYPE_COUNT, DEFAULT);
 			}
