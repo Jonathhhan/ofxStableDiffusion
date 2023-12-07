@@ -38,6 +38,7 @@ class ofApp : public ofBaseApp {
 		float cfgScale;
 		int batchSize;
 		float strength;
+		int seed;
 		int previewSize;
 		int selectedImage;
 		int previousSelectedImage;

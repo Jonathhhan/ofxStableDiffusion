@@ -21,6 +21,7 @@ void ofApp::setup() {
 	previewSize = batchSize = 4;
 	selectedImage = 0;
 	strength = 0.5;
+	seed = -1;
 	imageWidth = "512";
 	imageHeight = "512";
 	sampleMethod = "DPMPP2S_Mv2";
@@ -346,6 +347,8 @@ void ofApp::draw() {
 		if (isTextToImage) {
 			ImGui::EndDisabled();
 		}
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::InputInt("Seed", &seed, 1,100);
 		if (!isTextToImage) {
 			ImGui::BeginDisabled();
 		}
@@ -374,7 +377,7 @@ void ofApp::draw() {
 		thread.sampleMethod = (SampleMethod)sampleMethodEnum;
 		thread.sampleSteps = sampleSteps;
 		thread.strength = strength;
-		thread.seed = -1;
+		thread.seed = seed;
 		thread.batch_count = batchSize;
 		thread.isTextToImage = isTextToImage;
 		thread.startThread();
