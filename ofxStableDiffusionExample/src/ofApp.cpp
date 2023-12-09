@@ -6,7 +6,6 @@ void ofApp::setup() {
 	ofSetEscapeQuitsApp(false);
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	printf("%s", sd_get_system_info().c_str());
-	ofSetWindowShape(ofGetScreenWidth(), ofGetScreenHeight());
 	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
 	modelName = "v1-5-pruned-emaonly.safetensors";
 	taesdPath = "";
@@ -104,8 +103,7 @@ void ofApp::draw() {
 				ImGui::SameLine();
 			}
 			if (ImGui::IsItemClicked()) {
-				selectedImage = i;
-				previousSelectedImage = selectedImage;
+				previousSelectedImage = i;
 			}
 			if (ImGui::IsItemHovered()) {
 				selectedImage = i;
