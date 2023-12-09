@@ -52,11 +52,10 @@ void ofApp::update() {
 		for (int i = 0; i < batchSize; i++) {
 			fboVector[i].getTexture().loadData(&stableDiffusionPixelVector[i][0], width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 		}
-		previousSelectedImage = 0;
+		selectedImage = 0;
 		previewSize = batchSize;
 		diffused = false;
 	}
-	selectedImage = previousSelectedImage;
 }
 
 //--------------------------------------------------------------
