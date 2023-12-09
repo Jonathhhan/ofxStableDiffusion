@@ -65,4 +65,7 @@ class ofApp : public ofBaseApp {
 		int esrganMultiplier;
 		std::string imageName;
 		ofxImGui::Gui gui;
+		ggml_type ggmlType;
+		Schedule schedule;
+		RNGType rngType;
 };
