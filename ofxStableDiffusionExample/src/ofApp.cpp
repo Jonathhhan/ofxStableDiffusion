@@ -230,12 +230,20 @@ void ofApp::draw() {
 			if (isTAESD) {
 				taesdPath = "data/models/taesd/taesd.safetensors";
 				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				if (!thread.isThreadRunning()) {
+					isModelLoading = true;
+					thread.userData = this;
+					thread.startThread();
+				}
 			}
 			else {
 				taesdPath = "";
 				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				if (!thread.isThreadRunning()) {
+					isModelLoading = true;
+					thread.userData = this;
+					thread.startThread();
+				}
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
