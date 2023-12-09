@@ -37,20 +37,24 @@ void ofApp::setup() {
 	numThreads = 8;
 	esrganMultiplier = 1;
 	fboAllocate();
-	thread.stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], rngType);
-	thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+	stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], rngType);
+	if (!thread.isThreadRunning()) {
+		isModelLoading = true;
+		thread.userData = this;
+		thread.startThread();
+	}
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
-	if (thread.diffused) {
+	if (diffused) {
 		for (int i = 0; i < batchSize; i++) {
-			fboVector[i].getTexture().loadData(&thread.stableDiffusionPixelVector[i][0], width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+			fboVector[i].getTexture().loadData(&stableDiffusionPixelVector[i][0], width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 		}
 		previousSelectedImage = 0;
 		previewSize = batchSize;
-		thread.diffused = false;
+		diffused = false;
 	}
 	selectedImage = previousSelectedImage;
 }
@@ -204,12 +208,16 @@ void ofApp::draw() {
 				modelPath = result.getPath();
 				modelName = result.getName();
 				if (isTAESD) {
-					thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+					stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
 				}
 				else {
-					thread.stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], rngType);
+					stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], rngType);
 				}
-				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				if (!thread.isThreadRunning()) {
+					isModelLoading = true;
+					thread.userData = this;
+					thread.startThread();
+				}
 			}
 		}
 		ImGui::SameLine(0, 5);
@@ -221,13 +229,13 @@ void ofApp::draw() {
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
 			if (isTAESD) {
 				taesdPath = "data/models/taesd/taesd.safetensors";
-				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
 			}
 			else {
 				taesdPath = "";
-				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
@@ -236,15 +244,23 @@ void ofApp::draw() {
 				esrganMultiplier = 4;
 				fboAllocate();
 				esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
-				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				if (!thread.isThreadRunning()) {
+					isModelLoading = true;
+					thread.userData = this;
+					thread.startThread();
+				}
 			}
 			else {
 				esrganMultiplier = 1;
 				fboAllocate();
 				esrganPath = "";
-				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				if (!thread.isThreadRunning()) {
+					isModelLoading = true;
+					thread.userData = this;
+					thread.startThread();
+				}
 			}
 		}
 		if (!isTextToImage) {
@@ -264,8 +280,12 @@ void ofApp::draw() {
 			sampleMethod = "DPMPP2S_A";
 			if (isTAESD) {
 				taesdPath = "";
-				thread.stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				thread.stableDiffusion.load_from_file(&modelPath[0], &vaePath[0], ggmlType, schedule);
+				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				if (!thread.isThreadRunning()) {
+					isModelLoading = true;
+					thread.userData = this;
+					thread.startThread();
+				}
 				isTAESD = false;
 			}
 		}
@@ -335,7 +355,7 @@ void ofApp::draw() {
 				bool is_selected = (sampleMethod == sampleMethodArray[n]);
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
 					sampleMethod = sampleMethodArray[n];
-					sampleMethodEnum = n;
+					sampleMethodEnum = (SampleMethod)n;
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
@@ -370,20 +390,11 @@ void ofApp::draw() {
 		ImGui::BeginDisabled();
 	}
 	if (ImGui::Button("Generate")) {
-		fbo.getTexture().readToPixels(pixels);
-		thread.pixels = pixels.getData();
-		thread.prompt = prompt;
-		thread.negativePrompt = negativePrompt;
-		thread.cfgScale = cfgScale;
-		thread.width = width;
-		thread.height = height;
-		thread.sampleMethod = (SampleMethod)sampleMethodEnum;
-		thread.sampleSteps = sampleSteps;
-		thread.strength = strength;
-		thread.seed = seed;
-		thread.batch_count = batchSize;
-		thread.isTextToImage = isTextToImage;
-		thread.startThread();
+		if (!thread.isThreadRunning()) {
+			fbo.getTexture().readToPixels(pixels);
+			thread.userData = this;
+			thread.startThread();
+		}
 	}
 	if (thread.isThreadRunning()) {
 		ImGui::EndDisabled();

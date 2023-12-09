@@ -28,6 +28,8 @@ class ofApp : public ofBaseApp {
 
 		stableDiffusionThread thread;
 		std::vector<ofFbo> fboVector;
+		StableDiffusion stableDiffusion;
+		std::vector<uint8_t*> stableDiffusionPixelVector;
 		ofFbo fbo;
 		ofImage image;
 		ofPixels pixels;
@@ -53,7 +55,7 @@ class ofApp : public ofBaseApp {
 		std::string loraModelDir;
 		std::string vaePath;
 		std::string esrganPath;
-		int sampleMethodEnum;
+		SampleMethod sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
 		bool negativePromptIsEdited;
@@ -68,4 +70,6 @@ class ofApp : public ofBaseApp {
 		ggml_type ggmlType;
 		Schedule schedule;
 		RNGType rngType;
+		bool diffused;
+		bool isModelLoading;
 };
