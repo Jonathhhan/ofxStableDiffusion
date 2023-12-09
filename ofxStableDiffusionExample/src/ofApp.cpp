@@ -61,13 +61,9 @@ void ofApp::update() {
 
 //--------------------------------------------------------------
 void ofApp::draw() {
-	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
-	struct Funcs
-	{
-		static int InputTextCallback(ImGuiInputTextCallbackData* data)
-		{
-			if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
-			{
+	struct Funcs {
+		static int InputTextCallback(ImGuiInputTextCallbackData* data) {
+			if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
 				std::string* str = (std::string*)data->UserData;
 				IM_ASSERT(data->Buf == str->c_str());
 				str->resize(data->BufTextLen);
@@ -75,17 +71,15 @@ void ofApp::draw() {
 			}
 			return 0;
 		}
-
-		static bool MyInputTextMultiline(const char* label, std::string* prompt, const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0)
-		{
+		static bool MyInputTextMultiline(const char* label, std::string* prompt, const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0) {
 			IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
 			return ImGui::InputTextMultiline(label, (char*)prompt->c_str(), prompt->capacity() + 1, size, flags | ImGuiInputTextFlags_CallbackResize, Funcs::InputTextCallback, (void*)prompt);
 		}
 	};
-
-	gui.begin();
-	static bool logOpenSettings{ true };
+	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
 	ImVec2 center = ImVec2(ofGetScreenWidth() / 2, ofGetScreenHeight() / 2);
+	static bool logOpenSettings{ true };
+	gui.begin();
 	ImGui::StyleColorsDark();
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
@@ -94,7 +88,6 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
 	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-
 	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
@@ -135,7 +128,6 @@ void ofApp::draw() {
 		ImGui::TreePop();
 	}
 	ImGui::End();
-
 	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
 	ImGui::SetNextWindowPos(ImVec2(center.x * 1.4, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
