@@ -246,6 +246,9 @@ void ofApp::draw() {
 				}
 			}
 		}
+		if (!isTextToImage) {
+			ImGui::EndDisabled();
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("ESRGAN", &isESRGAN)) {
 			if (isESRGAN) {
@@ -270,9 +273,6 @@ void ofApp::draw() {
 					thread.startThread();
 				}
 			}
-		}
-		if (!isTextToImage) {
-			ImGui::EndDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		static int e = 0;
