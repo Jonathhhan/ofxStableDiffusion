@@ -16,16 +16,15 @@
 
 meta:
 	ADDON_NAME = ofxStableDiffusion
-	ADDON_DESCRIPTION =
-	ADDON_AUTHOR =
-	ADDON_TAGS =
-	ADDON_URL =
-	
+	ADDON_DESCRIPTION = Stable Diffusion: https://github.com/leejet/stable-diffusion.cpp
+	ADDON_AUTHOR = Jonathan Frank
+	ADDON_TAGS = "Stable Diffusion" "Artificial Intelligence" "Image Generation"
+	ADDON_URL = https://github.com/Jonathhhan/ofxStableDiffusion
+
 common:
 
 linux64:
-	LIB_PATH += /mnt/c/Users/Jonat/Downloads/of_v20231120_linux64gcc6_release/addons/ofxStableDiffusion/libs/stable-diffusion.cpp/lib/linux64
-	ADDON_LDFLAGS += -Wl,-rpath=$(LIB_PATH)
+	ADDON_LDFLAGS += -Wl,-rpath=../../../../addons/ofxStableDiffusion/libs/stable-diffusion.cpp/lib/linux64
 
 linux:
 
