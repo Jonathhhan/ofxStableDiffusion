@@ -24,10 +24,10 @@ class ofApp : public ofBaseApp {
 		void gotMessage(ofMessage msg);
 
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
-		void fboAllocate();
+		void allocate();
 
 		stableDiffusionThread thread;
-		std::vector<ofFbo> fboVector;
+		std::vector<ofTexture> textureVector;
 		StableDiffusion stableDiffusion;
 		std::vector<uint8_t*> stableDiffusionPixelVector;
 		ofFbo fbo;

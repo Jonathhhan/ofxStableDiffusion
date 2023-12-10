@@ -35,7 +35,7 @@ void ofApp::setup() {
 	isESRGAN = false;
 	numThreads = 8;
 	esrganMultiplier = 1;
-	fboAllocate();
+	allocate();
 	stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], rngType);
 	if (!thread.isThreadRunning()) {
 		isModelLoading = true;
@@ -49,7 +49,7 @@ void ofApp::setup() {
 void ofApp::update() {
 	if (diffused) {
 		for (int i = 0; i < batchSize; i++) {
-			fboVector[i].getTexture().loadData(&stableDiffusionPixelVector[i][0], width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+			textureVector[i].loadData(&stableDiffusionPixelVector[i][0], width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 		}
 		previousSelectedImage = 0;
 		previewSize = batchSize;
@@ -95,7 +95,7 @@ void ofApp::draw() {
 			if (i == previewSize - previewSize % 4) {
 				ImGui::Indent((ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 - (ImGui::GetWindowSize().x - width) / 2);
 			}
-			ImGui::Image((ImTextureID)(uintptr_t)fboVector[i].getTexture().getTextureData().textureID, ImVec2(width / 4, height / 4));
+			ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
 			if (i == previewSize - previewSize % 4) {
 				ImGui::Indent(-(ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 + (ImGui::GetWindowSize().x - width) / 2);
 			}
@@ -116,11 +116,11 @@ void ofApp::draw() {
 	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
-		ImGui::Image((ImTextureID)(uintptr_t)fboVector[selectedImage].getTexture().getTextureData().textureID, ImVec2(width, height));
+		ImGui::Image((ImTextureID)(uintptr_t)textureVector[selectedImage].getTextureData().textureID, ImVec2(width, height));
 		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Save")) {
-			fboVector[selectedImage].readToPixels(pixels);
+			textureVector[selectedImage].readToPixels(pixels);
 			ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
 		}
 		ImGui::TreePop();
@@ -243,7 +243,7 @@ void ofApp::draw() {
 		if (ImGui::Checkbox("ESRGAN", &isESRGAN)) {
 			if (isESRGAN) {
 				esrganMultiplier = 4;
-				fboAllocate();
+				allocate();
 				esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
@@ -254,7 +254,7 @@ void ofApp::draw() {
 			}
 			else {
 				esrganMultiplier = 1;
-				fboAllocate();
+				allocate();
 				esrganPath = "";
 				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
@@ -326,7 +326,7 @@ void ofApp::draw() {
 					ImGui::SetItemDefaultFocus();
 				if (width != atoi(imageWidth)) {
 					width = atoi(imageWidth);
-					fboAllocate();
+					allocate();
 				}
 			}
 			ImGui::EndCombo();
@@ -341,7 +341,7 @@ void ofApp::draw() {
 					ImGui::SetItemDefaultFocus();
 				if (height != atoi(imageHeight)) {
 					height = atoi(imageHeight);
-					fboAllocate();
+					allocate();
 				}
 			}
 			ImGui::EndCombo();
@@ -434,17 +434,15 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 }
 
 //--------------------------------------------------------------
-void ofApp::fboAllocate() {
+void ofApp::allocate() {
+	for (int i = 0; i < 16; i++) {
+		ofTexture texture;
+		textureVector.push_back(texture);
+		textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB, false);
+	}
 	ofFbo::Settings fboSettings;
 	fboSettings.internalformat = GL_RGB;
 	fboSettings.textureTarget = GL_TEXTURE_2D;
-	fboSettings.width = width * esrganMultiplier;
-	fboSettings.height = height * esrganMultiplier;
-	for (int i = 0; i < 16; i++) {
-		ofFbo fbo;
-		fboVector.push_back(fbo);
-		fboVector[i].allocate(fboSettings);
-	}
 	fboSettings.width = width;
 	fboSettings.height = height;
 	fbo.allocate(fboSettings);
