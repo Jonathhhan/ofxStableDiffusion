@@ -5,6 +5,7 @@ void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
 	ofSetEscapeQuitsApp(false);
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
+	ofDisableArbTex();
 	printf("%s", sd_get_system_info().c_str());
 	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
 	modelName = "v1-5-pruned-emaonly.safetensors";
@@ -435,17 +436,13 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 
 //--------------------------------------------------------------
 void ofApp::allocate() {
+	textureVector.clear();
 	for (int i = 0; i < 16; i++) {
 		ofTexture texture;
 		textureVector.push_back(texture);
-		textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB, false);
+		textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 	}
-	ofFbo::Settings fboSettings;
-	fboSettings.internalformat = GL_RGB;
-	fboSettings.textureTarget = GL_TEXTURE_2D;
-	fboSettings.width = width;
-	fboSettings.height = height;
-	fbo.allocate(fboSettings);
+	fbo.allocate(width, height, GL_RGB);
 	fbo.begin();
 	image.draw(0, 0, width, height);
 	fbo.end();
