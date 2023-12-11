@@ -421,20 +421,24 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 		textSize = ImGui::CalcTextSize(tmpStr.c_str()).x;
 		if (textSize > multilineWidth) {
 			int lastSpace = tmpStr.size() - 1;
-			while (tmpStr[lastSpace] != ' ' && lastSpace > 0)
+			while (tmpStr[lastSpace] != ' ' && lastSpace > 0) {
 				lastSpace--;
-			if (lastSpace == 0)
+			}
+			if (lastSpace == 0) {
 				lastSpace = tmpStr.size() - 2;
+			}
 			finalStr += tmpStr.substr(0, lastSpace + 1) + "\r\n";
-			if (lastSpace + 1 > tmpStr.size())
+			if (lastSpace + 1 > tmpStr.size()) {
 				tmpStr = "";
-			else
+			} else {
 				tmpStr = tmpStr.substr(lastSpace + 1);
+			}
 		}
 		curChr++;
 	}
-	if (tmpStr.size() > 0)
+	if (tmpStr.size() > 0) {
 		finalStr += tmpStr;
+	}
 	str = finalStr;
 }
 
