@@ -323,7 +323,7 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderInt("Sample Steps", &sampleSteps, 1, 50);
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Width", imageWidth)) {
+		if (ImGui::BeginCombo("Width", imageWidth, ImGuiComboFlags_NoArrowButton)) {
 			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
 				bool is_selected = (imageWidth == imageSizeArray[n]);
 				if (ImGui::Selectable(imageSizeArray[n], is_selected))
@@ -338,7 +338,7 @@ void ofApp::draw() {
 			ImGui::EndCombo();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Height", imageHeight)) {
+		if (ImGui::BeginCombo("Height", imageHeight, ImGuiComboFlags_NoArrowButton)) {
 			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
 				bool is_selected = (imageHeight == imageSizeArray[n]);
 				if (ImGui::Selectable(imageSizeArray[n], is_selected))
@@ -353,7 +353,7 @@ void ofApp::draw() {
 			ImGui::EndCombo();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Sample Method", sampleMethod)) {
+		if (ImGui::BeginCombo("Sample Method", sampleMethod, ImGuiComboFlags_NoArrowButton)) {
 			for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
 				bool is_selected = (sampleMethod == sampleMethodArray[n]);
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
