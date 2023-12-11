@@ -41,6 +41,7 @@ class ofApp : public ofBaseApp {
 		int batchSize;
 		float strength;
 		int seed;
+		int clipSkipLayers;
 		int previewSize;
 		int selectedImage;
 		int previousSelectedImage;
