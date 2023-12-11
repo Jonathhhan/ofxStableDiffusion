@@ -58,6 +58,9 @@ class ofApp : public ofBaseApp {
 		SampleMethod sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
+		bool isVaeDecodeOnly;
+		bool isVaeTiling;
+		bool isFreeParamsImmediatly;
 		bool negativePromptIsEdited;
 		bool isTextToImage;
 		bool isFullScreen;

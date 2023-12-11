@@ -34,10 +34,17 @@ void ofApp::setup() {
 	isFullScreen = false;
 	isTAESD = false;
 	isESRGAN = false;
+	isVaeDecodeOnly = false;
+	isVaeTiling = false;
+	isFreeParamsImmediatly = false;
 	numThreads = 8;
 	esrganMultiplier = 1;
+	for (int i = 0; i < 16; i++) {
+		ofTexture texture;
+		textureVector.push_back(texture);
+	}
 	allocate();
-	stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], rngType);
+	stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 	if (!thread.isThreadRunning()) {
 		isModelLoading = true;
 		thread.userData = this;
@@ -199,10 +206,7 @@ void ofApp::draw() {
 				modelPath = result.getPath();
 				modelName = result.getName();
 				if (isTAESD) {
-					stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
-				}
-				else {
-					stableDiffusion.setup(numThreads, false, "", &esrganPath[0], false, &loraModelDir[0], rngType);
+					stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				}
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
@@ -220,7 +224,7 @@ void ofApp::draw() {
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
 			if (isTAESD) {
 				taesdPath = "data/models/taesd/taesd.safetensors";
-				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -229,7 +233,7 @@ void ofApp::draw() {
 			}
 			else {
 				taesdPath = "";
-				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -246,7 +250,7 @@ void ofApp::draw() {
 				esrganMultiplier = 4;
 				allocate();
 				esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
-				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -257,7 +261,7 @@ void ofApp::draw() {
 				esrganMultiplier = 1;
 				allocate();
 				esrganPath = "";
-				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -279,7 +283,7 @@ void ofApp::draw() {
 			sampleMethod = "DPMPP2S_A";
 			if (isTAESD) {
 				taesdPath = "";
-				stableDiffusion.setup(numThreads, false, &taesdPath[0], &esrganPath[0], false, &loraModelDir[0], rngType);
+				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -349,8 +353,7 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Sample Method", sampleMethod)) {
-			for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++)
-			{
+			for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
 				bool is_selected = (sampleMethod == sampleMethodArray[n]);
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
 					sampleMethod = sampleMethodArray[n];
@@ -436,10 +439,8 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 
 //--------------------------------------------------------------
 void ofApp::allocate() {
-	textureVector.clear();
 	for (int i = 0; i < 16; i++) {
-		ofTexture texture;
-		textureVector.push_back(texture);
+		textureVector[i].getTextureData().textureID = NULL;
 		textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 	}
 	fbo.allocate(width, height, GL_RGB);
