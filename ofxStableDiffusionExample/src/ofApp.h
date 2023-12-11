@@ -44,7 +44,7 @@ class ofApp : public ofBaseApp {
 		int previewSize;
 		int selectedImage;
 		int previousSelectedImage;
-		const char* imageSizeArray[6] = {"128", "256", "384", "512", "768", "1024"};
+		const char* imageSizeArray[8] = {"128", "256", "384", "512", "640", "768", "896", "1024"};
 		const char* imageWidth;
 		const char* imageHeight;
 		const char* sampleMethodArray[8] = {"EULER_A", "EULER", "HEUN", "DPM2", "DPMPP2S_A", "DPMPP2M", "DPMPP2Mv2", "LCM"};
