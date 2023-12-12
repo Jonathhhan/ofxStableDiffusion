@@ -449,9 +449,11 @@ void ofApp::allocate() {
 		textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 	}
 	fbo.allocate(width, height, GL_RGB);
-	fbo.begin();
-	image.draw(0, 0, width, height);
-	fbo.end();
+	if (image.isAllocated()) {
+		fbo.begin();
+		image.draw(0, 0, width, height);
+		fbo.end();
+	}
 }
 
 //--------------------------------------------------------------
