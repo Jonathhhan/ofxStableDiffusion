@@ -105,7 +105,7 @@ void ofApp::draw() {
 			}
 			ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
 			if (i == previewSize - previewSize % 4) {
-				ImGui::Indent(-10.f * (previewSize % 4) / 4 + 10);
+				ImGui::Indent(- 10.f * (previewSize % 4) / 4 + 10);
 			}
 			if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
 				ImGui::SameLine();
