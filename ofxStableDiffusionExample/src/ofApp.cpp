@@ -45,7 +45,6 @@ void ofApp::setup() {
 		textureVector.push_back(texture);
 	}
 	allocate();
-	stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 	if (!thread.isThreadRunning()) {
 		isModelLoading = true;
 		thread.userData = this;
@@ -106,7 +105,7 @@ void ofApp::draw() {
 			}
 			ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
 			if (i == previewSize - previewSize % 4) {
-				ImGui::Indent(- 10.f * (previewSize % 4) / 4 + 10);
+				ImGui::Indent(-10.f * (previewSize % 4) / 4 + 10);
 			}
 			if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
 				ImGui::SameLine();
@@ -206,9 +205,6 @@ void ofApp::draw() {
 			if (result.bSuccess) {
 				modelPath = result.getPath();
 				modelName = result.getName();
-				if (isTAESD) {
-					stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
-				}
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -225,7 +221,6 @@ void ofApp::draw() {
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
 			if (isTAESD) {
 				taesdPath = "data/models/taesd/taesd.safetensors";
-				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -234,7 +229,6 @@ void ofApp::draw() {
 			}
 			else {
 				taesdPath = "";
-				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -251,7 +245,6 @@ void ofApp::draw() {
 				esrganMultiplier = 4;
 				allocate();
 				esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
-				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -262,7 +255,6 @@ void ofApp::draw() {
 				esrganMultiplier = 1;
 				allocate();
 				esrganPath = "";
-				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
@@ -284,7 +276,6 @@ void ofApp::draw() {
 			sampleMethod = "DPMPP2S_A";
 			if (isTAESD) {
 				taesdPath = "";
-				stableDiffusion.setup(numThreads, isVaeDecodeOnly, &taesdPath[0], &esrganPath[0], isFreeParamsImmediatly, isVaeTiling, &loraModelDir[0], rngType);
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
