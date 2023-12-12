@@ -99,14 +99,14 @@ void ofApp::draw() {
 	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Indent(10);
 		for (int i = 0; i < previewSize; i++) {
 			if (i == previewSize - previewSize % 4) {
-				ImGui::Indent((ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 - (ImGui::GetWindowSize().x - width) / 2);
+				ImGui::Indent(10 * (previewSize % 4) / 4 - 10);
 			}
 			ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
 			if (i == previewSize - previewSize % 4) {
-				ImGui::Indent(-(ImGui::GetWindowSize().x - width * (previewSize % 4) / 4) / 2 + (ImGui::GetWindowSize().x - width) / 2);
+				ImGui::Indent(-10 * (previewSize % 4) / 4 + 10);
 			}
 			if (i != 3 && i != 7 && i != 11 && i != 15 && i != previewSize - 1) {
 				ImGui::SameLine();
@@ -118,15 +118,15 @@ void ofApp::draw() {
 				selectedImage = i;
 			}
 		}
-		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Indent(- 10);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Indent((ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Indent(10);
 		ImGui::Image((ImTextureID)(uintptr_t)textureVector[selectedImage].getTextureData().textureID, ImVec2(width, height));
-		ImGui::Indent(-(ImGui::GetWindowSize().x - width) / 2);
+		ImGui::Indent(- 10);
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Save")) {
 			textureVector[selectedImage].readToPixels(pixels);
