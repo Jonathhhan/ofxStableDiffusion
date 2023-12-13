@@ -102,10 +102,10 @@ void ofApp::draw() {
 		for (int i = 0; i < previewSize; i++) {
 			if (i == previewSize - previewSize % 4) {
 				ImGui::Indent(width / 8.f * (4 - previewSize % 4));
-			}
-			ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
-			if (i == previewSize - previewSize % 4) {
+				ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
 				ImGui::Indent(- width / 8.f * (4 - previewSize % 4));
+			} else {
+				ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
 			}
 			if (i % 4 != 3 && i != previewSize - 1) {
 				ImGui::SameLine();
