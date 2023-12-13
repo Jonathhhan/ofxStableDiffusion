@@ -107,7 +107,7 @@ void ofApp::draw() {
 			if (i == previewSize - previewSize % 4) {
 				ImGui::Indent(- width / 8.f * (4 - previewSize % 4));
 			}
-			if (i != 3 && i != previewSize - 1) {
+			if (i % 4 != 3 && i != previewSize - 1) {
 				ImGui::SameLine();
 			}
 			if (ImGui::IsItemClicked()) {
