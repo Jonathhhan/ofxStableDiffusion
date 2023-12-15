@@ -7,17 +7,17 @@ void ofApp::setup() {
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	ofDisableArbTex();
 	printf("%s", sd_get_system_info().c_str());
-	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
-	modelName = "v1-5-pruned-emaonly.safetensors";
+	modelPath = "data/models/sd_turbo.safetensors";
+	modelName = "sd_turbo.safetensors";
 	taesdPath = "";
 	esrganPath = "";
 	loraModelDir = "data/models/lora/";
 	vaePath = "data/models/vae/sd-vae-ft-ema.safetensors";
-	prompt = "<lora:ohara_koson:1>mushroom, ohara koson, traditional media, botanic painting";
+	prompt = "mushroom, botanic painting, icon";
 	width = 512;
 	height = 512;
-	cfgScale = 7.0;
-	sampleSteps = 10;
+	cfgScale = 1.0;
+	sampleSteps = 1;
 	clipSkipLayers = 0;
 	previewSize = batchSize = 4;
 	selectedImage = 0;
@@ -89,16 +89,15 @@ void ofApp::draw() {
 	gui.begin();
 	ImGui::StyleColorsDark();
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0);
+	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
-	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags | ImGuiWindowFlags_NoBringToFrontOnFocus);
+	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, 750), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::Begin("ofxStableDiffusion##foo0", NULL, flags);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Indent(10);
 		for (int i = 0; i < previewSize; i++) {
 			if (i == previewSize - previewSize % 4) {
 				ImGui::Indent(width / 8.f * (4 - previewSize % 4));
@@ -117,16 +116,18 @@ void ofApp::draw() {
 				selectedImage = i;
 			}
 		}
-		ImGui::Indent(- 10);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
 	}
+	ImGui::End();
+	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
+	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, 350), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags);
 	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Indent(10);
 		ImGui::Image((ImTextureID)(uintptr_t)textureVector[selectedImage].getTextureData().textureID, ImVec2(width, height));
-		ImGui::Indent(- 10);
 		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Indent(-10);
 		if (ImGui::Button("Save")) {
 			textureVector[selectedImage].readToPixels(pixels);
 			ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
@@ -134,14 +135,12 @@ void ofApp::draw() {
 		ImGui::TreePop();
 	}
 	ImGui::End();
-	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
-	ImGui::SetNextWindowPos(ImVec2(center.x * 1.4, center.y), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(center.x * 1.4, 450), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
 	ImGui::Begin("ofxStableDiffusion##foo2", &logOpenSettings, flags);
 	if (!logOpenSettings) {
 		ImGui::OpenPopup("Exit Program?");
 	}
-	ImGui::SetNextWindowPos(ofGetWindowSize() / 2, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	if (ImGui::BeginPopupModal("Exit Program?", NULL, flags)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Yes", ImVec2(50, 17))) {
