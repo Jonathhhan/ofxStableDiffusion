@@ -14,7 +14,7 @@ void ofApp::setup() {
 	loraModelDir = "data/models/lora/";
 	vaePath = "data/models/vae/sd-vae-ft-ema.safetensors";
 	prompt = "mushroom, botanic painting, icon";
-	width = 512;
+	width = 768;
 	height = 512;
 	cfgScale = 1.0;
 	sampleSteps = 1;
@@ -26,7 +26,7 @@ void ofApp::setup() {
 	ggmlType = GGML_TYPE_COUNT;
 	schedule = DEFAULT;
 	rngType = STD_DEFAULT_RNG;
-	imageWidth = "512";
+	imageWidth = "768";
 	imageHeight = "512";
 	sampleMethod = "DPMPP2S_Mv2";
 	promptIsEdited = true;
@@ -84,7 +84,6 @@ void ofApp::draw() {
 		}
 	};
 	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
-	ImVec2 center = ImVec2(ofGetScreenWidth() / 2, ofGetScreenHeight() / 2);
 	static bool logOpenSettings{ true };
 	gui.begin();
 	ImGui::StyleColorsDark();
@@ -94,7 +93,7 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
 	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
-	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, 750), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(20, 620), ImGuiCond_Once);
 	ImGui::Begin("ofxStableDiffusion##foo0", NULL, flags);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
@@ -121,7 +120,7 @@ void ofApp::draw() {
 	}
 	ImGui::End();
 	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
-	ImGui::SetNextWindowPos(ImVec2(center.x / 1.75, 350), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_Once);
 	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags);
 	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
@@ -136,7 +135,7 @@ void ofApp::draw() {
 	}
 	ImGui::End();
 	ImGui::SetNextWindowSizeConstraints(ImVec2(532.f, -1.f), ImVec2(532.f, -1.f));
-	ImGui::SetNextWindowPos(ImVec2(center.x * 1.4, 450), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(828, 20), ImGuiCond_Once);
 	ImGui::Begin("ofxStableDiffusion##foo2", &logOpenSettings, flags);
 	if (!logOpenSettings) {
 		ImGui::OpenPopup("Exit Program?");
