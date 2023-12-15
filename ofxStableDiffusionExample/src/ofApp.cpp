@@ -13,7 +13,7 @@ void ofApp::setup() {
 	esrganPath = "";
 	loraModelDir = "data/models/lora/";
 	vaePath = "data/models/vae/sd-vae-ft-ema.safetensors";
-	prompt = "mushroom, botanic painting, icon";
+	prompt = "a mushroom, botanic painting, icon";
 	width = 768;
 	height = 512;
 	cfgScale = 1.0;
