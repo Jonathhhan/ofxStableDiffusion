@@ -69,6 +69,7 @@ class ofApp : public ofBaseApp {
 		bool isESRGAN;
 		int numThreads;
 		int esrganMultiplier;
+		int previewWidth;
 		std::string imageName;
 		ofxImGui::Gui gui;
 		ggml_type ggmlType;

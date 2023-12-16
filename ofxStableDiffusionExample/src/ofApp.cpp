@@ -92,13 +92,18 @@ void ofApp::draw() {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(5, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
-	ImGui::SetNextWindowSizeConstraints(ImVec2(20 + width, -1.f), ImVec2(INFINITY, -1.f));
+	if (previewSize > 3) {
+		previewWidth = width + 20;
+	} else {
+		previewWidth = width / 4 * previewSize + 20;
+	}
+	ImGui::SetNextWindowSizeConstraints(ImVec2(previewWidth, -1.f), ImVec2(previewWidth, -1.f));
 	ImGui::SetNextWindowPos(ImVec2(20, 620), ImGuiCond_Once);
 	ImGui::Begin("ofxStableDiffusion##foo0", NULL, flags);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		for (int i = 0; i < previewSize; i++) {
-			if (i == previewSize - previewSize % 4) {
+			if (i == previewSize - previewSize % 4 && i > 3) {
 				ImGui::Indent(width / 8.f * (4 - previewSize % 4));
 				ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
 				ImGui::Indent(- width / 8.f * (4 - previewSize % 4));
