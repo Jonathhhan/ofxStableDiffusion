@@ -217,30 +217,48 @@ void ofApp::draw() {
 		}
 		ImGui::SameLine(0, 5);
 		ImGui::Text(&modelName[0]);
-		if (!isTextToImage) {
-			ImGui::BeginDisabled();
-		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Checkbox("TAESD", &isTAESD)) {
+		static int e = 0;
+		if (ImGui::RadioButton("Text to Image", &e, 0)) {
+			isTextToImage = true;
+			batchSize = 4;
+			sampleMethod = "DPMPP2S_Mv2";
+		}
+		ImGui::SameLine(0, 10);
+		if (ImGui::RadioButton("Image to Image", &e, 1)) {
+			isTextToImage = false;
+			batchSize = 1;
+			sampleMethod = "DPMPP2S_A";
 			if (isTAESD) {
-				taesdPath = "data/models/taesd/taesd.safetensors";
-				if (!thread.isThreadRunning()) {
-					isModelLoading = true;
-					thread.userData = this;
-					thread.startThread();
-				}
-			}
-			else {
 				taesdPath = "";
 				if (!thread.isThreadRunning()) {
 					isModelLoading = true;
 					thread.userData = this;
 					thread.startThread();
 				}
+				isTAESD = false;
 			}
 		}
-		if (!isTextToImage) {
-			ImGui::EndDisabled();
+		if (isTextToImage) {
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::Checkbox("TAESD", &isTAESD)) {
+				if (isTAESD) {
+					taesdPath = "data/models/taesd/taesd.safetensors";
+					if (!thread.isThreadRunning()) {
+						isModelLoading = true;
+						thread.userData = this;
+						thread.startThread();
+					}
+				}
+				else {
+					taesdPath = "";
+					if (!thread.isThreadRunning()) {
+						isModelLoading = true;
+						thread.userData = this;
+						thread.startThread();
+					}
+				}
+			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("ESRGAN", &isESRGAN)) {
@@ -273,53 +291,27 @@ void ofApp::draw() {
 					thread.startThread();
 				}
 		}
-		ImGui::Dummy(ImVec2(0, 10));
-		static int e = 0;
-		if (ImGui::RadioButton("Text to Image", &e, 0)) {
-			isTextToImage = true;
-			batchSize = 4;
-			sampleMethod = "DPMPP2S_Mv2";
-		}
-		ImGui::SameLine(0, 10);
-		if (ImGui::RadioButton("Image to Image", &e, 1)) {
-			isTextToImage = false;
-			batchSize = 1;
-			sampleMethod = "DPMPP2S_A";
-			if (isTAESD) {
-				taesdPath = "";
-				if (!thread.isThreadRunning()) {
-					isModelLoading = true;
-					thread.userData = this;
-					thread.startThread();
-				}
-				isTAESD = false;
-			}
-		}
-		if (isTextToImage) {
-			ImGui::BeginDisabled();
-		}
-		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Button("Load Image")) {
-			ofFileDialogResult result = ofSystemLoadDialog("Load Image", false, "");
-			if (result.bSuccess) {
-				imageName = result.getName();
-				ofFile file(result.getPath());
-				string fileExtension = ofToUpper(file.getExtension());
-				if (fileExtension == "JPG" || fileExtension == "JPEG" || fileExtension == "PNG") {
-					image.load(result.getPath());
-					fbo.begin();
-					image.draw(0, 0, width, height);
-					fbo.end();
+		if (!isTextToImage) {
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::Button("Load Image")) {
+				ofFileDialogResult result = ofSystemLoadDialog("Load Image", false, "");
+				if (result.bSuccess) {
+					imageName = result.getName();
+					ofFile file(result.getPath());
+					string fileExtension = ofToUpper(file.getExtension());
+					if (fileExtension == "JPG" || fileExtension == "JPEG" || fileExtension == "PNG") {
+						image.load(result.getPath());
+						fbo.begin();
+						image.draw(0, 0, width, height);
+						fbo.end();
+					}
 				}
 			}
+			ImGui::SameLine(0, 5);
+			ImGui::Text(&imageName[0]);
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
 		}
-		ImGui::SameLine(0, 5);
-		ImGui::Text(&imageName[0]);
-		if (isTextToImage) {
-			ImGui::EndDisabled();
-		}
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat("CFG Scale", &cfgScale, 0, 20);
 		ImGui::Dummy(ImVec2(0, 10));
@@ -367,25 +359,16 @@ void ofApp::draw() {
 			}
 			ImGui::EndCombo();
 		}
-		if (isTextToImage) {
-			ImGui::BeginDisabled();
-		}
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderFloat("Strength", &strength, 0, 1);
-		if (isTextToImage) {
-			ImGui::EndDisabled();
+		if (!isTextToImage) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderFloat("Strength", &strength, 0, 1);
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::InputInt("Seed", &seed, 1, 100);
-		if (!isTextToImage) {
-			ImGui::BeginDisabled();
+		if (isTextToImage) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderInt("Batch Size", &batchSize, 1, 16);
 		}
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderInt("Batch Size", &batchSize, 1, 16);
-		if (!isTextToImage) {
-			ImGui::EndDisabled();
-		}
-		ImGui::Dummy(ImVec2(0, 10));
 		if (thread.isThreadRunning()) {
 			ImGui::EndDisabled();
 		}
@@ -394,6 +377,7 @@ void ofApp::draw() {
 	if (thread.isThreadRunning()) {
 		ImGui::BeginDisabled();
 	}
+	ImGui::Dummy(ImVec2(0, 10));
 	if (ImGui::Button("Generate")) {
 		if (!thread.isThreadRunning()) {
 			fbo.getTexture().readToPixels(pixels);
