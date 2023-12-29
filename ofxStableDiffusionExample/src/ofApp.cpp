@@ -18,7 +18,7 @@ void ofApp::setup() {
 	height = 512;
 	cfgScale = 1.0;
 	sampleSteps = 4;
-	clipSkipLayers = 0;
+	clipSkipLayers = -1;
 	previewSize = batchSize = 4;
 	selectedImage = 0;
 	strength = 0.5;
