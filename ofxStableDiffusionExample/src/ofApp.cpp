@@ -266,6 +266,14 @@ void ofApp::draw() {
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Checkbox("VAE Tiling", &isVaeTiling)) {
+				if (!thread.isThreadRunning()) {
+					isModelLoading = true;
+					thread.userData = this;
+					thread.startThread();
+				}
+		}
+		ImGui::Dummy(ImVec2(0, 10));
 		static int e = 0;
 		if (ImGui::RadioButton("Text to Image", &e, 0)) {
 			isTextToImage = true;
