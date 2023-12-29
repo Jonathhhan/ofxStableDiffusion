@@ -7,17 +7,17 @@ void ofApp::setup() {
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	ofDisableArbTex();
 	printf("%s", sd_get_system_info().c_str());
-	modelPath = "data/models/sd_turbo.safetensors";
-	modelName = "sd_turbo.safetensors";
+	modelPath = "data/models/sd_xl_turbo_1.0_fp16.safetensors";
+	modelName = "sd_xl_turbo_1.0_fp16.safetensors";
 	taesdPath = "";
 	esrganPath = "";
 	loraModelDir = "data/models/lora/";
-	vaePath = "data/models/vae/sd-vae-ft-ema.safetensors";
+	vaePath = "data/models/vae/sdxl_vae.safetensors";
 	prompt = "a mushroom, botanic painting, icon";
 	width = 768;
 	height = 512;
 	cfgScale = 1.0;
-	sampleSteps = 1;
+	sampleSteps = 4;
 	clipSkipLayers = 0;
 	previewSize = batchSize = 4;
 	selectedImage = 0;
@@ -439,7 +439,9 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 //--------------------------------------------------------------
 void ofApp::allocate() {
 	for (int i = 0; i < 16; i++) {
-		textureVector[i].getTextureData().textureID = NULL;
+		if (textureVector[i].isAllocated()) {
+			textureVector[i].getTextureData().textureID = NULL;
+		}
 		textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 	}
 	fbo.allocate(width, height, GL_RGB);

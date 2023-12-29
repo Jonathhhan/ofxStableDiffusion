@@ -4,8 +4,8 @@
 void stableDiffusionThread::threadedFunction() {
 	ofApp *thread = (ofApp*)userData;
 	if (thread->isModelLoading) {
-		thread->stableDiffusion.setup(thread->numThreads, thread->isVaeDecodeOnly, &thread->taesdPath[0], &thread->esrganPath[0], thread->isFreeParamsImmediatly, thread->isVaeTiling, &thread->loraModelDir[0], thread->rngType);
-		thread->stableDiffusion.load_from_file(&thread->modelPath[0], &thread->vaePath[0], thread->ggmlType, thread->schedule, thread->clipSkipLayers);
+		thread->stableDiffusion.setup(thread->numThreads, thread->isVaeDecodeOnly, &thread->taesdPath[0], &thread->esrganPath[0], thread->isFreeParamsImmediatly,  thread->isVaeTiling ,&thread->loraModelDir[0], thread->rngType);
+		thread->stableDiffusion.load_from_file(&thread->modelPath[0], &thread->vaePath[0], thread->ggmlType,  thread->schedule, thread->clipSkipLayers);
 		thread->isModelLoading = false;
 	} else if (thread->isTextToImage) {
 		thread->stableDiffusionPixelVector = thread->stableDiffusion.txt2img(thread->prompt, thread->negativePrompt, thread->cfgScale, thread->width, thread->height, thread->sampleMethodEnum, thread->sampleSteps, thread->seed, thread->batchSize);
