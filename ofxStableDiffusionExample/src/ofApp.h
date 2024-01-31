@@ -4,6 +4,7 @@
 #include "stableDiffusionThread.h"
 #include "stable-diffusion.h"
 #include "ofxImGui.h"
+#include "ofxCv.h"
 
 class ofApp : public ofBaseApp {
 	public:
@@ -28,8 +29,6 @@ class ofApp : public ofBaseApp {
 
 		stableDiffusionThread thread;
 		std::vector<ofTexture> textureVector;
-		StableDiffusion stableDiffusion;
-		std::vector<uint8_t*> stableDiffusionPixelVector;
 		ofFbo fbo;
 		ofImage image;
 		ofPixels pixels;
@@ -53,10 +52,12 @@ class ofApp : public ofBaseApp {
 		std::string modelPath;
 		std::string modelName;
 		std::string taesdPath;
+		std::string controlNetPath;
+		std::string embedDir;
 		std::string loraModelDir;
 		std::string vaePath;
 		std::string esrganPath;
-		SampleMethod sampleMethodEnum;
+		sample_method_t sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
 		bool isVaeDecodeOnly;
@@ -72,9 +73,14 @@ class ofApp : public ofBaseApp {
 		int previewWidth;
 		std::string imageName;
 		ofxImGui::Gui gui;
-		ggml_type ggmlType;
-		Schedule schedule;
-		RNGType rngType;
+		sd_type_t sdType;
+		schedule_t schedule;
+		rng_type_t rngType;
 		bool diffused;
 		bool isModelLoading;
+		sd_image_t input_image;
+		sd_image_t* output_images;
+		sd_image_t* control_image;
+		std::string controlImagePath;
+		float controlStrength;
 };

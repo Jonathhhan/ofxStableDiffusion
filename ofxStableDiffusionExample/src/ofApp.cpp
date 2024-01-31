@@ -1,32 +1,52 @@
 #include "ofApp.h"
 
+using namespace cv;
+using namespace cv::dnn;
+
+//--------------------------------------------------------------
+void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
+	if (level <= SD_LOG_INFO) {
+		fputs(log, stdout);
+		fflush(stdout);
+	}
+	else {
+		fputs(log, stderr);
+		fflush(stderr);
+	}
+}
+
 //--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
 	ofSetEscapeQuitsApp(false);
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	ofDisableArbTex();
-	printf("%s", sd_get_system_info().c_str());
-	modelPath = "data/models/sd_xl_turbo_1.0_fp16.safetensors";
-	modelName = "sd_xl_turbo_1.0_fp16.safetensors";
+	printf("%s", sd_get_system_info());
+	sd_set_log_callback(sd_log_cb, NULL);
+	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
+	modelName = "v1-5-pruned-emaonly.safetensors";
+	controlNetPath = "";
+	embedDir = "data/models/embeddings";
 	taesdPath = "";
-	esrganPath = "";
-	loraModelDir = "data/models/lora/";
-	vaePath = "data/models/vae/sdxl_vae.safetensors";
-	prompt = "a mushroom, botanic painting, icon";
-	width = 768;
+	loraModelDir = "data/models/lora";
+	vaePath = "data/models/vae/vae.safetensors";
+	prompt = "a car, 8k";
+	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
+	controlImagePath = "data/control_2.png";
+	width = 512;
 	height = 512;
-	cfgScale = 1.0;
-	sampleSteps = 4;
+	cfgScale = 7.0;
+	sampleSteps = 15;
 	clipSkipLayers = -1;
 	previewSize = batchSize = 4;
 	selectedImage = 0;
 	strength = 0.5;
+	controlStrength = 0.9;
 	seed = -1;
-	ggmlType = GGML_TYPE_COUNT;
+	sdType = SD_TYPE_COUNT;
 	schedule = DEFAULT;
-	rngType = STD_DEFAULT_RNG;
-	imageWidth = "768";
+	rngType = CUDA_RNG;
+	imageWidth = "512";
 	imageHeight = "512";
 	sampleMethod = "DPMPP2S_Mv2";
 	promptIsEdited = true;
@@ -39,7 +59,7 @@ void ofApp::setup() {
 	isVaeTiling = false;
 	isFreeParamsImmediatly = false;
 	numThreads = 8;
-	esrganMultiplier = 1;
+	esrganMultiplier = 4;
 	for (int i = 0; i < 16; i++) {
 		ofTexture texture;
 		textureVector.push_back(texture);
@@ -57,7 +77,12 @@ void ofApp::setup() {
 void ofApp::update() {
 	if (diffused) {
 		for (int i = 0; i < batchSize; i++) {
-			textureVector[i].loadData(&stableDiffusionPixelVector[i][0], width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+			if (isESRGAN) {
+				textureVector[i].loadData(output_images[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+			}
+			else {
+				textureVector[i].loadData(output_images[i].data, width, height, GL_RGB);
+			}
 		}
 		previousSelectedImage = 0;
 		previewSize = batchSize;
@@ -222,65 +247,25 @@ void ofApp::draw() {
 		if (ImGui::RadioButton("Text to Image", &e, 0)) {
 			isTextToImage = true;
 			batchSize = 4;
-			sampleMethod = "DPMPP2S_Mv2";
 		}
 		ImGui::SameLine(0, 10);
 		if (ImGui::RadioButton("Image to Image", &e, 1)) {
 			isTextToImage = false;
-			batchSize = 1;
-			sampleMethod = "DPMPP2S_A";
-			if (isTAESD) {
-				taesdPath = "";
-				if (!thread.isThreadRunning()) {
-					isModelLoading = true;
-					thread.userData = this;
-					thread.startThread();
-				}
-				isTAESD = false;
-			}
-		}
-		if (isTextToImage) {
-			ImGui::Dummy(ImVec2(0, 10));
-			if (ImGui::Checkbox("TAESD", &isTAESD)) {
-				if (isTAESD) {
-					taesdPath = "data/models/taesd/taesd.safetensors";
-					if (!thread.isThreadRunning()) {
-						isModelLoading = true;
-						thread.userData = this;
-						thread.startThread();
-					}
-				}
-				else {
-					taesdPath = "";
-					if (!thread.isThreadRunning()) {
-						isModelLoading = true;
-						thread.userData = this;
-						thread.startThread();
-					}
-				}
-			}
+			batchSize = 4;
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Checkbox("ESRGAN", &isESRGAN)) {
-			if (isESRGAN) {
-				esrganMultiplier = 4;
-				allocate();
-				esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
-				if (!thread.isThreadRunning()) {
-					isModelLoading = true;
-					thread.userData = this;
-					thread.startThread();
-				}
+		if (ImGui::Checkbox("TAESD", &isTAESD)) {
+			if (!thread.isThreadRunning() && isTAESD) {
+				taesdPath = "data/models/taesd/taesd.safetensors";
+				isModelLoading = true;
+				thread.userData = this;
+				thread.startThread();
 			}
-			else {
-				esrganMultiplier = 1;
-				allocate();
-				esrganPath = "";
-				if (!thread.isThreadRunning()) {
-					isModelLoading = true;
-					thread.userData = this;
-					thread.startThread();
-				}
+			else if (!thread.isThreadRunning() && !isTAESD) {
+				taesdPath = "";
+				isModelLoading = true;
+				thread.userData = this;
+				thread.startThread();
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
@@ -301,9 +286,22 @@ void ofApp::draw() {
 					string fileExtension = ofToUpper(file.getExtension());
 					if (fileExtension == "JPG" || fileExtension == "JPEG" || fileExtension == "PNG") {
 						image.load(result.getPath());
+
+
 						fbo.begin();
 						image.draw(0, 0, width, height);
 						fbo.end();
+						fbo.getTexture().readToPixels(pixels);
+						input_image = { (uint32_t)width,
+						  (uint32_t)height,
+						  3,
+						  pixels.getData() };
+						//delete control_image;
+						//control_image = NULL;
+						//control_image = new sd_image_t{ (uint32_t)width,
+						//  (uint32_t)height,
+						//  3,
+						//  pixels.getData() };
 					}
 				}
 			}
@@ -312,6 +310,10 @@ void ofApp::draw() {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
 		}
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::SliderInt("Clip Skip Layers", &clipSkipLayers, -1, 33);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::SliderFloat("Control Strength", &controlStrength, 0, 2);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat("CFG Scale", &cfgScale, 0, 20);
 		ImGui::Dummy(ImVec2(0, 10));
@@ -352,7 +354,7 @@ void ofApp::draw() {
 				bool is_selected = (sampleMethod == sampleMethodArray[n]);
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
 					sampleMethod = sampleMethodArray[n];
-					sampleMethodEnum = (SampleMethod)n;
+					sampleMethodEnum = (sample_method_t)n;
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
@@ -365,9 +367,11 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::InputInt("Seed", &seed, 1, 100);
-		if (isTextToImage) {
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderInt("Batch Size", &batchSize, 1, 16);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::SliderInt("Batch Size", &batchSize, 1, 16);
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Checkbox("4x Upscale", &isESRGAN)) {
+			allocate();
 		}
 		if (thread.isThreadRunning()) {
 			ImGui::EndDisabled();
@@ -380,7 +384,6 @@ void ofApp::draw() {
 	ImGui::Dummy(ImVec2(0, 10));
 	if (ImGui::Button("Generate")) {
 		if (!thread.isThreadRunning()) {
-			fbo.getTexture().readToPixels(pixels);
 			thread.userData = this;
 			thread.startThread();
 		}
@@ -434,13 +437,25 @@ void ofApp::allocate() {
 		if (textureVector[i].isAllocated()) {
 			textureVector[i].getTextureData().textureID = NULL;
 		}
-		textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+		if (isESRGAN) {
+			textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+		} else {
+			textureVector[i].allocate(width, height, GL_RGB);
+		}
 	}
 	fbo.allocate(width, height, GL_RGB);
 	if (image.isAllocated()) {
 		fbo.begin();
 		image.draw(0, 0, width, height);
 		fbo.end();
+		fbo.getTexture().readToPixels(pixels);
+		input_image = { (uint32_t)width, (uint32_t)height, 3, pixels.getData() };
+		delete control_image;
+		control_image = NULL;
+		control_image = new sd_image_t{ (uint32_t)width,
+		  (uint32_t)height,
+		  3,
+		  pixels.getData() };
 	}
 }
 

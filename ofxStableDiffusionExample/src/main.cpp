@@ -8,7 +8,7 @@ int main() {
 	settings.setSize(1280, 720);
 	// settings.maximized = true;
 	settings.visible = true;
-	settings.multiMonitorFullScreen = false;
+	// settings.multiMonitorFullScreen = true;
 	settings.windowMode = OF_WINDOW;
 
 	auto window = ofCreateWindow(settings);
