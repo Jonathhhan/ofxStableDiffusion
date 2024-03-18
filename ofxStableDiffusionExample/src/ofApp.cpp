@@ -35,6 +35,8 @@ void ofApp::setup() {
 	keepClipOnCpu = false;
 	keepControlNetCpu = false;
 	keepVaeOnCpu = false;
+	styleStrength = 1;
+	normalizeInput = false;
 	width = 512;
 	height = 512;
 	cfgScale = 7.0;

@@ -73,6 +73,8 @@ class ofApp : public ofBaseApp {
 		bool keepClipOnCpu;
 		bool keepControlNetCpu;
 		bool keepVaeOnCpu;
+		float styleStrength;
+		bool normalizeInput;
 		int numThreads;
 		int esrganMultiplier;
 		int previewWidth;
