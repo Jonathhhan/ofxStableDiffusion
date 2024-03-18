@@ -1,8 +1,5 @@
 #include "ofApp.h"
 
-using namespace cv;
-using namespace cv::dnn;
-
 //--------------------------------------------------------------
 void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	if (level <= SD_LOG_INFO) {
@@ -33,6 +30,11 @@ void ofApp::setup() {
 	prompt = "a car, 8k";
 	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 	controlImagePath = "data/control_2.png";
+	stackedIdEmbedDir = "";
+	inputIdImagesPath = "";
+	keepClipOnCpu = false;
+	keepControlNetCpu = false;
+	keepVaeOnCpu = false;
 	width = 512;
 	height = 512;
 	cfgScale = 7.0;

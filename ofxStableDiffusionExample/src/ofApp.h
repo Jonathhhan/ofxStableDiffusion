@@ -4,7 +4,7 @@
 #include "stableDiffusionThread.h"
 #include "stable-diffusion.h"
 #include "ofxImGui.h"
-#include "ofxCv.h"
+
 
 class ofApp : public ofBaseApp {
 	public:
@@ -57,6 +57,8 @@ class ofApp : public ofBaseApp {
 		std::string loraModelDir;
 		std::string vaePath;
 		std::string esrganPath;
+		std::string stackedIdEmbedDir;
+		std::string inputIdImagesPath;
 		sample_method_t sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
@@ -68,6 +70,9 @@ class ofApp : public ofBaseApp {
 		bool isFullScreen;
 		bool isTAESD;
 		bool isESRGAN;
+		bool keepClipOnCpu;
+		bool keepControlNetCpu;
+		bool keepVaeOnCpu;
 		int numThreads;
 		int esrganMultiplier;
 		int previewWidth;
