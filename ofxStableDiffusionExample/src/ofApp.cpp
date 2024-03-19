@@ -20,23 +20,23 @@ void ofApp::setup() {
 	ofDisableArbTex();
 	printf("%s", sd_get_system_info());
 	sd_set_log_callback(sd_log_cb, NULL);
-	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
-	modelName = "v1-5-pruned-emaonly.safetensors";
+	modelPath = "data/models/sd_xl_base_1.0.safetensors";
+	modelName = "sd_xl_base_1.0.safetensors";
 	controlNetPath = "";
 	embedDir = "data/models/embeddings";
 	taesdPath = "";
 	loraModelDir = "data/models/lora";
 	vaePath = "data/models/vae/vae.safetensors";
-	prompt = "a car, 8k";
+	prompt = "man img, man with futuristic clothes";
 	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 	controlImagePath = "data/control_2.png";
-	stackedIdEmbedDir = "";
-	inputIdImagesPath = "";
+	stackedIdEmbedDir = ""; //"data/models/photomaker/photomaker-v1.safetensors";
+	inputIdImagesPath = "data/photomaker_images/newton_man";
 	keepClipOnCpu = false;
 	keepControlNetCpu = false;
 	keepVaeOnCpu = false;
-	styleStrength = 1;
-	normalizeInput = false;
+	styleStrength = 20;
+	normalizeInput = true;
 	width = 512;
 	height = 512;
 	cfgScale = 7.0;
@@ -82,10 +82,10 @@ void ofApp::update() {
 	if (diffused) {
 		for (int i = 0; i < batchSize; i++) {
 			if (isESRGAN) {
-				textureVector[i].loadData(output_images[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+				textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 			}
 			else {
-				textureVector[i].loadData(output_images[i].data, width, height, GL_RGB);
+				textureVector[i].loadData(outputImages[i].data, width, height, GL_RGB);
 			}
 		}
 		previousSelectedImage = 0;
@@ -296,7 +296,7 @@ void ofApp::draw() {
 						image.draw(0, 0, width, height);
 						fbo.end();
 						fbo.getTexture().readToPixels(pixels);
-						input_image = { (uint32_t)width,
+						inputImage = { (uint32_t)width,
 						  (uint32_t)height,
 						  3,
 						  pixels.getData() };
@@ -453,10 +453,10 @@ void ofApp::allocate() {
 		image.draw(0, 0, width, height);
 		fbo.end();
 		fbo.getTexture().readToPixels(pixels);
-		input_image = { (uint32_t)width, (uint32_t)height, 3, pixels.getData() };
-		delete control_image;
-		control_image = NULL;
-		control_image = new sd_image_t{ (uint32_t)width,
+		inputImage = { (uint32_t)width, (uint32_t)height, 3, pixels.getData() };
+		delete controlImage;
+		controlImage = NULL;
+		controlImage = new sd_image_t{ (uint32_t)width,
 		  (uint32_t)height,
 		  3,
 		  pixels.getData() };

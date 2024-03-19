@@ -85,9 +85,9 @@ class ofApp : public ofBaseApp {
 		rng_type_t rngType;
 		bool diffused;
 		bool isModelLoading;
-		sd_image_t input_image;
-		sd_image_t* output_images;
-		sd_image_t* control_image;
+		sd_image_t inputImage;
+		sd_image_t* outputImages;
+		sd_image_t* controlImage;
 		std::string controlImagePath;
 		float controlStrength;
 };
