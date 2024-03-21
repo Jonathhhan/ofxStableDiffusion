@@ -27,7 +27,7 @@ void ofApp::setup() {
 	taesdPath = "";
 	loraModelDir = "data/models/lora";
 	vaePath = "data/models/vae/vae.safetensors";
-	prompt = "woman with futuristic clothes"; // "man img, man with futuristic clothes";
+	prompt = "animal with futuristic clothes"; // "man img, man with futuristic clothes";
 	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 	controlImagePath = "data/openpose.jpeg";
 	stackedIdEmbedDir = ""; // "data/models/photomaker/photomaker-v1.safetensors";
