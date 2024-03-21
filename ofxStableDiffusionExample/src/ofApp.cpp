@@ -20,27 +20,27 @@ void ofApp::setup() {
 	ofDisableArbTex();
 	printf("%s", sd_get_system_info());
 	sd_set_log_callback(sd_log_cb, NULL);
-	modelPath = "data/models/sd_xl_base_1.0.safetensors";
-	modelName = "sd_xl_base_1.0.safetensors";
-	controlNetPath = "";
-	embedDir = "data/models/embeddings";
+	modelPath = "data/models/sd_xl_turbo_1.0_fp16.safetensors";
+	modelName = "sd_xl_turbo_1.0_fp16.safetensors";
+	controlNetPath = ""; // "data/models/controlnet/control_v11p_sd15_openpose_2.safetensors";
+	embedDir = "";
 	taesdPath = "";
 	loraModelDir = "data/models/lora";
 	vaePath = "data/models/vae/vae.safetensors";
-	prompt = "man img, man with futuristic clothes";
+	prompt = "woman with futuristic clothes"; // "man img, man with futuristic clothes";
 	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
-	controlImagePath = "data/control_2.png";
-	stackedIdEmbedDir = ""; //"data/models/photomaker/photomaker-v1.safetensors";
+	controlImagePath = "data/openpose.jpeg";
+	stackedIdEmbedDir = ""; // "data/models/photomaker/photomaker-v1.safetensors";
 	inputIdImagesPath = "data/photomaker_images/newton_man";
 	keepClipOnCpu = false;
 	keepControlNetCpu = false;
 	keepVaeOnCpu = false;
 	styleStrength = 20;
 	normalizeInput = true;
-	width = 512;
-	height = 512;
-	cfgScale = 7.0;
-	sampleSteps = 15;
+	width = 768;
+	height = 768;
+	cfgScale = 1.0;
+	sampleSteps = 5;
 	clipSkipLayers = -1;
 	previewSize = batchSize = 4;
 	selectedImage = 0;
@@ -50,8 +50,8 @@ void ofApp::setup() {
 	sdType = SD_TYPE_COUNT;
 	schedule = DEFAULT;
 	rngType = CUDA_RNG;
-	imageWidth = "512";
-	imageHeight = "512";
+	imageWidth = "768";
+	imageHeight = "768";
 	sampleMethod = "DPMPP2S_Mv2";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
@@ -255,7 +255,7 @@ void ofApp::draw() {
 		ImGui::SameLine(0, 10);
 		if (ImGui::RadioButton("Image to Image", &e, 1)) {
 			isTextToImage = false;
-			batchSize = 4;
+			batchSize = 1;
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
@@ -300,9 +300,9 @@ void ofApp::draw() {
 						  (uint32_t)height,
 						  3,
 						  pixels.getData() };
-						//delete control_image;
-						//control_image = NULL;
-						//control_image = new sd_image_t{ (uint32_t)width,
+						//delete controlImage;
+						//controlImage = NULL;
+						//controlImage = new sd_image_t{ (uint32_t)width,
 						//  (uint32_t)height,
 						//  3,
 						//  pixels.getData() };
