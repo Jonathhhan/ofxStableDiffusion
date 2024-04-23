@@ -4,52 +4,56 @@
 void stableDiffusionThread::threadedFunction() {
 	ofxStableDiffusion* thread = (ofxStableDiffusion*)userData;
 	if (thread->isModelLoading) {
+		std::cout << thread->modelPath << std::endl;
 		if (sd_ctx != NULL) {
 			free_sd_ctx(sd_ctx);
 		}
 		sd_ctx = new_sd_ctx(&thread->modelPath[0],
 			&thread->vaePath[0],
 			&thread->taesdPath[0],
-			&thread->controlNetPath[0],
+			&thread->controlNetPathCStr[0],
 			&thread->loraModelDir[0],
-			&thread->embedDir[0],
-			&thread->stackedIdEmbedDir[0],
-			thread->isVaeDecodeOnly,
-			thread->isVaeTiling,
-			thread->isFreeParamsImmediatly,
-			thread->numThreads,
-			thread->sdType,
+			&thread->embedDirCStr[0],
+			&thread->stackedIdEmbedDirCStr[0],
+			thread->vaeDecodeOnly,
+			thread->vaeTiling,
+			thread->freeParamsImmediately,
+			thread->nThreads,
+			thread->wType,
 			thread->rngType,
 			thread->schedule,
 			thread->keepClipOnCpu,
 			thread->keepControlNetCpu,
 			thread->keepVaeOnCpu);
+		std::cout << "thread->modelPath" << std::endl;
 		if (upscaler_ctx != NULL) {
 			free_upscaler_ctx(upscaler_ctx);
 		}
-		upscaler_ctx = new_upscaler_ctx(&thread->esrganPath[0],
-			thread->numThreads,
-			thread->sdType);
+		if (thread->isESRGAN) {
+			upscaler_ctx = new_upscaler_ctx(&thread->esrganPath[0],
+				thread->nThreads,
+				thread->wType);
+		}
 		thread->isModelLoading = false;
 	} else if (thread->isTextToImage) {
 		thread->outputImages = txt2img(sd_ctx,
 			&thread->prompt[0],
 			&thread->negativePrompt[0],
-			thread->clipSkipLayers,
+			thread->clipSkip,
 			thread->cfgScale,
 			thread->width,
 			thread->height,
 			thread->sampleMethodEnum,
 			thread->sampleSteps,
 			thread->seed,
-			thread->batchSize,
-			thread->controlImage,
+			thread->batchCount,
+			thread->controlCond,
 			thread->controlStrength,
 			thread->styleStrength,
 			thread->normalizeInput,
 			&thread->inputIdImagesPath[0]);
 		if (thread->isESRGAN) {
-			for (int i = 0; i < thread->batchSize; i++) {
+			for (int i = 0; i < thread->batchCount; i++) {
 				thread->outputImages[i] = upscale(upscaler_ctx, thread->outputImages[i], thread->esrganMultiplier);
 			}
 		}
@@ -59,7 +63,7 @@ void stableDiffusionThread::threadedFunction() {
 			thread->inputImage,
 			&thread->prompt[0],
 			&thread->negativePrompt[0],
-			thread->clipSkipLayers,
+			thread->clipSkip,
 			thread->cfgScale,
 			thread->width,
 			thread->height,
@@ -67,9 +71,9 @@ void stableDiffusionThread::threadedFunction() {
 			thread->sampleSteps,
 			thread->strength,
 			thread->seed,
-			thread->batchSize);
+			thread->batchCount);
 		if (thread->isESRGAN) {
-			for (int i = 0; i < thread->batchSize; i++) {
+			for (int i = 0; i < thread->batchCount; i++) {
 				thread->outputImages[i] = upscale(upscaler_ctx, thread->outputImages[i], thread->esrganMultiplier);
 			}
 		}

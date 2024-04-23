@@ -6,13 +6,17 @@
 
 class ofxStableDiffusion {
 public:
+	ofxStableDiffusion();
 	void loadImage(ofPixels pixels);
+	bool isDiffused();
+	void setDiffused(bool diffused);
+	sd_image_t* returnImages();
 	void typeName(enum sd_type_t type);
 	void setLogCallback(sd_log_cb_t sd_log_cb, void* data);
 	void setProgressCallback(sd_progress_cb_t cb, void* data);
 	int32_t getNumPhysicalCores();
 	const char* getSystemInfo();
-	sd_ctx_t* newSdCtx(std::string model_path,
+	void newSdCtx(std::string model_path,
 		std::string vae_path,
 		std::string taesd_path,
 		std::string control_net_path_c_str,
@@ -30,18 +34,17 @@ public:
 		bool keep_control_net_cpu,
 		bool keep_vae_on_cpu);
 	void freeSdCtx(sd_ctx_t* sdCtx);
-	sd_image_t* txt2img(sd_ctx_t* sd_ctx,
-		std::string prompt,
+	void txt2img(std::string prompt,
 		std::string negative_prompt,
 		int clip_skip,
 		float cfg_scale,
 		int width,
 		int height,
-		enum sample_method_t sample_method,
+		sample_method_t sample_method,
 		int sample_steps,
 		int64_t seed,
 		int batch_count,
-		const sd_image_t* control_cond,
+		sd_image_t* control_cond,
 		float control_strength,
 		float style_strength,
 		bool normalize_input,
@@ -59,7 +62,7 @@ public:
 		float strength,
 		int64_t seed,
 		int batch_count);
-	sd_image_t* ofxStableDiffusion::img2vid(sd_ctx_t* sd_ctx,
+	sd_image_t* img2vid(sd_ctx_t* sd_ctx,
 		sd_image_t init_image,
 		int width,
 		int height,
@@ -98,26 +101,26 @@ public:
 	int width;
 	int height;
 	float cfgScale;
-	int batchSize;
+	int batchCount;
 	float strength;
 	int seed;
-	int clipSkipLayers;
+	int clipSkip;
 	const char* sampleMethod;
 	std::string modelPath;
 	std::string modelName;
 	std::string taesdPath;
-	std::string controlNetPath;
-	std::string embedDir;
+	std::string controlNetPathCStr;
+	std::string embedDirCStr;
 	std::string loraModelDir;
 	std::string vaePath;
 	std::string esrganPath;
-	std::string stackedIdEmbedDir;
+	std::string stackedIdEmbedDirCStr;
 	std::string inputIdImagesPath;
 	sample_method_t sampleMethodEnum;
 	int sampleSteps;
-	bool isVaeDecodeOnly;
-	bool isVaeTiling;
-	bool isFreeParamsImmediatly;
+	bool vaeDecodeOnly;
+	bool vaeTiling;
+	bool freeParamsImmediately;
 	bool isFullScreen;
 	bool isTAESD;
 	bool isESRGAN;
@@ -126,9 +129,9 @@ public:
 	bool keepVaeOnCpu;
 	float styleStrength;
 	bool normalizeInput;
-	int numThreads;
+	int nThreads;
 	int esrganMultiplier;
-	sd_type_t sdType;
+	sd_type_t wType;
 	schedule_t schedule;
 	rng_type_t rngType;
 	std::string controlImagePath;
@@ -136,7 +139,7 @@ public:
 
 	sd_image_t inputImage;
 	sd_image_t* outputImages;
-	sd_image_t* controlImage;
+	sd_image_t* controlCond;
 	stableDiffusionThread thread;
 	bool isTextToImage;
 	bool isModelLoading;

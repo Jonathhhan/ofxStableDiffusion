@@ -12,12 +12,28 @@ void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	}
 }
 
+ofxStableDiffusion::ofxStableDiffusion() {
+	setLogCallback(sd_log_cb, NULL);
+}
+
 //--------------------------------------------------------------
 void ofxStableDiffusion::loadImage(ofPixels pixels) {
 	inputImage = { (uint32_t)width,
 		(uint32_t)height,
 		3,
 		pixels.getData() };
+}
+
+bool ofxStableDiffusion::isDiffused() {
+	return diffused;
+}
+
+sd_image_t* ofxStableDiffusion::returnImages() {
+	return outputImages;
+}
+
+void ofxStableDiffusion::setDiffused(bool diffuse) {
+	diffused = diffuse;
 }
 
 //--------------------------------------------------------------
@@ -46,46 +62,45 @@ const char* ofxStableDiffusion::getSystemInfo() {
 }
 
 //--------------------------------------------------------------
-sd_ctx_t* ofxStableDiffusion::newSdCtx(std::string modelPath,
+void ofxStableDiffusion::newSdCtx(std::string modelPath,
 	std::string vaePath,
 	std::string taesdPath,
 	std::string controlNetPathCStr,
 	std::string loraModelDir,
 	std::string embedDirCStr,
 	std::string stackedIdEmbedDirCStr,
-					bool vaeDecodeOnly,
-					bool vaeTiling,
-					bool freeParamsImmediately,
-					int nThreads,
-					enum sd_type_t wType,
-					enum rng_type_t rngType,
-					enum schedule_t schedule,
-					bool keepClipOnCpu,
-					bool keepControlNetCpu,
-					bool keepVaeOnCpu) {
-
-		if (!thread.isThreadRunning()) {
-			isModelLoading = true;
-			thread.userData = this;
-			thread.startThread();
-		}
-	return new_sd_ctx(&modelPath[0],
-		&vaePath[0],
-		&taesdPath[0],
-		&controlNetPathCStr[0],
-		&loraModelDir[0],
-		&embedDirCStr[0],
-		&stackedIdEmbedDirCStr[0],
-		vaeDecodeOnly,
-		vaeTiling,
-		freeParamsImmediately,
-		nThreads,
-		wType,
-		rngType,
-		schedule,
-		keepClipOnCpu,
-		keepControlNetCpu,
-		keepVaeOnCpu);
+	bool vaeDecodeOnly,
+	bool vaeTiling,
+	bool freeParamsImmediately,
+	int nThreads,
+	enum sd_type_t wType,
+	enum rng_type_t rngType,
+	enum schedule_t schedule,
+	bool keepClipOnCpu,
+	bool keepControlNetCpu,
+	bool keepVaeOnCpu) {
+	if (!thread.isThreadRunning()) {
+		isModelLoading = true;
+		this->modelPath = modelPath;
+		this->vaePath = vaePath;
+		this->taesdPath = taesdPath;
+		this->controlNetPathCStr = controlNetPathCStr;
+		this->loraModelDir = loraModelDir;
+		this->embedDirCStr = embedDirCStr;
+		this->stackedIdEmbedDirCStr = stackedIdEmbedDirCStr;
+		this->vaeDecodeOnly = vaeDecodeOnly;
+		this->vaeTiling = vaeTiling;
+		this->freeParamsImmediately = freeParamsImmediately;
+		this->nThreads = nThreads;
+		this->wType = wType;
+		this->rngType = rngType;
+		this->schedule = schedule;
+		this->keepClipOnCpu = keepClipOnCpu;
+		this->keepControlNetCpu = keepControlNetCpu;
+		this->keepVaeOnCpu = keepVaeOnCpu;
+		thread.userData = this;
+		thread.startThread();
+	}
 }
 
 //--------------------------------------------------------------
@@ -94,59 +109,63 @@ void ofxStableDiffusion::freeSdCtx(sd_ctx_t* sdCtx) {
 }
 
 //--------------------------------------------------------------
-sd_image_t* ofxStableDiffusion::txt2img(sd_ctx_t* sdCtx,
-					std::string prompt,
-					std::string negativePrompt,
-					int clipSkip,
-					float cfgScale,
-					int width,
-					int height,
-					enum sample_method_t sampleMethod,
-					int sampleSteps,
-					int64_t seed,
-					int batchCount,
-					const sd_image_t* controlCond,
-					float controlStrength,
-					float styleStrength,
-					bool normalizeInput,
-					std::string inputIdImagesPath) {
-	return txt2img(sdCtx,
-		&prompt[0],
-		&negativePrompt[0],
-		clipSkip,
-		cfgScale,
-		width,
-		height,
-		sampleMethod,
-		sampleSteps,
-		seed,
-		batchCount,
-		controlCond,
-		controlStrength,
-		styleStrength,
-		normalizeInput,
-		&inputIdImagesPath[0]);
+void ofxStableDiffusion::txt2img(std::string prompt,
+	std::string negativePrompt,
+	int clipSkip,
+	float cfgScale,
+	int width,
+	int height,
+	enum sample_method_t sampleMethod,
+	int sampleSteps,
+	int64_t seed,
+	int batchCount,
+	sd_image_t* controlCond,
+	float controlStrength,
+	float styleStrength,
+	bool normalizeInput,
+	std::string inputIdImagesPath) {
+	isTextToImage = true;
+	this->prompt = prompt;
+	this->negativePrompt = negativePrompt;
+	this->clipSkip = clipSkip;
+	this->cfgScale = cfgScale;
+	this->width = width;
+	this->height = height;
+	this->sampleMethodEnum = sampleMethod;
+	this->sampleSteps = sampleSteps;
+	this->seed = seed;
+	this->batchCount = batchCount;
+	this->controlCond = controlCond;
+	this->controlStrength = controlStrength;
+	this->styleStrength = styleStrength;
+	this->normalizeInput = normalizeInput;
+	this->inputIdImagesPath = inputIdImagesPath;
+	if (!thread.isThreadRunning()) {
+		thread.userData = this;
+		thread.startThread();
+	}
+	//return sd_image_t*;
 }
 
 //--------------------------------------------------------------
 sd_image_t* ofxStableDiffusion::img2img(sd_ctx_t* sdCtx,
-					sd_image_t initImage,
-					std::string prompt,
-					std::string negativePrompt,
-					int clipSkip,
-					float cfgScale,
-					int width,
-					int height,
-					enum sample_method_t sample_method,
-					int sample_steps,
-					float strength,
-					int64_t seed,
-					int batch_count) {
+	sd_image_t initImage,
+	std::string prompt,
+	std::string negativePrompt,
+	int clipSkip,
+	float cfgScale,
+	int width,
+	int height,
+	enum sample_method_t sample_method,
+	int sample_steps,
+	float strength,
+	int64_t seed,
+	int batch_count) {
 	return img2img(sdCtx,
 		initImage,
 		&prompt[0],
 		&negativePrompt[0],
-		clipSkip, 
+		clipSkip,
 		cfgScale,
 		width,
 		height,
@@ -159,19 +178,19 @@ sd_image_t* ofxStableDiffusion::img2img(sd_ctx_t* sdCtx,
 
 //--------------------------------------------------------------
 sd_image_t* ofxStableDiffusion::img2vid(sd_ctx_t* sdCtx,
-					sd_image_t init_image,
-					int width,
-					int height,
-					int video_frames,
-					int motion_bucket_id,
-					int fps,
-					float augmentation_level,
-					float min_cfg,
-					float cfg_scale,
-					enum sample_method_t sample_method,
-					int sample_steps,
-					float strength,
-					int64_t seed) {
+	sd_image_t init_image,
+	int width,
+	int height,
+	int video_frames,
+	int motion_bucket_id,
+	int fps,
+	float augmentation_level,
+	float min_cfg,
+	float cfg_scale,
+	enum sample_method_t sample_method,
+	int sample_steps,
+	float strength,
+	int64_t seed) {
 	return img2vid(sdCtx,
 		init_image,
 		width,
