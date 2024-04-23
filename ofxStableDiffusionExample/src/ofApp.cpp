@@ -7,7 +7,6 @@ void ofApp::setup() {
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	ofDisableArbTex();
 	printf("%s", stableDiffusion.getSystemInfo());
-	// stableDiffusion.setLogCallback(sd_log_cb, NULL);
 	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
 	modelName = "v1-5-pruned-emaonly.safetensors";
 	controlNetPath = ""; // "data/models/controlnet/control_v11p_sd15_openpose_2.safetensors";
@@ -16,7 +15,7 @@ void ofApp::setup() {
 	loraModelDir = ""; // "data/models/lora";
 	vaePath = ""; // "data/models/vae/vae.safetensors";
 	prompt = "animal with futuristic clothes"; // "man img, man with futuristic clothes";
-	esrganPath = ""; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
+	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth"; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 	controlImagePath = ""; // "data/openpose.jpeg";
 	stackedIdEmbedDir = ""; // "data/models/photomaker/photomaker-v1.safetensors";
 	inputIdImagesPath = ""; // "data/photomaker_images/newton_man";
@@ -62,7 +61,8 @@ void ofApp::setup() {
 
 //--------------------------------------------------------------
 void ofApp::update() {
-	if (diffused) {
+	if (stableDiffusion.isDiffused()) {
+		outputImages = stableDiffusion.returnImages();
 		for (int i = 0; i < batchSize; i++) {
 			if (isESRGAN) {
 				textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
@@ -73,7 +73,7 @@ void ofApp::update() {
 		}
 		previousSelectedImage = 0;
 		previewSize = batchSize;
-		diffused = false;
+		stableDiffusion.setDiffused(false);
 	}
 	selectedImage = previousSelectedImage;
 }
@@ -220,7 +220,7 @@ void ofApp::draw() {
 			if (result.bSuccess) {
 				modelPath = result.getPath();
 				modelName = result.getName();
-				sdCtx = stableDiffusion.newSdCtx(modelPath,
+				stableDiffusion.newSdCtx(modelPath,
 					vaePath,
 					taesdPath,
 					controlNetPath,
@@ -376,9 +376,8 @@ void ofApp::draw() {
 	}
 	ImGui::Dummy(ImVec2(0, 10));
 	if (ImGui::Button("Generate")) {
-		stableDiffusion.txt2img(sdCtx,
-			&prompt[0],
-			&negativePrompt[0],
+		stableDiffusion.txt2img(prompt,
+			negativePrompt,
 			clipSkip,
 			cfgScale,
 			width,
@@ -391,7 +390,7 @@ void ofApp::draw() {
 			controlStrength,
 			styleStrength,
 			normalizeInput,
-			&inputIdImagesPath[0]);
+			inputIdImagesPath);
 	}
 	if (stableDiffusion.diffused) {
 		ImGui::EndDisabled();
