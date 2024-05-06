@@ -4,11 +4,10 @@
 void stableDiffusionThread::threadedFunction() {
 	ofxStableDiffusion* thread = (ofxStableDiffusion*)userData;
 	if (thread->isModelLoading) {
-		std::cout << thread->modelPath << std::endl;
-		if (sd_ctx != NULL) {
-			free_sd_ctx(sd_ctx);
+		if (sdCtx != NULL) {
+			free_sd_ctx(sdCtx);
 		}
-		sd_ctx = new_sd_ctx(&thread->modelPath[0],
+		sdCtx = new_sd_ctx(&thread->modelPath[0],
 			&thread->vaePath[0],
 			&thread->taesdPath[0],
 			&thread->controlNetPathCStr[0],
@@ -25,18 +24,18 @@ void stableDiffusionThread::threadedFunction() {
 			thread->keepClipOnCpu,
 			thread->keepControlNetCpu,
 			thread->keepVaeOnCpu);
-		std::cout << "thread->modelPath" << std::endl;
-		if (upscaler_ctx != NULL) {
-			free_upscaler_ctx(upscaler_ctx);
+		if (upscalerCtx != NULL) {
+			free_upscaler_ctx(upscalerCtx);
 		}
 		if (thread->isESRGAN) {
-			upscaler_ctx = new_upscaler_ctx(&thread->esrganPath[0],
+			upscalerCtx = new_upscaler_ctx(&thread->esrganPath[0],
 				thread->nThreads,
 				thread->wType);
 		}
 		thread->isModelLoading = false;
-	} else if (thread->isTextToImage) {
-		thread->outputImages = txt2img(sd_ctx,
+	}
+	else if (thread->isTextToImage) {
+		thread->outputImages = txt2img(sdCtx,
 			&thread->prompt[0],
 			&thread->negativePrompt[0],
 			thread->clipSkip,
@@ -54,12 +53,13 @@ void stableDiffusionThread::threadedFunction() {
 			&thread->inputIdImagesPath[0]);
 		if (thread->isESRGAN) {
 			for (int i = 0; i < thread->batchCount; i++) {
-				thread->outputImages[i] = upscale(upscaler_ctx, thread->outputImages[i], thread->esrganMultiplier);
+				thread->outputImages[i] = upscale(upscalerCtx, thread->outputImages[i], thread->esrganMultiplier);
 			}
 		}
 		thread->diffused = true;
-	} else {
-		thread->outputImages = img2img(sd_ctx,
+	}
+	else {
+		thread->outputImages = img2img(sdCtx,
 			thread->inputImage,
 			&thread->prompt[0],
 			&thread->negativePrompt[0],
@@ -74,7 +74,7 @@ void stableDiffusionThread::threadedFunction() {
 			thread->batchCount);
 		if (thread->isESRGAN) {
 			for (int i = 0; i < thread->batchCount; i++) {
-				thread->outputImages[i] = upscale(upscaler_ctx, thread->outputImages[i], thread->esrganMultiplier);
+				thread->outputImages[i] = upscale(upscalerCtx, thread->outputImages[i], thread->esrganMultiplier);
 			}
 		}
 		thread->diffused = true;

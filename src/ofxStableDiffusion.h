@@ -2,8 +2,8 @@
 
 #include "ofMain.h"
 #include "stableDiffusionThread.h"
-#include "../libs/stable-diffusion/include/stable-diffusion.h"
-
+#include "../libs/ofxStableDiffusion/include/stable-diffusion.h"
+#include <thread>
 class ofxStableDiffusion {
 public:
 	ofxStableDiffusion();
@@ -33,24 +33,23 @@ public:
 		bool keep_clip_on_cpu,
 		bool keep_control_net_cpu,
 		bool keep_vae_on_cpu);
-	void freeSdCtx(sd_ctx_t* sdCtx);
+	void freeSdCtx();
 	void txt2img(std::string prompt,
-		std::string negative_prompt,
-		int clip_skip,
-		float cfg_scale,
+		std::string negativePrompt,
+		int clipSkip,
+		float cfgScale,
 		int width,
 		int height,
-		sample_method_t sample_method,
-		int sample_steps,
+		sample_method_t sampleMethod,
+		int sampleSteps,
 		int64_t seed,
-		int batch_count,
-		sd_image_t* control_cond,
-		float control_strength,
-		float style_strength,
-		bool normalize_input,
-		std::string input_id_images_path);
-	sd_image_t* img2img(sd_ctx_t* sd_ctx,
-		sd_image_t init_image,
+		int batchCount,
+		sd_image_t* controlCond,
+		float controlStrength,
+		float styleStrength,
+		bool normalizeInput,
+		std::string inputIdImagesPath);
+	void img2img(sd_image_t init_image,
 		std::string prompt,
 		std::string negative_prompt,
 		int clip_skip,
@@ -61,9 +60,8 @@ public:
 		int sample_steps,
 		float strength,
 		int64_t seed,
-		int batch_count);
-	sd_image_t* img2vid(sd_ctx_t* sd_ctx,
-		sd_image_t init_image,
+		int batch_count) const;
+	void img2vid(sd_image_t init_image,
 		int width,
 		int height,
 		int video_frames,
@@ -75,7 +73,7 @@ public:
 		enum sample_method_t sample_method,
 		int sample_steps,
 		float strength,
-		int64_t seed);
+		int64_t seed) const;
 	void newUpscalerCtx(const char* esrgan_path,
 		int n_threads,
 		enum sd_type_t wtype);
@@ -105,7 +103,7 @@ public:
 	float strength;
 	int seed;
 	int clipSkip;
-	const char* sampleMethod;
+	char* sampleMethod;
 	std::string modelPath;
 	std::string modelName;
 	std::string taesdPath;

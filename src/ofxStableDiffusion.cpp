@@ -99,13 +99,14 @@ void ofxStableDiffusion::newSdCtx(std::string modelPath,
 		this->keepControlNetCpu = keepControlNetCpu;
 		this->keepVaeOnCpu = keepVaeOnCpu;
 		thread.userData = this;
+		std::cout << "start" << std::endl;
 		thread.startThread();
 	}
 }
 
 //--------------------------------------------------------------
-void ofxStableDiffusion::freeSdCtx(sd_ctx_t* sdCtx) {
-	free_sd_ctx(sdCtx);
+void ofxStableDiffusion::freeSdCtx() {
+	free_sd_ctx(thread.sdCtx);
 }
 
 //--------------------------------------------------------------
@@ -144,12 +145,10 @@ void ofxStableDiffusion::txt2img(std::string prompt,
 		thread.userData = this;
 		thread.startThread();
 	}
-	//return sd_image_t*;
 }
 
 //--------------------------------------------------------------
-sd_image_t* ofxStableDiffusion::img2img(sd_ctx_t* sdCtx,
-	sd_image_t initImage,
+void ofxStableDiffusion::img2img(sd_image_t initImage,
 	std::string prompt,
 	std::string negativePrompt,
 	int clipSkip,
@@ -160,25 +159,11 @@ sd_image_t* ofxStableDiffusion::img2img(sd_ctx_t* sdCtx,
 	int sample_steps,
 	float strength,
 	int64_t seed,
-	int batch_count) {
-	return img2img(sdCtx,
-		initImage,
-		&prompt[0],
-		&negativePrompt[0],
-		clipSkip,
-		cfgScale,
-		width,
-		height,
-		sample_method,
-		sample_steps,
-		strength,
-		seed,
-		batch_count);
+	int batch_count) const {
 }
 
 //--------------------------------------------------------------
-sd_image_t* ofxStableDiffusion::img2vid(sd_ctx_t* sdCtx,
-	sd_image_t init_image,
+void ofxStableDiffusion::img2vid(sd_image_t init_image,
 	int width,
 	int height,
 	int video_frames,
@@ -190,21 +175,7 @@ sd_image_t* ofxStableDiffusion::img2vid(sd_ctx_t* sdCtx,
 	enum sample_method_t sample_method,
 	int sample_steps,
 	float strength,
-	int64_t seed) {
-	return img2vid(sdCtx,
-		init_image,
-		width,
-		height,
-		video_frames,
-		motion_bucket_id,
-		fps,
-		augmentation_level,
-		min_cfg,
-		cfg_scale,
-		sample_method,
-		sample_steps,
-		strength,
-		seed);
+	int64_t seed) const {
 }
 
 //--------------------------------------------------------------
