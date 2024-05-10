@@ -6,6 +6,8 @@
 
 class ofxStableDiffusion {
 public:
+	ofxStableDiffusion();
+	virtual ~ofxStableDiffusion();
 	void loadImage(ofPixels pixels);
 	bool isDiffused() const;
 	void setDiffused(bool diffused);
