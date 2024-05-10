@@ -2,7 +2,6 @@
 
 #include "ofMain.h"
 #include "../libs/ofxStableDiffusion/include/stable-diffusion.h"
-#include <thread>
 
 class stableDiffusionThread : public ofThread {
 public:
@@ -11,4 +10,6 @@ public:
 	sd_ctx_t* sdCtx;
 private:
 	void threadedFunction();
+	bool isSdCtxLoaded = false;
+	bool isUpscalerCtxLoaded = false;
 };

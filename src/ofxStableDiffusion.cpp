@@ -1,22 +1,6 @@
 #include "ofxStableDiffusion.h"
 
 //--------------------------------------------------------------
-void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
-	if (level <= SD_LOG_INFO) {
-		fputs(log, stdout);
-		fflush(stdout);
-	}
-	else {
-		fputs(log, stderr);
-		fflush(stderr);
-	}
-}
-
-ofxStableDiffusion::ofxStableDiffusion() {
-	setLogCallback(sd_log_cb, NULL);
-}
-
-//--------------------------------------------------------------
 void ofxStableDiffusion::loadImage(ofPixels pixels) {
 	inputImage = { (uint32_t)width,
 		(uint32_t)height,
@@ -24,11 +8,11 @@ void ofxStableDiffusion::loadImage(ofPixels pixels) {
 		pixels.getData() };
 }
 
-bool ofxStableDiffusion::isDiffused() {
+bool ofxStableDiffusion::isDiffused() const {
 	return diffused;
 }
 
-sd_image_t* ofxStableDiffusion::returnImages() {
+sd_image_t* ofxStableDiffusion::returnImages() const {
 	return outputImages;
 }
 
@@ -62,44 +46,43 @@ const char* ofxStableDiffusion::getSystemInfo() {
 }
 
 //--------------------------------------------------------------
-void ofxStableDiffusion::newSdCtx(std::string modelPath,
-	std::string vaePath,
-	std::string taesdPath,
-	std::string controlNetPathCStr,
-	std::string loraModelDir,
-	std::string embedDirCStr,
-	std::string stackedIdEmbedDirCStr,
-	bool vaeDecodeOnly,
-	bool vaeTiling,
-	bool freeParamsImmediately,
-	int nThreads,
-	enum sd_type_t wType,
-	enum rng_type_t rngType,
-	enum schedule_t schedule,
-	bool keepClipOnCpu,
-	bool keepControlNetCpu,
-	bool keepVaeOnCpu) {
+void ofxStableDiffusion::newSdCtx(std::string modelPath_,
+	std::string vaePath_,
+	std::string taesdPath_,
+	std::string controlNetPathCStr_,
+	std::string loraModelDir_,
+	std::string embedDirCStr_,
+	std::string stackedIdEmbedDirCStr_,
+	bool vaeDecodeOnly_,
+	bool vaeTiling_,
+	bool freeParamsImmediately_,
+	int nThreads_,
+	enum sd_type_t wType_,
+	enum rng_type_t rngType_,
+	enum schedule_t schedule_,
+	bool keepClipOnCpu_,
+	bool keepControlNetCpu_,
+	bool keepVaeOnCpu_) {
 	if (!thread.isThreadRunning()) {
 		isModelLoading = true;
-		this->modelPath = modelPath;
-		this->vaePath = vaePath;
-		this->taesdPath = taesdPath;
-		this->controlNetPathCStr = controlNetPathCStr;
-		this->loraModelDir = loraModelDir;
-		this->embedDirCStr = embedDirCStr;
-		this->stackedIdEmbedDirCStr = stackedIdEmbedDirCStr;
-		this->vaeDecodeOnly = vaeDecodeOnly;
-		this->vaeTiling = vaeTiling;
-		this->freeParamsImmediately = freeParamsImmediately;
-		this->nThreads = nThreads;
-		this->wType = wType;
-		this->rngType = rngType;
-		this->schedule = schedule;
-		this->keepClipOnCpu = keepClipOnCpu;
-		this->keepControlNetCpu = keepControlNetCpu;
-		this->keepVaeOnCpu = keepVaeOnCpu;
+		modelPath = modelPath_;
+		vaePath = vaePath_;
+		taesdPath = taesdPath_;
+		controlNetPathCStr = controlNetPathCStr_;
+		loraModelDir = loraModelDir_;
+		embedDirCStr = embedDirCStr_;
+		stackedIdEmbedDirCStr = stackedIdEmbedDirCStr_;
+		vaeDecodeOnly = vaeDecodeOnly_;
+		vaeTiling = vaeTiling_;
+		freeParamsImmediately = freeParamsImmediately_;
+		nThreads = nThreads_;
+		wType = wType_;
+		rngType = rngType_;
+		schedule = schedule_;
+		keepClipOnCpu = keepClipOnCpu_;
+		keepControlNetCpu = keepControlNetCpu_;
+		keepVaeOnCpu = keepVaeOnCpu_;
 		thread.userData = this;
-		std::cout << "start" << std::endl;
 		thread.startThread();
 	}
 }
@@ -186,8 +169,8 @@ void ofxStableDiffusion::newUpscalerCtx(const char* esrganPath,
 }
 
 //--------------------------------------------------------------
-void ofxStableDiffusion::freeUpscalerCtx(upscaler_ctx_t* upscaler_ctx) {
-	free_upscaler_ctx(upscaler_ctx);
+void ofxStableDiffusion::freeUpscalerCtx() {
+	free_upscaler_ctx(thread.upscalerCtx);
 }
 
 //--------------------------------------------------------------

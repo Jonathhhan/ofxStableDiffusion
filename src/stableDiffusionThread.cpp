@@ -4,7 +4,7 @@
 void stableDiffusionThread::threadedFunction() {
 	ofxStableDiffusion* thread = (ofxStableDiffusion*)userData;
 	if (thread->isModelLoading) {
-		if (sdCtx != NULL) {
+		if (isSdCtxLoaded) {
 			free_sd_ctx(sdCtx);
 		}
 		sdCtx = new_sd_ctx(&thread->modelPath[0],
@@ -24,14 +24,16 @@ void stableDiffusionThread::threadedFunction() {
 			thread->keepClipOnCpu,
 			thread->keepControlNetCpu,
 			thread->keepVaeOnCpu);
-		if (upscalerCtx != NULL) {
+		if (isUpscalerCtxLoaded) {
 			free_upscaler_ctx(upscalerCtx);
 		}
 		if (thread->isESRGAN) {
 			upscalerCtx = new_upscaler_ctx(&thread->esrganPath[0],
 				thread->nThreads,
 				thread->wType);
+				isUpscalerCtxLoaded = true;
 		}
+		isSdCtxLoaded = true;
 		thread->isModelLoading = false;
 	}
 	else if (thread->isTextToImage) {

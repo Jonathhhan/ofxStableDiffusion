@@ -3,14 +3,13 @@
 #include "ofMain.h"
 #include "stableDiffusionThread.h"
 #include "../libs/ofxStableDiffusion/include/stable-diffusion.h"
-#include <thread>
+
 class ofxStableDiffusion {
 public:
-	ofxStableDiffusion();
 	void loadImage(ofPixels pixels);
-	bool isDiffused();
+	bool isDiffused() const;
 	void setDiffused(bool diffused);
-	sd_image_t* returnImages();
+	sd_image_t* returnImages() const;
 	void typeName(enum sd_type_t type);
 	void setLogCallback(sd_log_cb_t sd_log_cb, void* data);
 	void setProgressCallback(sd_progress_cb_t cb, void* data);
@@ -77,7 +76,7 @@ public:
 	void newUpscalerCtx(const char* esrgan_path,
 		int n_threads,
 		enum sd_type_t wtype);
-	void freeUpscalerCtx(upscaler_ctx_t* upscaler_ctx);
+	void freeUpscalerCtx();
 	void upscale(upscaler_ctx_t* upscaler_ctx,
 		sd_image_t input_image,
 		uint32_t upscale_factor);
