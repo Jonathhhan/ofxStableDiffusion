@@ -1,6 +1,12 @@
 #include "ofxStableDiffusion.h"
 
 //--------------------------------------------------------------
+ofxStableDiffusion::ofxStableDiffusion() {}
+
+//--------------------------------------------------------------
+ofxStableDiffusion::~ofxStableDiffusion() {}
+
+//--------------------------------------------------------------
 void ofxStableDiffusion::loadImage(ofPixels pixels) {
 	inputImage = { (uint32_t)width,
 		(uint32_t)height,
