@@ -1,10 +1,8 @@
 #pragma once
 
 #include "ofMain.h"
-#include "stableDiffusionThread.h"
-#include "stable-diffusion.h"
 #include "ofxImGui.h"
-
+#include "ofxStableDiffusion.h"
 
 class ofApp : public ofBaseApp {
 	public:
@@ -27,7 +25,7 @@ class ofApp : public ofBaseApp {
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
 		void allocate();
 
-		stableDiffusionThread thread;
+		//stableDiffusionThread thread;
 		std::vector<ofTexture> textureVector;
 		ofFbo fbo;
 		ofImage image;
@@ -40,7 +38,7 @@ class ofApp : public ofBaseApp {
 		int batchSize;
 		float strength;
 		int seed;
-		int clipSkipLayers;
+		int clipSkip;
 		int previewSize;
 		int selectedImage;
 		int previousSelectedImage;
@@ -62,11 +60,10 @@ class ofApp : public ofBaseApp {
 		sample_method_t sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
-		bool isVaeDecodeOnly;
-		bool isVaeTiling;
-		bool isFreeParamsImmediatly;
+		bool vaeDecodeOnly;
+		bool vaeTiling;
+		bool freeParamsImmediately;
 		bool negativePromptIsEdited;
-		bool isTextToImage;
 		bool isFullScreen;
 		bool isTAESD;
 		bool isESRGAN;
@@ -75,19 +72,24 @@ class ofApp : public ofBaseApp {
 		bool keepVaeOnCpu;
 		float styleStrength;
 		bool normalizeInput;
-		int numThreads;
+		int nThreads;
 		int esrganMultiplier;
-		int previewWidth;
-		std::string imageName;
-		ofxImGui::Gui gui;
-		sd_type_t sdType;
+		sd_type_t wType;
 		schedule_t schedule;
 		rng_type_t rngType;
+		std::string controlImagePath;
+		float controlStrength;
+
 		bool diffused;
 		bool isModelLoading;
 		sd_image_t inputImage;
 		sd_image_t* outputImages;
 		sd_image_t* controlImage;
-		std::string controlImagePath;
-		float controlStrength;
+		bool isTextToImage;
+		int previewWidth;
+		std::string imageName;
+		ofxImGui::Gui gui;
+		ofxStableDiffusion stableDiffusion;
+		sd_ctx_t* sdCtx;
+		upscaler_ctx_t* upscalerCtx;
 };

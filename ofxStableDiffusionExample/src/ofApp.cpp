@@ -1,37 +1,24 @@
 #include "ofApp.h"
 
 //--------------------------------------------------------------
-void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
-	if (level <= SD_LOG_INFO) {
-		fputs(log, stdout);
-		fflush(stdout);
-	}
-	else {
-		fputs(log, stderr);
-		fflush(stderr);
-	}
-}
-
-//--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
 	ofSetEscapeQuitsApp(false);
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	ofDisableArbTex();
-	printf("%s", sd_get_system_info());
-	sd_set_log_callback(sd_log_cb, NULL);
-	modelPath = "data/models/sd_xl_turbo_1.0_fp16.safetensors";
-	modelName = "sd_xl_turbo_1.0_fp16.safetensors";
+	printf("%s", stableDiffusion.getSystemInfo());
+	modelPath = "data/models/v1-5-pruned-emaonly.safetensors";
+	modelName = "v1-5-pruned-emaonly.safetensors";
 	controlNetPath = ""; // "data/models/controlnet/control_v11p_sd15_openpose_2.safetensors";
 	embedDir = "";
 	taesdPath = "";
-	loraModelDir = "data/models/lora";
-	vaePath = "data/models/vae/vae.safetensors";
+	loraModelDir = ""; // "data/models/lora";
+	vaePath = ""; // "data/models/vae/vae.safetensors";
 	prompt = "animal with futuristic clothes"; // "man img, man with futuristic clothes";
-	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
-	controlImagePath = "data/openpose.jpeg";
+	esrganPath = "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth"; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
+	controlImagePath = ""; // "data/openpose.jpeg";
 	stackedIdEmbedDir = ""; // "data/models/photomaker/photomaker-v1.safetensors";
-	inputIdImagesPath = "data/photomaker_images/newton_man";
+	inputIdImagesPath = ""; // "data/photomaker_images/newton_man";
 	keepClipOnCpu = false;
 	keepControlNetCpu = false;
 	keepVaeOnCpu = false;
@@ -41,13 +28,13 @@ void ofApp::setup() {
 	height = 768;
 	cfgScale = 1.0;
 	sampleSteps = 5;
-	clipSkipLayers = -1;
+	clipSkip = -1;
 	previewSize = batchSize = 4;
 	selectedImage = 0;
 	strength = 0.5;
 	controlStrength = 0.9;
 	seed = -1;
-	sdType = SD_TYPE_COUNT;
+	wType = SD_TYPE_COUNT;
 	schedule = DEFAULT;
 	rngType = CUDA_RNG;
 	imageWidth = "768";
@@ -59,27 +46,23 @@ void ofApp::setup() {
 	isFullScreen = false;
 	isTAESD = false;
 	isESRGAN = false;
-	isVaeDecodeOnly = false;
-	isVaeTiling = false;
-	isFreeParamsImmediatly = false;
-	numThreads = 8;
+	vaeDecodeOnly = false;
+	vaeTiling = false;
+	freeParamsImmediately = false;
+	nThreads = 8;
 	esrganMultiplier = 4;
 	for (int i = 0; i < 16; i++) {
 		ofTexture texture;
 		textureVector.push_back(texture);
 	}
 	allocate();
-	if (!thread.isThreadRunning()) {
-		isModelLoading = true;
-		thread.userData = this;
-		thread.startThread();
-	}
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
-	if (diffused) {
+	if (stableDiffusion.isDiffused()) {
+		outputImages = stableDiffusion.returnImages();
 		for (int i = 0; i < batchSize; i++) {
 			if (isESRGAN) {
 				textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
@@ -90,7 +73,7 @@ void ofApp::update() {
 		}
 		previousSelectedImage = 0;
 		previewSize = batchSize;
-		diffused = false;
+		stableDiffusion.setDiffused(false);
 	}
 	selectedImage = previousSelectedImage;
 }
@@ -217,7 +200,7 @@ void ofApp::draw() {
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
-		if (thread.isThreadRunning()) {
+		if (stableDiffusion.diffused) {
 			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
@@ -237,11 +220,23 @@ void ofApp::draw() {
 			if (result.bSuccess) {
 				modelPath = result.getPath();
 				modelName = result.getName();
-				if (!thread.isThreadRunning()) {
-					isModelLoading = true;
-					thread.userData = this;
-					thread.startThread();
-				}
+				stableDiffusion.newSdCtx(modelPath,
+					vaePath,
+					taesdPath,
+					controlNetPath,
+					loraModelDir,
+					embedDir,
+					stackedIdEmbedDir,
+					vaeDecodeOnly,
+					vaeTiling,
+					freeParamsImmediately,
+					nThreads,
+					wType,
+					rngType,
+					schedule,
+					keepClipOnCpu,
+					keepControlNetCpu,
+					keepVaeOnCpu);
 			}
 		}
 		ImGui::SameLine(0, 5);
@@ -259,25 +254,19 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
-			if (!thread.isThreadRunning() && isTAESD) {
+			if (!stableDiffusion.diffused && isTAESD) {
 				taesdPath = "data/models/taesd/taesd.safetensors";
-				isModelLoading = true;
-				thread.userData = this;
-				thread.startThread();
+
 			}
-			else if (!thread.isThreadRunning() && !isTAESD) {
+			else if (!stableDiffusion.diffused && !isTAESD) {
 				taesdPath = "";
-				isModelLoading = true;
-				thread.userData = this;
-				thread.startThread();
+
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Checkbox("VAE Tiling", &isVaeTiling)) {
-				if (!thread.isThreadRunning()) {
-					isModelLoading = true;
-					thread.userData = this;
-					thread.startThread();
+		if (ImGui::Checkbox("VAE Tiling", &vaeTiling)) {
+				if (!stableDiffusion.diffused) {
+
 				}
 		}
 		if (!isTextToImage) {
@@ -315,7 +304,7 @@ void ofApp::draw() {
 			ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderInt("Clip Skip Layers", &clipSkipLayers, -1, 33);
+		ImGui::SliderInt("Clip Skip Layers", &clipSkip, -1, 33);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat("Control Strength", &controlStrength, 0, 2);
 		ImGui::Dummy(ImVec2(0, 10));
@@ -377,22 +366,33 @@ void ofApp::draw() {
 		if (ImGui::Checkbox("4x Upscale", &isESRGAN)) {
 			allocate();
 		}
-		if (thread.isThreadRunning()) {
+		if (stableDiffusion.diffused) {
 			ImGui::EndDisabled();
 		}
 		ImGui::TreePop();
 	}
-	if (thread.isThreadRunning()) {
+	if (stableDiffusion.diffused) {
 		ImGui::BeginDisabled();
 	}
 	ImGui::Dummy(ImVec2(0, 10));
 	if (ImGui::Button("Generate")) {
-		if (!thread.isThreadRunning()) {
-			thread.userData = this;
-			thread.startThread();
-		}
+		stableDiffusion.txt2img(prompt,
+			negativePrompt,
+			clipSkip,
+			cfgScale,
+			width,
+			height,
+			sampleMethodEnum,
+			sampleSteps,
+			seed,
+			batchSize,
+			controlImage,
+			controlStrength,
+			styleStrength,
+			normalizeInput,
+			inputIdImagesPath);
 	}
-	if (thread.isThreadRunning()) {
+	if (stableDiffusion.diffused) {
 		ImGui::EndDisabled();
 	}
 	ImGui::End();
