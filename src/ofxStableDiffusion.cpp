@@ -168,19 +168,33 @@ void ofxStableDiffusion::img2img(sd_image_t inputImage_,
 }
 
 //--------------------------------------------------------------
-void ofxStableDiffusion::img2vid(sd_image_t init_image,
-	int width,
-	int height,
-	int video_frames,
-	int motion_bucket_id,
-	int fps,
-	float augmentation_level,
-	float min_cfg,
-	float cfg_scale,
-	enum sample_method_t sample_method,
-	int sample_steps,
-	float strength,
-	int64_t seed) {
+void ofxStableDiffusion::img2vid(sd_image_t inputImage_,
+	int width_,
+	int height_,
+	int videoFrames_,
+	int motionBucketId_,
+	int fps_,
+	float augmentationLevel_,
+	float minCfg_,
+	float cfgScale_,
+	enum sample_method_t sampleMethod_,
+	int sampleSteps_,
+	float strength_,
+	int64_t seed_) {
+	if (!thread.isThreadRunning()) {
+		inputImage = inputImage_;
+		width = width_;
+		height = height_;
+		videoFrames = videoFrames_;
+		motionBucketId = motionBucketId_;
+		fps = fps_;
+		sampleMethodEnum = sampleMethod_;
+		sampleSteps = sampleSteps_;
+		strength = strength_;
+		seed = seed_;
+		thread.userData = this;
+		thread.startThread();
+	}
 }
 
 //--------------------------------------------------------------

@@ -61,7 +61,7 @@ public:
 		int sample_steps,
 		float strength,
 		int64_t seed,
-		int batch_count) const;
+		int batch_count);
 	void img2vid(sd_image_t init_image,
 		int width,
 		int height,
@@ -74,7 +74,7 @@ public:
 		enum sample_method_t sample_method,
 		int sample_steps,
 		float strength,
-		int64_t seed) const;
+		int64_t seed);
 	void newUpscalerCtx(const char* esrgan_path,
 		int n_threads,
 		enum sd_type_t wtype);
@@ -117,6 +117,9 @@ public:
 	std::string inputIdImagesPath;
 	sample_method_t sampleMethodEnum;
 	int sampleSteps;
+	int videoFrames;
+	int motionBucketId;
+	int fps;
 	bool vaeDecodeOnly;
 	bool vaeTiling;
 	bool freeParamsImmediately;
