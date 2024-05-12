@@ -99,56 +99,72 @@ void ofxStableDiffusion::freeSdCtx() {
 }
 
 //--------------------------------------------------------------
-void ofxStableDiffusion::txt2img(std::string prompt,
-	std::string negativePrompt,
-	int clipSkip,
-	float cfgScale,
-	int width,
-	int height,
-	enum sample_method_t sampleMethod,
-	int sampleSteps,
-	int64_t seed,
-	int batchCount,
-	sd_image_t* controlCond,
-	float controlStrength,
-	float styleStrength,
-	bool normalizeInput,
-	std::string inputIdImagesPath) {
-	isTextToImage = true;
-	this->prompt = prompt;
-	this->negativePrompt = negativePrompt;
-	this->clipSkip = clipSkip;
-	this->cfgScale = cfgScale;
-	this->width = width;
-	this->height = height;
-	this->sampleMethodEnum = sampleMethod;
-	this->sampleSteps = sampleSteps;
-	this->seed = seed;
-	this->batchCount = batchCount;
-	this->controlCond = controlCond;
-	this->controlStrength = controlStrength;
-	this->styleStrength = styleStrength;
-	this->normalizeInput = normalizeInput;
-	this->inputIdImagesPath = inputIdImagesPath;
+void ofxStableDiffusion::txt2img(std::string prompt_,
+	std::string negativePrompt_,
+	int clipSkip_,
+	float cfgScale_,
+	int width_,
+	int height_,
+	enum sample_method_t sampleMethod_,
+	int sampleSteps_,
+	int64_t seed_,
+	int batchCount_,
+	sd_image_t* controlCond_,
+	float controlStrength_,
+	float styleStrength_,
+	bool normalizeInput_,
+	std::string inputIdImagesPath_) {
 	if (!thread.isThreadRunning()) {
+		isTextToImage = true;
+		prompt = prompt_;
+		negativePrompt = negativePrompt_;
+		clipSkip = clipSkip_;
+		cfgScale = cfgScale_;
+		width = width_;
+		height = height_;
+		sampleMethodEnum = sampleMethod_;
+		sampleSteps = sampleSteps_;
+		seed = seed;
+		batchCount = batchCount_;
+		controlCond = controlCond_;
+		controlStrength = controlStrength_;
+		styleStrength = styleStrength_;
+		normalizeInput = normalizeInput_;
+		inputIdImagesPath = inputIdImagesPath_;
 		thread.userData = this;
 		thread.startThread();
 	}
 }
 
 //--------------------------------------------------------------
-void ofxStableDiffusion::img2img(sd_image_t initImage,
-	std::string prompt,
-	std::string negativePrompt,
-	int clipSkip,
-	float cfgScale,
-	int width,
-	int height,
-	enum sample_method_t sample_method,
-	int sample_steps,
-	float strength,
-	int64_t seed,
-	int batch_count) const {
+void ofxStableDiffusion::img2img(sd_image_t inputImage_,
+	std::string prompt_,
+	std::string negativePrompt_,
+	int clipSkip_,
+	float cfgScale_,
+	int width_,
+	int height_,
+	enum sample_method_t sampleMethod_,
+	int sampleSteps_,
+	float strength_,
+	int64_t seed_,
+	int batchCount_) {
+	if (!thread.isThreadRunning()) {
+		inputImage = inputImage_;
+		prompt = prompt_;
+		negativePrompt = negativePrompt_;
+		clipSkip = clipSkip_;
+		cfgScale = cfgScale_;
+		width = width_;
+		height = height_;
+		sampleMethodEnum = sampleMethod_;
+		sampleSteps = sampleSteps_;
+		strength = strength_;
+		seed = seed_;
+		batchCount = batchCount_;
+		thread.userData = this;
+		thread.startThread();
+	}
 }
 
 //--------------------------------------------------------------
@@ -164,7 +180,7 @@ void ofxStableDiffusion::img2vid(sd_image_t init_image,
 	enum sample_method_t sample_method,
 	int sample_steps,
 	float strength,
-	int64_t seed) const {
+	int64_t seed) {
 }
 
 //--------------------------------------------------------------
