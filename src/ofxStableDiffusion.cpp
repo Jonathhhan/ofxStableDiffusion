@@ -124,7 +124,7 @@ void ofxStableDiffusion::txt2img(std::string prompt_,
 		height = height_;
 		sampleMethodEnum = sampleMethod_;
 		sampleSteps = sampleSteps_;
-		seed = seed;
+		seed = seed_;
 		batchCount = batchCount_;
 		controlCond = controlCond_;
 		controlStrength = controlStrength_;
