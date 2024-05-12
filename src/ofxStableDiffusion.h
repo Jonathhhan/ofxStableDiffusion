@@ -140,7 +140,7 @@ public:
 	sd_image_t* outputImages;
 	sd_image_t* controlCond;
 	stableDiffusionThread thread;
-	bool isTextToImage;
-	bool isModelLoading;
-	bool diffused;
+	bool isTextToImage = false;
+	bool isModelLoading = false;
+	bool diffused = false;
 };
