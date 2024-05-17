@@ -262,12 +262,10 @@ void ofApp::draw() {
 		static int e = 0;
 		if (ImGui::RadioButton("Text to Image", &e, 0)) {
 			isTextToImage = true;
-			batchCount = 4;
 		}
 		ImGui::SameLine(0, 10);
 		if (ImGui::RadioButton("Image to Image", &e, 1)) {
 			isTextToImage = false;
-			batchCount = 1;
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
