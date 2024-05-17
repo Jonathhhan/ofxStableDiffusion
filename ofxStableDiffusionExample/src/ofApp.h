@@ -25,7 +25,6 @@ class ofApp : public ofBaseApp {
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
 		void allocate();
 
-		//stableDiffusionThread thread;
 		std::vector<ofTexture> textureVector;
 		ofFbo fbo;
 		ofImage image;
@@ -35,7 +34,7 @@ class ofApp : public ofBaseApp {
 		int width;
 		int height;
 		float cfgScale;
-		int batchSize;
+		int batchCount;
 		float strength;
 		int seed;
 		int clipSkip;
