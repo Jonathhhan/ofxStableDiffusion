@@ -16,6 +16,10 @@ public:
 	int32_t getNumPhysicalCores();
 	const char* getSystemInfo();
 	void newSdCtx(std::string modelPath,
+		std::string clipLPath,
+		std::string clipGPath,
+		std::string t5xxlPath,
+		std::string diffusionModelPath,
 		std::string vaePath,
 		std::string taesdPath,
 		std::string controlNetPathCStr,
@@ -31,12 +35,14 @@ public:
 		enum schedule_t s,
 		bool keepClipOnCpu,
 		bool keepControlNetCpu,
-		bool keepVaeOnCpu);
+		bool keepVaeOnCpu,
+		bool diffusionFlashAttn);
 	void freeSdCtx();
 	void txt2img(std::string prompt,
 		std::string negativePrompt,
 		int clipSkip,
 		float cfgScale,
+		float guidance,
 		int width,
 		int height,
 		sample_method_t sampleMethod,
@@ -47,12 +53,19 @@ public:
 		float controlStrength,
 		float styleStrength,
 		bool normalizeInput,
-		std::string inputIdImagesPath);
+		std::string inputIdImagesPath,
+		int * skip_layers,
+		size_t skip_layers_count,
+		float slg_scale,
+		float skip_layer_start,
+		float skip_layer_end);
 	void img2img(sd_image_t initImage,
+		sd_image_t maskImage,
 		std::string prompt,
 		std::string negativePrompt,
 		int clipSkip,
 		float cfgScale,
+		float guidance,
 		int width,
 		int height,
 		enum sample_method_t sampleMethod,
@@ -64,7 +77,12 @@ public:
 		float controlStrength,
 		float styleStrength,
 		bool normalizeInput,
-		std::string inputIdImagesPath);
+		std::string inputIdImagesPath,
+		int * skip_layers,
+		size_t skip_layers_count,
+		float slg_scale,
+		float skip_layer_start,
+		float skip_layer_end);
 	void img2vid(sd_image_t init_image,
 		int width,
 		int height,
@@ -79,8 +97,7 @@ public:
 		float strength,
 		int64_t seed);
 	void newUpscalerCtx(const char* esrganPath,
-		int nThreads,
-		enum sd_type_t wType);
+		int nThreads);
 	void freeUpscalerCtx();
 	void upscale(upscaler_ctx_t* upscalerCtx,
 		sd_image_t inputImage,
@@ -98,53 +115,69 @@ public:
 		float strong,
 		bool inverse);
 
-	std::string prompt;
-	std::string negativePrompt;
-	int width;
-	int height;
-	float cfgScale;
-	int batchCount;
-	float strength;
-	int seed;
-	int clipSkip;
-	char* sampleMethod;
 	std::string modelPath;
 	std::string modelName;
+	std::string clipLPath;
+	std::string clipGPath;
+	std::string t5xxlPath;
+	std::string diffusionModelPath;
+	std::string vaePath;
 	std::string taesdPath;
 	std::string controlNetPathCStr;
 	std::string embedDirCStr;
 	std::string loraModelDir;
-	std::string vaePath;
 	std::string esrganPath;
 	std::string stackedIdEmbedDirCStr;
-	std::string inputIdImagesPath;
-	sample_method_t sampleMethodEnum;
-	int sampleSteps;
-	int videoFrames;
-	int motionBucketId;
-	int fps;
 	bool vaeDecodeOnly;
 	bool vaeTiling;
 	bool freeParamsImmediately;
-	bool isFullScreen;
-	bool isTAESD;
-	bool isESRGAN;
+	int nThreads;
+	sd_type_t wType;
+	rng_type_t rngType;
+	schedule_t schedule;
 	bool keepClipOnCpu;
 	bool keepControlNetCpu;
 	bool keepVaeOnCpu;
+	bool diffusionFlashAttn;
+	std::string prompt;
+	std::string negativePrompt;
+	int clipSkip;
+	float cfgScale;
+	float guidance;
+	int width;
+	int height;
+	char * sampleMethod;
+	sample_method_t sampleMethodEnum;
+	int sampleSteps;
+	int seed;
+	int batchCount;
+	sd_image_t * controlCond;
+	float controlStrength;
 	float styleStrength;
 	bool normalizeInput;
-	int nThreads;
-	int esrganMultiplier;
-	sd_type_t wType;
-	schedule_t schedule;
-	rng_type_t rngType;
-	std::string controlImagePath;
-	float controlStrength;
+	std::string inputIdImagesPath;
+	int * skipLayers;
+	size_t skipLayersCount;
+	float slgScale;
+	float skipLayerStart;
+	float skipLayerEnd;
+	sd_image_t initImage;
+	sd_image_t maskImage;
+	int videoFrames;
+	int motionBucketId;
+	int fps;
+	float augmentationLevel;
+	float minCfg;
+	float strength;
 
-	sd_image_t inputImage;
+	bool isFullScreen;
+	bool isTAESD;
+	bool isESRGAN;
+	int esrganMultiplier;
+
+	//std::string controlImagePath;
 	sd_image_t* outputImages;
-	sd_image_t* controlCond;
+	
 	stableDiffusionThread thread;
 	bool isTextToImage = false;
 	bool isModelLoading = false;

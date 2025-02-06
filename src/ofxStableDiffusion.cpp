@@ -22,7 +22,7 @@ ofxStableDiffusion::~ofxStableDiffusion() {}
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::loadImage(ofPixels pixels) {
-	inputImage = { (uint32_t)width,
+	initImage = { (uint32_t)width,
 		(uint32_t)height,
 		3,
 		pixels.getData() };
@@ -57,6 +57,10 @@ const char* ofxStableDiffusion::getSystemInfo() {
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::newSdCtx(std::string modelPath_,
+	std::string clipLPath_,
+	std::string clipGPath_,
+	std::string t5xxlPath_,
+	std::string diffusionModelPath_,
 	std::string vaePath_,
 	std::string taesdPath_,
 	std::string controlNetPathCStr_,
@@ -72,10 +76,15 @@ void ofxStableDiffusion::newSdCtx(std::string modelPath_,
 	enum schedule_t schedule_,
 	bool keepClipOnCpu_,
 	bool keepControlNetCpu_,
-	bool keepVaeOnCpu_) {
+	bool keepVaeOnCpu_,
+	bool diffusionFlashAttn_) {
 	if (!thread.isThreadRunning()) {
 		isModelLoading = true;
 		modelPath = modelPath_;
+		clipLPath = clipLPath_;
+		clipGPath = clipGPath_;
+		t5xxlPath = t5xxlPath_;
+		diffusionModelPath = diffusionModelPath_;
 		vaePath = vaePath_;
 		taesdPath = taesdPath_;
 		controlNetPathCStr = controlNetPathCStr_;
@@ -92,6 +101,7 @@ void ofxStableDiffusion::newSdCtx(std::string modelPath_,
 		keepClipOnCpu = keepClipOnCpu_;
 		keepControlNetCpu = keepControlNetCpu_;
 		keepVaeOnCpu = keepVaeOnCpu_;
+		diffusionFlashAttn = diffusionFlashAttn_;
 		thread.userData = this;
 		thread.startThread();
 	}
@@ -107,6 +117,7 @@ void ofxStableDiffusion::txt2img(std::string prompt_,
 	std::string negativePrompt_,
 	int clipSkip_,
 	float cfgScale_,
+	float guidance_,
 	int width_,
 	int height_,
 	enum sample_method_t sampleMethod_,
@@ -117,13 +128,19 @@ void ofxStableDiffusion::txt2img(std::string prompt_,
 	float controlStrength_,
 	float styleStrength_,
 	bool normalizeInput_,
-	std::string inputIdImagesPath_) {
+	std::string inputIdImagesPath_,
+	int * skipLayers_,
+	size_t skipLayersCount_,
+	float slgScale_,
+	float skipLayerStart_,
+	float skipLayerEnd_) {
 	if (!thread.isThreadRunning()) {
 		isTextToImage = true;
 		prompt = prompt_;
 		negativePrompt = negativePrompt_;
 		clipSkip = clipSkip_;
 		cfgScale = cfgScale_;
+		guidance = guidance_;
 		width = width_;
 		height = height_;
 		sampleMethodEnum = sampleMethod_;
@@ -135,6 +152,11 @@ void ofxStableDiffusion::txt2img(std::string prompt_,
 		styleStrength = styleStrength_;
 		normalizeInput = normalizeInput_;
 		inputIdImagesPath = inputIdImagesPath_;
+		skipLayers = skipLayers_;
+		skipLayersCount = skipLayersCount_;
+		slgScale = slgScale_;
+		skipLayerStart = skipLayerStart_;
+		skipLayerEnd = skipLayerEnd_;
 		thread.userData = this;
 		thread.startThread();
 	}
@@ -142,10 +164,12 @@ void ofxStableDiffusion::txt2img(std::string prompt_,
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::img2img(sd_image_t initImage_,
+	sd_image_t maskImage_,
 	std::string prompt_,
 	std::string negativePrompt_,
 	int clipSkip_,
 	float cfgScale_,
+	float guidance_,
 	int width_,
 	int height_,
 	enum sample_method_t sampleMethod_,
@@ -157,14 +181,21 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	float controlStrength_,
 	float styleStrength_,
 	bool normalizeInput_,
-	std::string inputIdImagesPath_) {
+	std::string inputIdImagesPath_,
+	int * skipLayers_,
+	size_t skipLayersCount_,
+	float slgScale_,
+	float skipLayerStart_,
+	float skipLayerEnd_) {
 	if (!thread.isThreadRunning()) {
 		isTextToImage = false;
-		inputImage = initImage_;
+		initImage = initImage_;
+		maskImage = maskImage_;
 		prompt = prompt_;
 		negativePrompt = negativePrompt_;
 		clipSkip = clipSkip_;
 		cfgScale = cfgScale_;
+		guidance = guidance_;
 		width = width_;
 		height = height_;
 		sampleMethodEnum = sampleMethod_;
@@ -177,6 +208,11 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 		styleStrength = styleStrength_;
 		normalizeInput = normalizeInput_;
 		inputIdImagesPath = inputIdImagesPath_;
+		skipLayers = skipLayers_;
+		skipLayersCount = skipLayersCount_;
+		slgScale = slgScale_;
+		skipLayerStart = skipLayerStart_;
+		skipLayerEnd = skipLayerEnd_;
 		thread.userData = this;
 		thread.startThread();
 	}
@@ -197,7 +233,7 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 	float strength_,
 	int64_t seed_) {
 	if (!thread.isThreadRunning()) {
-		inputImage = initImage_;
+		initImage = initImage_;
 		width = width_;
 		height = height_;
 		videoFrames = videoFrames_;
@@ -214,9 +250,8 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::newUpscalerCtx(const char* esrganPath,
-	int nThreads,
-	enum sd_type_t wType) {
-	new_upscaler_ctx(esrganPath, nThreads, wType);
+	int nThreads) {
+	new_upscaler_ctx(esrganPath, nThreads);
 }
 
 //--------------------------------------------------------------
