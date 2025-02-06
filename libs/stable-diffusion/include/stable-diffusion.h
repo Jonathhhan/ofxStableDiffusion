@@ -41,6 +41,8 @@ enum sample_method_t {
     DPMPP2S_A,
     DPMPP2M,
     DPMPP2Mv2,
+    IPNDM,
+    IPNDM_V,
     LCM,
     N_SAMPLE_METHODS
 };
@@ -49,7 +51,9 @@ enum schedule_t {
     DEFAULT,
     DISCRETE,
     KARRAS,
+    EXPONENTIAL,
     AYS,
+    GITS,
     N_SCHEDULES
 };
 
@@ -60,29 +64,37 @@ enum sd_type_t {
     SD_TYPE_Q4_0 = 2,
     SD_TYPE_Q4_1 = 3,
     // SD_TYPE_Q4_2 = 4, support has been removed
-    // SD_TYPE_Q4_3 (5) support has been removed
-    SD_TYPE_Q5_0 = 6,
-    SD_TYPE_Q5_1 = 7,
-    SD_TYPE_Q8_0 = 8,
-    SD_TYPE_Q8_1 = 9,
-    // k-quantizations
-    SD_TYPE_Q2_K    = 10,
-    SD_TYPE_Q3_K    = 11,
-    SD_TYPE_Q4_K    = 12,
-    SD_TYPE_Q5_K    = 13,
-    SD_TYPE_Q6_K    = 14,
-    SD_TYPE_Q8_K    = 15,
-    SD_TYPE_IQ2_XXS = 16,
-    SD_TYPE_IQ2_XS  = 17,
-    SD_TYPE_IQ3_XXS = 18,
-    SD_TYPE_IQ1_S   = 19,
-    SD_TYPE_IQ4_NL  = 20,
-    SD_TYPE_IQ3_S   = 21,
-    SD_TYPE_IQ2_S   = 22,
-    SD_TYPE_IQ4_XS  = 23,
-    SD_TYPE_I8,
-    SD_TYPE_I16,
-    SD_TYPE_I32,
+    // SD_TYPE_Q4_3 = 5, support has been removed
+    SD_TYPE_Q5_0     = 6,
+    SD_TYPE_Q5_1     = 7,
+    SD_TYPE_Q8_0     = 8,
+    SD_TYPE_Q8_1     = 9,
+    SD_TYPE_Q2_K     = 10,
+    SD_TYPE_Q3_K     = 11,
+    SD_TYPE_Q4_K     = 12,
+    SD_TYPE_Q5_K     = 13,
+    SD_TYPE_Q6_K     = 14,
+    SD_TYPE_Q8_K     = 15,
+    SD_TYPE_IQ2_XXS  = 16,
+    SD_TYPE_IQ2_XS   = 17,
+    SD_TYPE_IQ3_XXS  = 18,
+    SD_TYPE_IQ1_S    = 19,
+    SD_TYPE_IQ4_NL   = 20,
+    SD_TYPE_IQ3_S    = 21,
+    SD_TYPE_IQ2_S    = 22,
+    SD_TYPE_IQ4_XS   = 23,
+    SD_TYPE_I8       = 24,
+    SD_TYPE_I16      = 25,
+    SD_TYPE_I32      = 26,
+    SD_TYPE_I64      = 27,
+    SD_TYPE_F64      = 28,
+    SD_TYPE_IQ1_M    = 29,
+    SD_TYPE_BF16     = 30,
+    SD_TYPE_Q4_0_4_4 = 31,
+    SD_TYPE_Q4_0_4_8 = 32,
+    SD_TYPE_Q4_0_8_8 = 33,
+    SD_TYPE_TQ1_0    = 34,
+    SD_TYPE_TQ2_0    = 35,
     SD_TYPE_COUNT,
 };
 
@@ -113,6 +125,10 @@ typedef struct {
 typedef struct sd_ctx_t sd_ctx_t;
 
 SD_API sd_ctx_t* new_sd_ctx(const char* model_path,
+                            const char* clip_l_path,
+                            const char* clip_g_path,
+                            const char* t5xxl_path,
+                            const char* diffusion_model_path,
                             const char* vae_path,
                             const char* taesd_path,
                             const char* control_net_path_c_str,
@@ -128,7 +144,8 @@ SD_API sd_ctx_t* new_sd_ctx(const char* model_path,
                             enum schedule_t s,
                             bool keep_clip_on_cpu,
                             bool keep_control_net_cpu,
-                            bool keep_vae_on_cpu);
+                            bool keep_vae_on_cpu,
+                            bool diffusion_flash_attn);
 
 SD_API void free_sd_ctx(sd_ctx_t* sd_ctx);
 
@@ -137,6 +154,7 @@ SD_API sd_image_t* txt2img(sd_ctx_t* sd_ctx,
                            const char* negative_prompt,
                            int clip_skip,
                            float cfg_scale,
+                           float guidance,
                            int width,
                            int height,
                            enum sample_method_t sample_method,
@@ -147,14 +165,21 @@ SD_API sd_image_t* txt2img(sd_ctx_t* sd_ctx,
                            float control_strength,
                            float style_strength,
                            bool normalize_input,
-                           const char* input_id_images_path);
+                           const char* input_id_images_path,
+                           int* skip_layers,
+                           size_t skip_layers_count,
+                           float slg_scale,
+                           float skip_layer_start,
+                           float skip_layer_end);
 
 SD_API sd_image_t* img2img(sd_ctx_t* sd_ctx,
                            sd_image_t init_image,
+                           sd_image_t mask_image,
                            const char* prompt,
                            const char* negative_prompt,
                            int clip_skip,
                            float cfg_scale,
+                           float guidance,
                            int width,
                            int height,
                            enum sample_method_t sample_method,
@@ -166,7 +191,12 @@ SD_API sd_image_t* img2img(sd_ctx_t* sd_ctx,
                            float control_strength,
                            float style_strength,
                            bool normalize_input,
-                           const char* input_id_images_path);
+                           const char* input_id_images_path,
+                           int* skip_layers,
+                           size_t skip_layers_count,
+                           float slg_scale,
+                           float skip_layer_start,
+                           float skip_layer_end);
 
 SD_API sd_image_t* img2vid(sd_ctx_t* sd_ctx,
                            sd_image_t init_image,
@@ -186,13 +216,12 @@ SD_API sd_image_t* img2vid(sd_ctx_t* sd_ctx,
 typedef struct upscaler_ctx_t upscaler_ctx_t;
 
 SD_API upscaler_ctx_t* new_upscaler_ctx(const char* esrgan_path,
-                                        int n_threads,
-                                        enum sd_type_t wtype);
+                                        int n_threads);
 SD_API void free_upscaler_ctx(upscaler_ctx_t* upscaler_ctx);
 
 SD_API sd_image_t upscale(upscaler_ctx_t* upscaler_ctx, sd_image_t input_image, uint32_t upscale_factor);
 
-SD_API bool convert(const char* input_path, const char* vae_path, const char* output_path, sd_type_t output_type);
+SD_API bool convert(const char* input_path, const char* vae_path, const char* output_path, enum sd_type_t output_type);
 
 SD_API uint8_t* preprocess_canny(uint8_t* img,
                                  int width,
