@@ -118,6 +118,7 @@ void ofxStableDiffusion::txt2img(std::string prompt_,
 	int clipSkip_,
 	float cfgScale_,
 	float guidance_,
+	float eta_,
 	int width_,
 	int height_,
 	enum sample_method_t sampleMethod_,
@@ -141,6 +142,7 @@ void ofxStableDiffusion::txt2img(std::string prompt_,
 		clipSkip = clipSkip_;
 		cfgScale = cfgScale_;
 		guidance = guidance_;
+		eta = eta_;
 		width = width_;
 		height = height_;
 		sampleMethodEnum = sampleMethod_;
@@ -170,6 +172,7 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	int clipSkip_,
 	float cfgScale_,
 	float guidance_,
+	float eta_,
 	int width_,
 	int height_,
 	enum sample_method_t sampleMethod_,
@@ -196,6 +199,7 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 		clipSkip = clipSkip_;
 		cfgScale = cfgScale_;
 		guidance = guidance_;
+		eta = eta_;
 		width = width_;
 		height = height_;
 		sampleMethodEnum = sampleMethod_;

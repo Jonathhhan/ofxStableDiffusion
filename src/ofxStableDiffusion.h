@@ -43,6 +43,7 @@ public:
 		int clipSkip,
 		float cfgScale,
 		float guidance,
+		float eta,
 		int width,
 		int height,
 		sample_method_t sampleMethod,
@@ -66,6 +67,7 @@ public:
 		int clipSkip,
 		float cfgScale,
 		float guidance,
+		float eta,
 		int width,
 		int height,
 		enum sample_method_t sampleMethod,
@@ -144,6 +146,7 @@ public:
 	int clipSkip;
 	float cfgScale;
 	float guidance;
+	float eta;
 	int width;
 	int height;
 	char * sampleMethod;
