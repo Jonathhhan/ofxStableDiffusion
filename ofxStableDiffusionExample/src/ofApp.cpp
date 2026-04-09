@@ -39,7 +39,8 @@ void ofApp::setup() {
 	rngType = STD_DEFAULT_RNG;
 	imageWidth = "512";
 	imageHeight = "512";
-	sampleMethod = "DPMPP2S_Mv2";
+	sampleMethod = "DPMPP2Mv2";
+	sampleMethodEnum = DPMPP2Mv2;
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
@@ -475,7 +476,7 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 void ofApp::allocate() {
 	for (int i = 0; i < 16; i++) {
 		if (textureVector[i].isAllocated()) {
-			textureVector[i].getTextureData().textureID = NULL;
+			textureVector[i].clear();
 		}
 		if (isESRGAN) {
 			textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);

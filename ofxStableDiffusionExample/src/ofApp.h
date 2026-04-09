@@ -81,14 +81,12 @@ class ofApp : public ofBaseApp {
 
 		bool diffused;
 		bool isModelLoading;
-		sd_image_t inputImage;
-		sd_image_t* outputImages;
-		sd_image_t* controlImage;
+		sd_image_t inputImage = {0, 0, 0, nullptr};
+		sd_image_t* outputImages = nullptr;
+		sd_image_t* controlImage = nullptr;
 		bool isTextToImage;
 		int previewWidth;
 		std::string imageName;
 		ofxImGui::Gui gui;
 		ofxStableDiffusion stableDiffusion;
-		sd_ctx_t* sdCtx;
-		upscaler_ctx_t* upscalerCtx;
 };
