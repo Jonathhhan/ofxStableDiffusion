@@ -5,9 +5,9 @@
 
 class stableDiffusionThread : public ofThread {
 public:
-	void* userData;
-	upscaler_ctx_t* upscalerCtx;
-	sd_ctx_t* sdCtx;
+	void* userData = nullptr;
+	upscaler_ctx_t* upscalerCtx = nullptr;
+	sd_ctx_t* sdCtx = nullptr;
 private:
 	void threadedFunction();
 	bool isSdCtxLoaded = false;
