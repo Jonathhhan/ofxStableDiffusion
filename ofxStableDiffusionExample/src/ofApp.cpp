@@ -119,7 +119,8 @@ void ofApp::update() {
 	}
 	if (isPlaying && totalVideoFrames > 0) {
 		float now = ofGetElapsedTimef();
-		float frameInterval = (videoFps > 0) ? (1.0f / videoFps) : 0.1f;
+		const float fallbackFps = 10.0f;
+		float frameInterval = (videoFps > 0) ? (1.0f / videoFps) : (1.0f / fallbackFps);
 		if (now - lastFrameTime >= frameInterval) {
 			currentFrame = (currentFrame + 1) % totalVideoFrames;
 			previousSelectedImage = currentFrame;
