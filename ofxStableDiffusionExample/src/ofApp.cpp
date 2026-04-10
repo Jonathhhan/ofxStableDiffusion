@@ -44,6 +44,16 @@ void ofApp::setup() {
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
+	isImageToVideo = false;
+	videoFrames = 6;
+	motionBucketId = 127;
+	videoFps = 6;
+	augmentationLevel = 0.0f;
+	minCfg = 1.0f;
+	isPlaying = false;
+	currentFrame = 0;
+	totalVideoFrames = 0;
+	lastFrameTime = 0.0f;
 	isFullScreen = false;
 	isTAESD = false;
 	isESRGAN = false;
@@ -81,17 +91,40 @@ void ofApp::setup() {
 void ofApp::update() {
 	if (stableDiffusion.isDiffused()) {
 		outputImages = stableDiffusion.returnImages();
-		for (int i = 0; i < batchCount; i++) {
-			if (isESRGAN) {
-				textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
-			}
-			else {
+		if (isImageToVideo) {
+			totalVideoFrames = videoFrames;
+			for (int i = 0; i < totalVideoFrames; i++) {
 				textureVector[i].loadData(outputImages[i].data, width, height, GL_RGB);
 			}
+			previousSelectedImage = 0;
+			currentFrame = 0;
+			previewSize = totalVideoFrames;
+			isPlaying = true;
+			lastFrameTime = ofGetElapsedTimef();
 		}
-		previousSelectedImage = 0;
-		previewSize = batchCount;
+		else {
+			for (int i = 0; i < batchCount; i++) {
+				if (isESRGAN) {
+					textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+				}
+				else {
+					textureVector[i].loadData(outputImages[i].data, width, height, GL_RGB);
+				}
+			}
+			previousSelectedImage = 0;
+			previewSize = batchCount;
+			totalVideoFrames = 0;
+		}
 		stableDiffusion.setDiffused(false);
+	}
+	if (isPlaying && totalVideoFrames > 0) {
+		float now = ofGetElapsedTimef();
+		float frameInterval = (videoFps > 0) ? (1.0f / videoFps) : 0.1f;
+		if (now - lastFrameTime >= frameInterval) {
+			currentFrame = (currentFrame + 1) % totalVideoFrames;
+			previousSelectedImage = currentFrame;
+			lastFrameTime = now;
+		}
 	}
 	selectedImage = previousSelectedImage;
 }
@@ -263,10 +296,17 @@ void ofApp::draw() {
 		static int e = 0;
 		if (ImGui::RadioButton("Text to Image", &e, 0)) {
 			isTextToImage = true;
+			isImageToVideo = false;
 		}
 		ImGui::SameLine(0, 10);
 		if (ImGui::RadioButton("Image to Image", &e, 1)) {
 			isTextToImage = false;
+			isImageToVideo = false;
+		}
+		ImGui::SameLine(0, 10);
+		if (ImGui::RadioButton("Image to Video", &e, 2)) {
+			isTextToImage = false;
+			isImageToVideo = true;
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
@@ -305,12 +345,6 @@ void ofApp::draw() {
 						  (uint32_t)height,
 						  3,
 						  pixels.getData() };
-						//delete controlImage;
-						//controlImage = NULL;
-						//controlImage = new sd_image_t{ (uint32_t)width,
-						//  (uint32_t)height,
-						//  3,
-						//  pixels.getData() };
 					}
 				}
 			}
@@ -318,6 +352,18 @@ void ofApp::draw() {
 			ImGui::Text(&imageName[0]);
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
+		}
+		if (isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderInt("Video Frames", &videoFrames, 1, 16);
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderInt("Motion Bucket ID", &motionBucketId, 1, 255);
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderInt("FPS", &videoFps, 1, 30);
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderFloat("Augmentation Level", &augmentationLevel, 0.0f, 1.0f);
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderFloat("Min CFG", &minCfg, 0.0f, 20.0f);
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderInt("Clip Skip Layers", &clipSkip, -1, 33);
@@ -376,11 +422,13 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::InputInt("Seed", &seed, 1, 100);
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderInt("Batch Size", &batchCount, 1, 16);
-		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Checkbox("4x Upscale", &isESRGAN)) {
-			allocate();
+		if (!isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderInt("Batch Size", &batchCount, 1, 16);
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::Checkbox("4x Upscale", &isESRGAN)) {
+				allocate();
+			}
 		}
 		if (stableDiffusion.diffused) {
 			ImGui::EndDisabled();
@@ -392,7 +440,24 @@ void ofApp::draw() {
 	}
 	ImGui::Dummy(ImVec2(0, 10));
 	if (ImGui::Button("Generate")) {
-		if (isTextToImage) {
+		if (isImageToVideo) {
+			isPlaying = false;
+			totalVideoFrames = 0;
+			stableDiffusion.img2vid(inputImage,
+				width,
+				height,
+				videoFrames,
+				motionBucketId,
+				videoFps,
+				augmentationLevel,
+				minCfg,
+				cfgScale,
+				sampleMethodEnum,
+				sampleSteps,
+				strength,
+				seed);
+		}
+		else if (isTextToImage) {
 			stableDiffusion.txt2img(prompt,
 				negativePrompt,
 				clipSkip,
@@ -427,6 +492,22 @@ void ofApp::draw() {
 				styleStrength,
 				normalizeInput,
 				inputIdImagesPath);
+		}
+	}
+	if (totalVideoFrames > 0) {
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button(isPlaying ? "Stop" : "Play")) {
+			isPlaying = !isPlaying;
+			if (isPlaying) {
+				lastFrameTime = ofGetElapsedTimef();
+			}
+		}
+		ImGui::SameLine(0, 10);
+		ImGui::Text("Frame %d / %d", currentFrame + 1, totalVideoFrames);
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::SliderInt("Frame", &currentFrame, 0, totalVideoFrames - 1)) {
+			previousSelectedImage = currentFrame;
+			isPlaying = false;
 		}
 	}
 	if (stableDiffusion.diffused) {
