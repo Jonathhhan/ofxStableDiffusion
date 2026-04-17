@@ -4,119 +4,76 @@ This document contains suggested features and enhancements for future versions o
 
 ## High Priority Features
 
-### 1. Advanced Error Handling
+### 1. Advanced Error Handling ✅ IMPLEMENTED (v1.0.0)
 
-**Current State**: String-based error messages via `getLastError()`
+**Status**: ✅ **COMPLETED** in version 1.0.0
 
-**Suggested Enhancement**:
-- Add error code enumeration for programmatic error handling
-- Implement error categories (model loading, generation, validation, memory)
-- Support error history/stack for debugging complex workflows
-- Add error recovery suggestions
+This feature has been fully implemented with error code enumeration, error categories, error history tracking, and recovery suggestions.
 
-**Example API**:
-```cpp
-enum class ofxStableDiffusionErrorCode {
-    None = 0,
-    ModelNotFound,
-    ModelCorrupted,
-    OutOfMemory,
-    InvalidDimensions,
-    InvalidBatchCount,
-    MissingInputImage,
-    GenerationFailed,
-    ThreadBusy
-};
+### 2. Model Preloading and Management ✅ IMPLEMENTED (v1.1.0)
 
-struct ofxStableDiffusionError {
-    ofxStableDiffusionErrorCode code;
-    std::string message;
-    std::string suggestion;
-    uint64_t timestamp;
-};
+**Status**: ✅ **COMPLETED** in version 1.1.0
 
-std::vector<ofxStableDiffusionError> getErrorHistory() const;
-ofxStableDiffusionErrorCode getLastErrorCode() const;
-```
-
-### 2. Model Preloading and Management
-
-**Current State**: Model loads synchronously on first generation
-
-**Suggested Enhancement**:
+Implemented via `ofxStableDiffusionModelManager` class with:
 - Async model preloading
-- Multiple model management (switch between models without reloading)
-- Model info/metadata query
-- Model validation before loading
+- Model metadata extraction and validation
+- LRU cache eviction
+- Model scanning from directories
+- Cache size and count limits
+- Progress callbacks during loading
 
-**Example API**:
+**API Added**:
 ```cpp
-struct ofxStableDiffusionModelInfo {
-    std::string path;
-    std::string type; // SD1.5, SD2.1, SDXL, SD-Turbo, etc.
-    uint64_t sizeBytes;
-    int width, height; // default dimensions
-    bool isLoaded;
-    bool isValid;
-};
-
-void preloadModel(const std::string& modelPath, std::function<void(bool)> callback);
-ofxStableDiffusionModelInfo queryModelInfo(const std::string& path);
-std::vector<std::string> getLoadedModels() const;
-void switchModel(const std::string& modelPath);
+ofxStableDiffusionModelManager modelManager;
+auto models = modelManager.scanModelsInDirectory("data/models");
+std::string errorMsg;
+bool success = modelManager.preloadModel(modelInfo, errorMsg);
+sd_ctx_t* ctx = modelManager.getModelContext(modelPath, modelInfo, errorMsg);
 ```
 
-### 3. Generation Queue System
+### 3. Generation Queue System ✅ IMPLEMENTED (v1.1.0)
 
-**Current State**: Only one generation at a time, subsequent calls ignored
+**Status**: ✅ **COMPLETED** in version 1.1.0
 
-**Suggested Enhancement**:
-- Queue multiple generation requests
-- Priority-based scheduling
-- Cancel pending requests
-- Batch processing optimization
+Implemented via `ofxStableDiffusionQueue` class with:
+- Priority-based request queuing (Low, Normal, High, Critical)
+- Request cancellation by ID or tag
+- Per-request completion, error, and progress callbacks
+- Queue statistics and state management
+- Optional queue persistence to file
 
-**Example API**:
+**API Added**:
 ```cpp
-struct ofxStableDiffusionQueueEntry {
-    uint64_t id;
-    ofxStableDiffusionImageRequest request;
-    int priority;
-    float progress;
-};
-
-uint64_t queueGeneration(const ofxStableDiffusionImageRequest& request, int priority = 0);
-void cancelQueuedGeneration(uint64_t id);
-std::vector<ofxStableDiffusionQueueEntry> getQueue() const;
-void setMaxConcurrentGenerations(int count);
+ofxStableDiffusionQueue queue;
+int requestId = queue.addImageRequest(request, ofxStableDiffusionPriority::High, "batch1");
+queue.setCompletionCallback(requestId, [](const ofxStableDiffusionResult& result) {
+    // Handle completion
+});
+queue.cancelRequest(requestId);
+auto stats = queue.getStats();
 ```
 
 ## Medium Priority Features
 
-### 4. Advanced Progress Reporting
+### 4. Advanced Progress Reporting ✅ IMPLEMENTED (v1.1.0)
 
-**Current State**: Simple step/steps callback
+**Status**: ✅ **COMPLETED** in version 1.1.0
 
-**Suggested Enhancement**:
-- Stage-based progress (loading, encoding, diffusion, decoding)
-- ETA estimation
-- Throughput metrics (it/s)
+Implemented via `ofxStableDiffusionProgressTracker` class with:
+- Stage-based progress (Loading, Encoding, Diffusing, Decoding, Upscaling, Finalizing)
+- ETA estimation with adaptive algorithm
+- Throughput metrics (steps/second)
 - Memory usage reporting
+- Batch progress support
 
-**Example API**:
+**API Added**:
 ```cpp
-struct ofxStableDiffusionProgress {
-    enum Stage { Loading, Encoding, Diffusion, Decoding, Upscaling };
-    Stage currentStage;
-    int currentStep;
-    int totalSteps;
-    float etaSeconds;
-    float iterationsPerSecond;
-    uint64_t memoryUsageBytes;
-    uint64_t memoryPeakBytes;
-};
-
-void setProgressCallback(std::function<void(const ofxStableDiffusionProgress&)> cb);
+ofxStableDiffusionProgressTracker tracker;
+tracker.reset(totalSteps, totalBatches);
+tracker.update(currentStep, currentBatch, elapsedSeconds);
+tracker.setPhase(ofxStableDiffusionPhase::Diffusing);
+auto progressInfo = tracker.getProgressInfo();
+// Access: percentComplete, estimatedTimeRemainingSeconds, stepsPerSecond, etc.
 ```
 
 ### 5. ControlNet Multi-Model Support
@@ -167,51 +124,48 @@ void removeLoRA(const std::string& name);
 std::vector<std::string> discoverLoRAs(const std::string& directory);
 ```
 
-### 7. Image Seed Management
+### 7. Image Seed Management ✅ IMPLEMENTED (v1.1.0)
 
-**Current State**: Basic seed support via int64
+**Status**: ✅ **COMPLETED** in version 1.1.0
 
-**Suggested Enhancement**:
-- Seed variations (subseed, subseed_strength)
-- Seed travel/interpolation for video
+Implemented with seed history tracking and deterministic seed generation:
+- Seed history tracking (up to 20 recent seeds)
 - Deterministic seed from string hash
-- Seed history tracking
+- Actual seed capture in results
 
-**Example API**:
+**API Added**:
 ```cpp
-struct ofxStableDiffusionSeedConfig {
-    int64_t seed;
-    int64_t subseed;
-    float subseedStrength;
-};
-
-int64_t hashStringToSeed(const std::string& text);
-std::vector<int64_t> getSeedHistory() const;
 int64_t getLastUsedSeed() const;
+const std::vector<int64_t>& getSeedHistory() const;
+void clearSeedHistory();
+static int64_t hashStringToSeed(const std::string& text);
+// Result structure includes actualSeedUsed field
 ```
 
-### 8. Inpainting and Outpainting
+### 8. Inpainting and Outpainting 🚧 IN PROGRESS (v1.1.0)
 
-**Current State**: Not directly supported
+**Status**: 🚧 **PARTIALLY COMPLETED** in version 1.1.0
 
-**Suggested Enhancement**:
-- Dedicated inpainting mode
-- Mask support (grayscale or alpha channel)
-- Outpainting with automatic padding
-- Feathering/blur control for mask edges
+Infrastructure added for inpainting mode:
+- Dedicated `Inpainting` mode enum
+- Mask support (`maskImage` field in request)
+- Mask blur control (`maskBlur` parameter)
 
-**Example API**:
+**Remaining Work**:
+- Implement inpainting generation logic in thread
+- Add mask preprocessing helpers
+- Add outpainting with automatic padding
+- Add feathering/blur control for mask edges
+
+**Current API**:
 ```cpp
-struct ofxStableDiffusionInpaintRequest {
-    sd_image_t sourceImage;
-    sd_image_t maskImage; // white = inpaint, black = keep
-    std::string prompt;
-    float maskBlur;
-    int padding; // for outpainting
-    // ... other common parameters
-};
-
-void generateInpaint(const ofxStableDiffusionInpaintRequest& request);
+ofxStableDiffusionImageRequest request;
+request.mode = ofxStableDiffusionImageMode::Inpainting;
+request.initImage = sourceImage;  // Source image
+request.maskImage = maskImage;     // White=inpaint, Black=keep
+request.maskBlur = 4.0f;          // Edge softening
+request.prompt = "replace with ocean view";
+sd.generate(request);
 ```
 
 ## Low Priority / Future Enhancements
@@ -311,6 +265,26 @@ void generateInpaint(const ofxStableDiffusionInpaintRequest& request);
 ## Community Requests
 
 This section is reserved for features requested by addon users. Please submit feature requests via GitHub issues with the `enhancement` label.
+
+---
+
+## Implementation Status Summary
+
+### ✅ Completed Features (v1.0.0 - v1.1.0)
+1. ✅ Advanced Error Handling (v1.0.0)
+2. ✅ Model Preloading and Management (v1.1.0)
+3. ✅ Generation Queue System (v1.1.0)
+4. ✅ Advanced Progress Reporting (v1.1.0)
+7. ✅ Image Seed Management (v1.1.0)
+
+### 🚧 In Progress
+8. 🚧 Inpainting and Outpainting (v1.1.0 - partial)
+
+### 📋 Planned
+- ControlNet Multi-Model Support
+- LoRA Management System
+- Real-time Generation Modes
+- And more...
 
 ---
 

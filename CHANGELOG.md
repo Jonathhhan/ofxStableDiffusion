@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.1.0 - 2026-04-17
+
+### Added
+
+- **Seed Management** (Feature #7): Track generation seeds and reproducibility
+  - `getLastUsedSeed()` returns the actual seed used in the last generation
+  - `getSeedHistory()` returns up to 20 recent seed values
+  - `clearSeedHistory()` clears the seed history
+  - `hashStringToSeed()` static method to generate deterministic seeds from strings
+  - `actualSeedUsed` field added to `ofxStableDiffusionResult` to capture the real seed (including auto-generated ones)
+
+- **Inpainting Mode** (Feature #8 - Partial): Selective image editing with mask support
+  - Added `Inpainting` to `ofxStableDiffusionImageMode` enum
+  - Added `maskImage` field to `ofxStableDiffusionImageRequest` for mask input (white=inpaint, black=keep)
+  - Added `maskBlur` parameter for mask edge softening (default: 4.0f)
+  - Inpainting task enum added for proper mode handling
+
+- **Model Management System** (Feature #2): Already implemented via `ofxStableDiffusionModelManager`
+  - Model preloading and caching with LRU eviction
+  - Model metadata extraction and validation
+  - Cache size and count limits
+  - Model scanning from directories
+
+- **Generation Queue System** (Feature #3): Already implemented via `ofxStableDiffusionQueue`
+  - Priority-based request queuing (Low, Normal, High, Critical)
+  - Request cancellation by ID or tag
+  - Per-request completion, error, and progress callbacks
+  - Queue statistics and state management
+  - Optional queue persistence to file
+
+- **Advanced Progress Reporting** (Feature #4): Already implemented via `ofxStableDiffusionProgressTracker`
+  - Stage-based progress (Idle, LoadingModel, Encoding, Diffusing, Decoding, Upscaling, Finalizing)
+  - ETA estimation with adaptive algorithm
+  - Performance metrics (steps/second, average step time)
+  - Memory usage tracking
+  - Batch progress support
+
+### Changed
+
+- Seed values are now tracked and stored in generation results
+- Image request structure extended with mask support for future inpainting implementation
+
 ## 1.0.0 - 2026-04-17
 
 ### Added
