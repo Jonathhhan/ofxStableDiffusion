@@ -63,6 +63,9 @@ public:
 	/// Reload embeddings by rebuilding the context with the current (or provided) embed directory.
 	void reloadEmbeddings(const std::string& embedDir = "");
 
+	/// Query current embeddings on disk (resolved from embedDir); loads names and paths.
+	std::vector<std::pair<std::string, std::string>> listEmbeddings() const;
+
 	bool isDiffused() const;
 	void setDiffused(bool diffused);
 	/// Returned buffers are owned by the addon; they become invalid after a new

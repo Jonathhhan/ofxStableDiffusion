@@ -85,6 +85,9 @@ sd.setLoras({loraA});
 
 // Hot-reload textual-inversion embeddings (reloads the context)
 sd.reloadEmbeddings("data/embeddings");
+
+// List currently discoverable embeddings (name, absolute path)
+const auto embeddings = sd.listEmbeddings();
 ```
 
 ### Error Handling

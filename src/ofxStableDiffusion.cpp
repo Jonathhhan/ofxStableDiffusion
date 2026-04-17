@@ -243,6 +243,35 @@ void ofxStableDiffusion::reloadEmbeddings(const std::string& embedDir) {
 }
 
 //--------------------------------------------------------------
+std::vector<std::pair<std::string, std::string>> ofxStableDiffusion::listEmbeddings() const {
+	std::vector<std::pair<std::string, std::string>> results;
+	const std::string targetDir = embedDirCStr;
+	if (targetDir.empty()) {
+		return results;
+	}
+
+	ofDirectory dir(targetDir);
+	if (!dir.exists()) {
+		return results;
+	}
+	dir.allowExt("pt");
+	dir.allowExt("ckpt");
+	dir.allowExt("safetensors");
+	dir.allowExt("bin");
+	dir.allowExt("gguf");
+	dir.listDir();
+
+	for (std::size_t i = 0; i < dir.size(); ++i) {
+		const ofFile& file = dir.getFile(static_cast<int>(i));
+		if (!file.isFile()) {
+			continue;
+		}
+		results.emplace_back(file.getBaseName(), file.getAbsolutePath());
+	}
+	return results;
+}
+
+//--------------------------------------------------------------
 void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request) {
 	const ofxStableDiffusionTask task = ofxStableDiffusionTaskForImageMode(request.mode);
 	if (!validateImageRequestAndSetError(request, task)) {

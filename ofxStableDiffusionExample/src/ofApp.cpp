@@ -75,6 +75,61 @@ float computeHeuristicPromptScore(const std::string& rankingPrompt, const ofPixe
 
 } // namespace
 
+std::vector<std::pair<std::string, std::string>> ofApp::listEmbeddingFiles() const {
+	std::vector<std::pair<std::string, std::string>> out;
+	if (embedDir.empty()) return out;
+	ofDirectory dir(embedDir);
+	if (!dir.exists()) return out;
+	dir.allowExt("pt");
+	dir.allowExt("ckpt");
+	dir.allowExt("safetensors");
+	dir.allowExt("bin");
+	dir.allowExt("gguf");
+	dir.listDir();
+	for (std::size_t i = 0; i < dir.size(); ++i) {
+		const ofFile& f = dir.getFile(static_cast<int>(i));
+		if (!f.isFile()) continue;
+		out.emplace_back(f.getBaseName(), f.getAbsolutePath());
+	}
+	return out;
+}
+
+std::vector<std::pair<std::string, std::string>> ofApp::listLoraFiles() const {
+	std::vector<std::pair<std::string, std::string>> out;
+	if (loraModelDir.empty()) return out;
+	ofDirectory dir(loraModelDir);
+	if (!dir.exists()) return out;
+	dir.allowExt("safetensors");
+	dir.allowExt("ckpt");
+	dir.allowExt("pt");
+	dir.allowExt("bin");
+	dir.allowExt("gguf");
+	dir.listDir();
+	for (std::size_t i = 0; i < dir.size(); ++i) {
+		const ofFile& f = dir.getFile(static_cast<int>(i));
+		if (!f.isFile()) continue;
+		out.emplace_back(f.getBaseName(), f.getAbsolutePath());
+	}
+	return out;
+}
+
+void ofApp::loadAllLoras(float strength) {
+	loras.clear();
+	for (const auto& entry : listLoraFiles()) {
+		ofxStableDiffusionLora l;
+		l.path = entry.second;
+		l.strength = strength;
+		l.isHighNoise = false;
+		loras.push_back(std::move(l));
+	}
+	stableDiffusion.setLoras(loras);
+}
+
+void ofApp::clearLoras() {
+	loras.clear();
+	stableDiffusion.setLoras(loras);
+}
+
 //--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
@@ -176,6 +231,11 @@ void ofApp::setup() {
 		keepClipOnCpu,
 		keepControlNetCpu,
 		keepVaeOnCpu);
+
+	// Initial embedding enumeration (best-effort).
+	auto embeds = stableDiffusion.listEmbeddings();
+	ofLogNotice("ofApp") << "Found " << embeds.size() << " embeddings in " << embedDir;
+	ofLogNotice("ofApp") << "Keys: 'e' reload embeddings, 'E' list embeddings, 'l' list LoRAs, 'a' apply all LoRAs (strength 1.0), 'u' unload LoRAs";
 }
 
 //--------------------------------------------------------------
@@ -834,7 +894,41 @@ void ofApp::allocate() {
 
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key) {
-
+	switch (key) {
+	case 'e': { // reload embeddings
+		stableDiffusion.reloadEmbeddings(embedDir);
+		ofLogNotice("ofApp") << "Reloaded embeddings from " << embedDir;
+		break;
+	}
+	case 'E': { // list embeddings
+		auto embeds = stableDiffusion.listEmbeddings();
+		ofLogNotice("ofApp") << "Embeddings (" << embeds.size() << "):";
+		for (const auto& e : embeds) {
+			ofLogNotice("ofApp") << "  " << e.first << " -> " << e.second;
+		}
+		break;
+	}
+	case 'l': { // list loras
+		auto entries = listLoraFiles();
+		ofLogNotice("ofApp") << "LoRAs (" << entries.size() << ") in " << loraModelDir;
+		for (const auto& e : entries) {
+			ofLogNotice("ofApp") << "  " << e.first << " -> " << e.second;
+		}
+		break;
+	}
+	case 'a': { // apply all loras with default strength
+		loadAllLoras(1.0f);
+		ofLogNotice("ofApp") << "Applied " << loras.size() << " LoRAs";
+		break;
+	}
+	case 'u': { // unload loras
+		clearLoras();
+		ofLogNotice("ofApp") << "Cleared active LoRAs";
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 //--------------------------------------------------------------
