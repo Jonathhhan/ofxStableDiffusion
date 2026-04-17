@@ -53,7 +53,7 @@ class ofApp : public ofBaseApp {
 		const char* imageMode;
 		const char* selectionModeArray[3] = {"KeepOrder", "Rerank", "BestOnly"};
 		const char* selectionMode;
-		const char* sampleMethodArray[8] = {"EULER_A", "EULER", "HEUN", "DPM2", "DPMPP2S_A", "DPMPP2M", "DPMPP2Mv2", "LCM"};
+		const char* sampleMethodArray[8] = {"EULER_A_SAMPLE_METHOD", "EULER_SAMPLE_METHOD", "HEUN_SAMPLE_METHOD", "DPM2_SAMPLE_METHOD", "DPMPP2S_A_SAMPLE_METHOD", "DPMPP2M_SAMPLE_METHOD", "DPMPP2Mv2_SAMPLE_METHOD", "LCM_SAMPLE_METHOD"};
 		const char* sampleMethod;
 		const char* videoModeArray[4] = {"Standard", "Loop", "PingPong", "Boomerang"};
 		const char* videoMode;
@@ -85,7 +85,7 @@ class ofApp : public ofBaseApp {
 		int nThreads;
 		int esrganMultiplier;
 		sd_type_t wType;
-		schedule_t schedule;
+		scheduler_t schedule;
 		rng_type_t rngType;
 		std::string controlImagePath;
 		float controlStrength;

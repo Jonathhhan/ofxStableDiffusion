@@ -77,7 +77,7 @@ public:
 		int nThreads,
 		enum sd_type_t wType,
 		enum rng_type_t rngType,
-		enum schedule_t s,
+		enum scheduler_t s,
 		bool keepClipOnCpu,
 		bool keepControlNetCpu,
 		bool keepVaeOnCpu);
@@ -193,7 +193,7 @@ public:
 	std::string esrganPath;
 	std::string stackedIdEmbedDirCStr;
 	std::string inputIdImagesPath;
-	sample_method_t sampleMethodEnum = EULER_A;
+	sample_method_t sampleMethodEnum = EULER_A_SAMPLE_METHOD;
 	int sampleSteps = 20;
 	int videoFrames = 6;
 	int motionBucketId = 127;
@@ -214,7 +214,7 @@ public:
 	int nThreads = -1;
 	int esrganMultiplier = 4;
 	sd_type_t wType = SD_TYPE_COUNT;
-	schedule_t schedule = DEFAULT;
+	scheduler_t schedule = SCHEDULER_COUNT;
 	rng_type_t rngType = STD_DEFAULT_RNG;
 	std::string controlImagePath;
 	float controlStrength = 0.9f;

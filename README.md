@@ -12,7 +12,7 @@ The addon is now structured more like a production addon:
 - background-thread generation
 - owned image/video outputs
 - explicit native-library staging
-- wrapper-level compatibility for existing `ofxGgml` interaction
+- wrapper-level integration seams for `ofxGgml` interaction
 - lightweight unit tests for the new video helper layer
 
 ## Highlights
@@ -23,7 +23,7 @@ The addon is now structured more like a production addon:
 - Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
 - ESRGAN upscaling support
 - Progress callbacks for diffusion steps
-- Legacy compatibility surface kept intact for older code paths
+- Legacy entry points still available for wrapper-level migration
 - Standalone native runtime management instead of sharing `ggml` binaries across addons
 
 ## Repo Layout
@@ -162,9 +162,10 @@ under `libs/stable-diffusion/source`, pinned to:
 - upstream commit: `a564fdf642780d1df123f1c413b19961375b8346`
 - vendored on: `2026-04-17`
 
-The addon keeps a small compatibility shim at
-`libs/stable-diffusion/include/stable-diffusion.h` so older addon-facing enum
-names remain usable while the native build targets current upstream.
+The addon now includes the upstream header directly through
+`libs/stable-diffusion/include/stable-diffusion.h`, without re-exporting the
+older enum aliases. Addon code should use the current upstream names such as
+`EULER_A_SAMPLE_METHOD`, `DPMPP2Mv2_SAMPLE_METHOD`, and `SCHEDULER_COUNT`.
 
 ## Testing
 

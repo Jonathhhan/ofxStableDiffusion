@@ -8,7 +8,7 @@ of relying on a global install.
 - `libs/stable-diffusion/source`
   A vendored snapshot of upstream `stable-diffusion.cpp`
 - `libs/stable-diffusion/include`
-  The addon compatibility header used by the wrapper and examples
+  Thin passthrough include for the vendored upstream header
 - `libs/stable-diffusion/lib/vs`
   Windows import library and runtime DLL
 - `libs/stable-diffusion/lib/Linux64`
@@ -52,20 +52,19 @@ The addon currently vendors upstream `stable-diffusion.cpp` from:
 The vendored tree includes the required submodules so the native rebuild scripts
 can run end-to-end.
 
-## Compatibility Notes
+## Header Notes
 
 Current upstream master uses a newer parameter-struct based C API. The addon
-keeps `libs/stable-diffusion/include/stable-diffusion.h` as a small wrapper
-shim over `libs/stable-diffusion/source/include/stable-diffusion.h` so older
-addon-facing enum names such as `EULER_A`, `DPMPP2Mv2`, `DEFAULT`, `DISCRETE`,
-and `KARRAS` still compile.
+keeps `libs/stable-diffusion/include/stable-diffusion.h` only as a passthrough
+include to the vendored upstream header, so addon code should use the current
+upstream names directly.
 
 The native rebuild script stages:
 
 - `stable-diffusion.dll`
 - `stable-diffusion.lib`
 
-It intentionally does not overwrite the addon compatibility header.
+It intentionally does not rewrite the addon include path.
 
 ## Recommended Pinning Policy
 

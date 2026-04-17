@@ -18,7 +18,7 @@
 
 - Reworked the wrapper toward a more structured addon API while preserving the legacy `newSdCtx` / `txt2img` / `img2img` / `img2vid` surface
 - Migrated the native bridge to current upstream `stable-diffusion.cpp` master using the newer parameter-struct API under the hood
-- Added a compatibility shim header so existing addon-facing sample/scheduler enum names still compile against the newer upstream API
+- Removed the temporary enum compatibility shim so addon code now uses the current upstream sample/scheduler names directly
 - Added a first-class `InstructImage` wrapper mode over the addon request layer instead of relying on the older native `img2img` entry point
 - Added a bridge-friendly CLIP rerank seam so `ofxGgml` can score and reorder outputs without native binary coupling
 - Improved example-app UX with explicit busy states, progress/error feedback, video-mode controls, and frame-sequence export

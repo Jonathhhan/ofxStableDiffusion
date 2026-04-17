@@ -356,7 +356,7 @@ void ofxStableDiffusion::newSdCtx(const std::string& modelPath_,
 	int nThreads_,
 	enum sd_type_t wType_,
 	enum rng_type_t rngType_,
-	enum schedule_t schedule_,
+	enum scheduler_t schedule_,
 	bool keepClipOnCpu_,
 	bool keepControlNetCpu_,
 	bool keepVaeOnCpu_) {

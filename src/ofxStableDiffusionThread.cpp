@@ -19,11 +19,11 @@ sample_method_t resolveSampleMethod(sd_ctx_t* sdCtx, sample_method_t requested) 
 scheduler_t resolveScheduler(
 	sd_ctx_t* sdCtx,
 	sample_method_t sampleMethod,
-	schedule_t legacySchedule) {
-	if (legacySchedule == DEFAULT || legacySchedule == SCHEDULER_COUNT) {
+	scheduler_t requestedSchedule) {
+	if (requestedSchedule == SCHEDULER_COUNT) {
 		return sd_get_default_scheduler(sdCtx, sampleMethod);
 	}
-	return static_cast<scheduler_t>(legacySchedule);
+	return requestedSchedule;
 }
 
 sd_tiling_params_t makeTilingParams(bool enabled) {

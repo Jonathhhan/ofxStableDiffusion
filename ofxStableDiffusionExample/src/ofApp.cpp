@@ -112,7 +112,7 @@ void ofApp::setup() {
 	controlStrength = 0.9;
 	seed = -1;
 	wType = SD_TYPE_F16;
-	schedule = DEFAULT;
+	schedule = SCHEDULER_COUNT;
 	rngType = STD_DEFAULT_RNG;
 	imageWidth = "512";
 	imageHeight = "512";
@@ -120,8 +120,8 @@ void ofApp::setup() {
 	imageModeEnum = ofxStableDiffusionImageMode::TextToImage;
 	selectionMode = "KeepOrder";
 	selectionModeEnum = ofxStableDiffusionImageSelectionMode::KeepOrder;
-	sampleMethod = "DPMPP2Mv2";
-	sampleMethodEnum = DPMPP2Mv2;
+	sampleMethod = "DPMPP2Mv2_SAMPLE_METHOD";
+	sampleMethodEnum = DPMPP2Mv2_SAMPLE_METHOD;
 	videoMode = "Standard";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;

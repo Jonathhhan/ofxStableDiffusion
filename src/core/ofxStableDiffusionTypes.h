@@ -24,7 +24,7 @@ struct ofxStableDiffusionContextSettings {
 	int nThreads = -1;
 	sd_type_t weightType = SD_TYPE_F16;
 	rng_type_t rngType = STD_DEFAULT_RNG;
-	schedule_t schedule = DEFAULT;
+	scheduler_t schedule = SCHEDULER_COUNT;
 	bool keepClipOnCpu = false;
 	bool keepControlNetCpu = false;
 	bool keepVaeOnCpu = false;
@@ -50,7 +50,7 @@ struct ofxStableDiffusionImageRequest {
 	float cfgScale = 7.0f;
 	int width = 512;
 	int height = 512;
-	sample_method_t sampleMethod = EULER_A;
+	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
 	int sampleSteps = 20;
 	float strength = 0.5f;
 	int64_t seed = -1;
@@ -72,7 +72,7 @@ struct ofxStableDiffusionVideoRequest {
 	float augmentationLevel = 0.0f;
 	float minCfg = 1.0f;
 	float cfgScale = 7.0f;
-	sample_method_t sampleMethod = EULER_A;
+	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
 	int sampleSteps = 20;
 	float strength = 0.5f;
 	int64_t seed = -1;
