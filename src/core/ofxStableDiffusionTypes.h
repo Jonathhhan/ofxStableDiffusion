@@ -54,6 +54,7 @@ struct ofxStableDiffusionImageRequest {
 	ofxStableDiffusionImageSelectionMode selectionMode =
 		ofxStableDiffusionImageSelectionMode::KeepOrder;
 	sd_image_t initImage{0, 0, 0, nullptr};
+	sd_image_t maskImage{0, 0, 0, nullptr};  // For inpainting (white=inpaint, black=keep)
 	std::string prompt;
 	std::string instruction;
 	std::string negativePrompt;
@@ -69,6 +70,7 @@ struct ofxStableDiffusionImageRequest {
 	sd_image_t * controlCond = nullptr;
 	float controlStrength = 0.9f;
 	float styleStrength = 20.0f;
+	float maskBlur = 4.0f;  // Blur radius for mask edge softening
 	bool normalizeInput = true;
 	std::string inputIdImagesPath;
 };
@@ -140,6 +142,7 @@ struct ofxStableDiffusionResult {
 	float elapsedMs = 0.0f;
 	bool rankingApplied = false;
 	int selectedImageIndex = -1;
+	int64_t actualSeedUsed = -1;
 	std::string error;
 	std::vector<ofxStableDiffusionImageFrame> images;
 	ofxStableDiffusionVideoClip video;
@@ -163,3 +166,6 @@ std::string ofxStableDiffusionErrorCodeSuggestion(ofxStableDiffusionErrorCode co
 std::vector<ofxStableDiffusionImageFrame> ofxStableDiffusionBuildVideoFrames(
 	const std::vector<ofxStableDiffusionImageFrame> & sourceFrames,
 	ofxStableDiffusionVideoMode mode);
+
+/// Hash a string to a deterministic seed value for reproducibility.
+int64_t ofxStableDiffusionHashStringToSeed(const std::string& text);
