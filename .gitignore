@@ -1,0 +1,27 @@
+# Visual Studio / OF project generator output
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+icon.rc
+
+# Build intermediates
+obj/
+build/
+tests/build/
+
+# Example build output
+ofxStableDiffusionExample/bin/*.exe
+ofxStableDiffusionExample/bin/*.exp
+ofxStableDiffusionExample/bin/*.lib
+ofxStableDiffusionExample/bin/*.pdb
+ofxStableDiffusionExample/bin/stable-diffusion.dll
+ofxStableDiffusionExample/bin/libs/
+
+# CMake / test output
+Testing/
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake

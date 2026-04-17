@@ -1,119 +1,193 @@
 # ofxStableDiffusion
 
-An [openFrameworks](https://openframeworks.cc/) addon that wraps [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp), providing text-to-image, image-to-image, image-to-video generation, and ESRGAN upscaling from C++.
+`ofxStableDiffusion` is an openFrameworks addon that wraps
+[`stable-diffusion.cpp`](https://github.com/leejet/stable-diffusion.cpp) for
+text-to-image, image-to-image, image-to-video, and upscaling workflows.
 
-![Screenshot 2023-12-01 062447](https://github.com/Jonathhhan/ofxStableDiffusion/assets/41275844/4622905e-1fcb-4693-b2d0-48a464d2a95c)
+The addon is now structured more like a production addon:
 
-## Features
+- typed request/config/result objects
+- background-thread generation
+- owned image/video outputs
+- explicit native-library staging
+- wrapper-level compatibility for existing `ofxGgml` interaction
+- lightweight unit tests for the new video helper layer
 
-- **Text-to-image** — generate images from text prompts
-- **Image-to-image** — transform existing images guided by prompts
-- **Image-to-video** — generate video frames from a source image
-- **ESRGAN upscaling** — 4× super-resolution on generated images
-- **ControlNet** support (pose, canny, etc.)
-- **TAESD** — lightweight VAE decoder for faster previews
-- **PhotoMaker** — identity-preserving generation
-- **LoRA** — load LoRA adapter weights
-- **Threaded generation** — all heavy work runs off the main thread
-- **Progress callback** — monitor diffusion step progress in real time
+## Highlights
 
-## Dependencies
+- Text-to-image and image-to-image generation
+- Expanded image modes: `TextToImage`, `ImageToImage`, `InstructImage`, `Variation`, and `Restyle`
+- Best-of-N image reranking through a callback seam that can be driven by `ofxGgml` CLIP scoring
+- Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
+- ESRGAN upscaling support
+- Progress callbacks for diffusion steps
+- Legacy compatibility surface kept intact for older code paths
+- Standalone native runtime management instead of sharing `ggml` binaries across addons
 
-| Dependency | Branch / Notes |
-|---|---|
-| [openFrameworks](https://openframeworks.cc/) | 0.12+ recommended |
-| [ofxImGui](https://github.com/jvcleave/ofxImGui/tree/develop) | **develop** branch (required by the example) |
+## Repo Layout
 
-The pre-built `stable-diffusion.cpp` shared library is bundled in `libs/`.
+- `src/`
+  Addon wrapper, typed request/result model, and background-thread integration
+- `src/core/`
+  Enums and owned result types
+- `src/video/`
+  Video clip behavior and pure helper utilities
+- `libs/stable-diffusion/`
+  Bundled header/libs and vendoring location for upstream native source
+- `scripts/`
+  Native rebuild scripts
+- `tests/`
+  Lightweight CMake-based unit tests
+- `docs/`
+  Architecture and native-build notes
 
-## Setup
+## API Shape
 
-1. Clone this repo into your openFrameworks `addons/` folder:
-   ```bash
-   cd openFrameworks/addons
-   git clone https://github.com/Jonathhhan/ofxStableDiffusion.git
-   ```
-2. Download a compatible model and place it in the example's `bin/data/models/` directory.
-   A ready-to-use model folder is available here:
-   <https://huggingface.co/Jona0123456789/ofxStableDiffusion/tree/main>
-3. Add `ofxStableDiffusion` (and `ofxImGui` for the example) to your project's `addons.make`.
+The addon now supports two layers of use:
 
-## Quick Start (addon API)
+### Modern typed wrapper API
 
 ```cpp
 #include "ofxStableDiffusion.h"
 
 ofxStableDiffusion sd;
 
-// In setup():
-sd.newSdCtx("data/models/sd_turbo.safetensors",
-    "", "", "", "", "", "",       // vae, taesd, controlnet, lora, embed, stacked-id
-    false, false, false,          // vaeDecodeOnly, vaeTiling, freeParamsImmediately
-    8, SD_TYPE_F16,               // threads, weight type
-    STD_DEFAULT_RNG, DEFAULT,     // rng, schedule
-    false, false, false);         // keepClipOnCpu, keepControlNetCpu, keepVaeOnCpu
+ofxStableDiffusionContextSettings context;
+context.modelPath = "data/models/sd/sd_turbo.safetensors";
+context.nThreads = 8;
+context.weightType = SD_TYPE_F16;
+sd.configureContext(context);
 
-// Optional: receive progress updates
-sd.setProgressCallback([](int step, int steps, float time) {
-    ofLog() << "Step " << step << "/" << steps << " (" << time << "s)";
-});
-
-// Generate:
-sd.txt2img("a cat in space", "",
-    -1, 7.0, 512, 512,           // clipSkip, cfg, w, h
-    EULER_A, 20, -1, 1,          // sampler, steps, seed, batch
-    nullptr, 0.9, 20.0, true, "");
-
-// In update():
-if (sd.isDiffused()) {
-    sd_image_t* imgs = sd.returnImages();
-    // upload imgs[0].data to a texture …
-    sd.setDiffused(false);
-}
+ofxStableDiffusionImageRequest request;
+request.prompt = "cinematic portrait, rim lighting";
+request.width = 512;
+request.height = 512;
+request.sampleSteps = 20;
+sd.generate(request);
 ```
 
-## API Reference
+### Legacy compatibility API
 
-### `ofxStableDiffusion`
+The older `newSdCtx`, `txt2img`, `img2img`, and `img2vid` entry points are still
+available so existing call sites, including addon-to-addon bridges, do not have
+to migrate immediately.
 
-| Method | Description |
-|---|---|
-| `newSdCtx(...)` | Load a model (runs on a background thread). |
-| `freeSdCtx()` | Free the loaded model context. |
-| `txt2img(...)` | Start text-to-image generation (background thread). |
-| `img2img(...)` | Start image-to-image generation (background thread). |
-| `img2vid(...)` | Start image-to-video generation (background thread). |
-| `newUpscalerCtx(path, threads, wtype)` | Load an ESRGAN upscaler model. |
-| `freeUpscalerCtx()` | Free the upscaler context. |
-| `upscaleImage(image, factor)` | Upscale a single `sd_image_t`. |
-| `convert(in, vae, out, type)` | Convert a model to a different quantisation. |
-| `preprocessCanny(...)` | Run Canny edge detection on a buffer. |
-| `loadImage(pixels)` | Set the input image from `ofPixels` (by reference — pixels must stay alive). |
-| `isDiffused()` | Returns `true` when generation is complete. |
-| `setDiffused(bool)` | Reset the diffused flag after consuming results. |
-| `returnImages()` | Get the array of generated `sd_image_t` results. |
-| `isGenerating()` | Returns `true` while the background thread is running. |
-| `setProgressCallback(cb)` | Register a callback for per-step progress. |
-| `getSystemInfo()` | Print system / backend info. |
-| `getNumPhysicalCores()` | Query physical CPU core count. |
-| `typeName(type)` | Get the name string for an `sd_type_t` value. |
+## Video Behavior
 
-### Supported Samplers
+Video generation returns owned frames through `ofxStableDiffusionVideoClip`.
 
-`EULER_A`, `EULER`, `HEUN`, `DPM2`, `DPMPP2S_A`, `DPMPP2M`, `DPMPP2Mv2`, `LCM`
+Supported playback/presentation modes:
 
-### Supported Schedules
+- `Standard`
+  Return generated frames as-is
+- `Loop`
+  Repeat the first frame at the end for easier closed-loop playback
+- `PingPong`
+  Play forward, then back through the interior frames
+- `Boomerang`
+  Play forward, then fully reverse including the endpoints
 
-`DEFAULT`, `DISCRETE`, `KARRAS`, `AYS`
+This is especially useful when a UI layer or another addon wants a more natural
+preview clip without re-asking the native runtime for more frames.
 
-## Bundled Library Version
+## Image Modes
 
-The `libs/stable-diffusion/` directory ships a pre-built version of stable-diffusion.cpp.
-The upstream project's API has evolved significantly since this version was bundled (the latest
-master uses struct-based parameter passing). To update the bindings, rebuild the shared library
-from upstream and update the header accordingly.
+The typed image request layer now exposes addon-level image modes:
 
-## License
+- `TextToImage`
+- `ImageToImage`
+- `InstructImage`
+- `Variation`
+- `Restyle`
 
-See the [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) repo for library licensing.
-This addon wrapper follows the same MIT license as openFrameworks addons.
+`InstructImage` is implemented as a first-class wrapper mode on top of the
+bundled native `img2img` path, which keeps the addon compatible with the
+current bundled C API while still giving callers a clearer editing-oriented API.
+
+## CLIP-Rerank Integration
+
+`ofxStableDiffusion` now exposes a wrapper-level image ranking callback for
+Best-of-N workflows.
+
+That is the intended integration point for `ofxGgml` CLIP scoring:
+
+- generate a batch in `ofxStableDiffusion`
+- score the outputs with `ofxGgmlClipInference`
+- rerank or collapse to the best image without sharing native runtimes
+
+This keeps diffusion and CLIP loosely coupled while still enabling a strong
+cross-addon workflow.
+
+## `ofxGgml` Integration Guidance
+
+Recommended architecture:
+
+- keep `ofxStableDiffusion` standalone at the native-runtime layer
+- integrate `ofxGgml` with it through the addon API
+- do not share the low-level `ggml` binary directly across addons
+
+Why:
+
+- upstream `stable-diffusion.cpp` may require a different `ggml` revision
+- backend flags and ABI expectations can diverge
+- wrapper-level integration is more stable than native binary coupling
+
+More detail: [docs/ARCHITECTURE.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/docs/ARCHITECTURE.md)
+
+## Native Runtime
+
+The addon stages native artifacts into addon-local paths:
+
+- `libs/stable-diffusion/include`
+- `libs/stable-diffusion/lib/vs`
+- `libs/stable-diffusion/lib/Linux64`
+
+Rebuild helpers:
+
+- `scripts/build-stable-diffusion.ps1`
+- `scripts/build-stable-diffusion.bat`
+- `scripts/build-stable-diffusion.sh`
+
+More detail: [docs/NATIVE_BUILD.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/docs/NATIVE_BUILD.md)
+
+## Current Native Source Status
+
+The repo currently includes staged native binaries and headers, but the full
+vendored upstream `stable-diffusion.cpp` source snapshot is not yet present in
+`libs/stable-diffusion/source`.
+
+That means the rebuild scripts are ready, but full native rebuilds stay blocked
+until a compatible upstream snapshot is pinned and vendored.
+
+## Testing
+
+The test suite focuses on wrapper-level logic that should stay stable even when
+the native runtime changes.
+
+Run:
+
+```bash
+cmake -S tests -B tests/build
+cmake --build tests/build --config Release
+ctest --test-dir tests/build -C Release --output-on-failure
+```
+
+You can also use:
+
+- `scripts/run-tests.ps1`
+- `scripts/run-tests.sh`
+
+Test notes: [tests/README.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/tests/README.md)
+
+## Example
+
+The example project lives in `ofxStableDiffusionExample/` and now exposes:
+
+- progress/error status
+- busy-state gating
+- video-mode selection
+- frame export for generated clips
+
+## Changelog
+
+See [CHANGELOG.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/CHANGELOG.md).

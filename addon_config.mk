@@ -22,9 +22,13 @@ meta:
 	ADDON_URL = https://github.com/Jonathhhan/ofxStableDiffusion
 
 common:
+	ADDON_INCLUDES += libs/stable-diffusion/include
+	ADDON_SOURCES_EXCLUDE += libs/stable-diffusion/source/%
+	ADDON_SOURCES_EXCLUDE += libs/stable-diffusion/build/%
 
 linux64:
-	ADDON_LDFLAGS += -Wl,-rpath=../../../../addons/ofxStableDiffusion/libs/stable-diffusion.cpp/lib/linux64
+	ADDON_LIBS += libs/stable-diffusion/lib/Linux64/libstable-diffusion.so
+	ADDON_LDFLAGS += -Wl,-rpath=../../../../addons/ofxStableDiffusion/libs/stable-diffusion/lib/Linux64
 
 linux:
 
@@ -35,6 +39,7 @@ linuxarmv7l:
 msys2:
 
 vs:
+	ADDON_LIBS += libs/stable-diffusion/lib/vs/stable-diffusion.lib
 
 android/armeabi:
 

@@ -24,6 +24,8 @@ class ofApp : public ofBaseApp {
 
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
 		void allocate();
+		void applySelectedImageMode(ofxStableDiffusionImageMode mode);
+		bool usesInputImageMode() const;
 
 		std::vector<ofTexture> textureVector;
 		ofFbo fbo;
@@ -44,8 +46,14 @@ class ofApp : public ofBaseApp {
 		const char* imageSizeArray[8] = {"128", "256", "384", "512", "640", "768", "896", "1024"};
 		const char* imageWidth;
 		const char* imageHeight;
+		const char* imageModeArray[5] = {"TextToImage", "ImageToImage", "InstructImage", "Variation", "Restyle"};
+		const char* imageMode;
+		const char* selectionModeArray[3] = {"KeepOrder", "Rerank", "BestOnly"};
+		const char* selectionMode;
 		const char* sampleMethodArray[8] = {"EULER_A", "EULER", "HEUN", "DPM2", "DPMPP2S_A", "DPMPP2M", "DPMPP2Mv2", "LCM"};
 		const char* sampleMethod;
+		const char* videoModeArray[4] = {"Standard", "Loop", "PingPong", "Boomerang"};
+		const char* videoMode;
 		std::string modelPath;
 		std::string modelName;
 		std::string taesdPath;
@@ -84,7 +92,11 @@ class ofApp : public ofBaseApp {
 		sd_image_t inputImage = {0, 0, 0, nullptr};
 		sd_image_t* outputImages = nullptr;
 		sd_image_t* controlImage = nullptr;
+		ofxStableDiffusionImageMode imageModeEnum = ofxStableDiffusionImageMode::TextToImage;
+		ofxStableDiffusionImageSelectionMode selectionModeEnum =
+			ofxStableDiffusionImageSelectionMode::KeepOrder;
 		bool isTextToImage;
+		bool isInstructImage;
 		bool isImageToVideo;
 		int videoFrames;
 		int motionBucketId;
@@ -96,6 +108,10 @@ class ofApp : public ofBaseApp {
 		int totalVideoFrames;
 		float lastFrameTime;
 		int previewWidth;
+		int maxPreviewTextures = 64;
+		int progressStep = 0;
+		int progressSteps = 0;
+		float progressTime = 0.0f;
 		std::string imageName;
 		ofxImGui::Gui gui;
 		ofxStableDiffusion stableDiffusion;

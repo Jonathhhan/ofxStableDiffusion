@@ -1,19 +1,51 @@
 #pragma once
 
 #include "ofMain.h"
+#include "core/ofxStableDiffusionTypes.h"
 #include "ofxStableDiffusionThread.h"
-#include "../../libs/stable-diffusion/include/stable-diffusion.h"
+#include "../libs/stable-diffusion/include/stable-diffusion.h"
+
+#include <functional>
+#include <vector>
 
 /// Callback type for generation progress reporting.
 /// @param step Current step number.
 /// @param steps Total number of steps.
 /// @param time Time elapsed in seconds.
 typedef std::function<void(int step, int steps, float time)> ofxSdProgressCallback;
+typedef std::function<std::vector<ofxStableDiffusionImageScore>(
+	const ofxStableDiffusionImageRequest& request,
+	const std::vector<ofxStableDiffusionImageFrame>& images)> ofxSdImageRankCallback;
 
 class ofxStableDiffusion {
 public:
 	ofxStableDiffusion();
 	virtual ~ofxStableDiffusion();
+
+	void configureContext(const ofxStableDiffusionContextSettings& settings);
+	void generate(const ofxStableDiffusionImageRequest& request);
+	void generateVideo(const ofxStableDiffusionVideoRequest& request);
+	void setUpscalerSettings(const ofxStableDiffusionUpscalerSettings& settings);
+	ofxStableDiffusionContextSettings getContextSettings() const;
+	ofxStableDiffusionUpscalerSettings getUpscalerSettings() const;
+	const ofxStableDiffusionResult& getLastResult() const;
+	const std::vector<ofxStableDiffusionImageFrame>& getImages() const;
+	const ofxStableDiffusionVideoClip& getVideoClip() const;
+	bool hasImageResult() const;
+	bool hasVideoResult() const;
+	int getOutputCount() const;
+	const std::string& getLastError() const;
+	int getVideoFrameIndexForTime(float seconds) const;
+	const ofPixels* getVideoFramePixels(int index) const;
+	bool saveVideoFrames(const std::string& directory, const std::string& prefix = "frame") const;
+	void setVideoGenerationMode(ofxStableDiffusionVideoMode mode);
+	ofxStableDiffusionVideoMode getVideoGenerationMode() const;
+	void setImageGenerationMode(ofxStableDiffusionImageMode mode);
+	ofxStableDiffusionImageMode getImageGenerationMode() const;
+	void setImageSelectionMode(ofxStableDiffusionImageSelectionMode mode);
+	ofxStableDiffusionImageSelectionMode getImageSelectionMode() const;
+	void setImageRankCallback(ofxSdImageRankCallback cb);
+	int getSelectedImageIndex() const;
 
 	/// Load an input image from ofPixels. The pixels must remain valid for the
 	/// lifetime of any subsequent img2img / img2vid call.
@@ -84,6 +116,21 @@ public:
 		float styleStrength,
 		bool normalizeInput,
 		const std::string& inputIdImagesPath);
+	void instructImage(sd_image_t initImage,
+		const std::string& instruction,
+		const std::string& negativePrompt,
+		int clipSkip,
+		float cfgScale,
+		int width,
+		int height,
+		enum sample_method_t sampleMethod,
+		int sampleSteps,
+		float strength,
+		int64_t seed,
+		int batchCount,
+		sd_image_t* controlCond,
+		float controlStrength,
+		bool normalizeInput);
 
 	void img2vid(sd_image_t init_image,
 		int width,
@@ -127,6 +174,7 @@ public:
 	bool isGenerating() const;
 
 	std::string prompt;
+	std::string instruction;
 	std::string negativePrompt;
 	int width = 512;
 	int height = 512;
@@ -181,4 +229,32 @@ public:
 	bool diffused = false;
 
 	ofxSdProgressCallback progressCallback;
+	ofxSdImageRankCallback imageRankCallback;
+
+private:
+	friend class stableDiffusionThread;
+
+	bool beginBackgroundTask(ofxStableDiffusionTask task);
+	void applyContextSettings(const ofxStableDiffusionContextSettings& settings);
+	void applyImageRequest(const ofxStableDiffusionImageRequest& request);
+	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
+	void clearOutputState();
+	void setLastError(const std::string& errorMessage);
+	void clearLastError();
+	void captureImageResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
+	void captureVideoResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
+	void applyImageRanking(std::vector<ofxStableDiffusionImageFrame>& frames);
+	void rebuildLegacyOutputViews();
+	ofPixels makePixelsCopy(const sd_image_t& image) const;
+
+	ofxStableDiffusionTask activeTask = ofxStableDiffusionTask::None;
+	ofxStableDiffusionImageRequest currentImageRequest;
+	ofxStableDiffusionImageMode imageMode = ofxStableDiffusionImageMode::TextToImage;
+	ofxStableDiffusionImageSelectionMode imageSelectionMode =
+		ofxStableDiffusionImageSelectionMode::KeepOrder;
+	ofxStableDiffusionVideoMode videoMode = ofxStableDiffusionVideoMode::Standard;
+	ofxStableDiffusionResult lastResult;
+	std::vector<sd_image_t> outputImageViews;
+	std::string lastError;
+	uint64_t taskStartMicros = 0;
 };

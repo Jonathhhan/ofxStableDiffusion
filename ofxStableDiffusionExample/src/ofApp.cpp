@@ -39,11 +39,17 @@ void ofApp::setup() {
 	rngType = STD_DEFAULT_RNG;
 	imageWidth = "512";
 	imageHeight = "512";
+	imageMode = "TextToImage";
+	imageModeEnum = ofxStableDiffusionImageMode::TextToImage;
+	selectionMode = "KeepOrder";
+	selectionModeEnum = ofxStableDiffusionImageSelectionMode::KeepOrder;
 	sampleMethod = "DPMPP2Mv2";
 	sampleMethodEnum = DPMPP2Mv2;
+	videoMode = "Standard";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
+	isInstructImage = false;
 	isImageToVideo = false;
 	videoFrames = 6;
 	motionBucketId = 127;
@@ -62,12 +68,19 @@ void ofApp::setup() {
 	freeParamsImmediately = false;
 	nThreads = 8;
 	esrganMultiplier = 4;
-	for (int i = 0; i < 16; i++) {
+	for (int i = 0; i < maxPreviewTextures; i++) {
 		ofTexture texture;
 		textureVector.push_back(texture);
 	}
 	allocate();
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
+	applySelectedImageMode(imageModeEnum);
+	stableDiffusion.setImageSelectionMode(selectionModeEnum);
+	stableDiffusion.setProgressCallback([this](int step, int steps, float time) {
+		progressStep = step;
+		progressSteps = steps;
+		progressTime = time;
+	});
 	stableDiffusion.newSdCtx(modelPath,
 		vaePath,
 		taesdPath,
@@ -92,7 +105,7 @@ void ofApp::update() {
 	if (stableDiffusion.isDiffused()) {
 		outputImages = stableDiffusion.returnImages();
 		if (isImageToVideo) {
-			totalVideoFrames = videoFrames;
+			totalVideoFrames = stableDiffusion.getOutputCount();
 			for (int i = 0; i < totalVideoFrames; i++) {
 				textureVector[i].loadData(outputImages[i].data, width, height, GL_RGB);
 			}
@@ -103,7 +116,8 @@ void ofApp::update() {
 			lastFrameTime = ofGetElapsedTimef();
 		}
 		else {
-			for (int i = 0; i < batchCount; i++) {
+			const int outputCount = stableDiffusion.getOutputCount();
+			for (int i = 0; i < outputCount; i++) {
 				if (isESRGAN) {
 					textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 				}
@@ -111,8 +125,8 @@ void ofApp::update() {
 					textureVector[i].loadData(outputImages[i].data, width, height, GL_RGB);
 				}
 			}
-			previousSelectedImage = 0;
-			previewSize = batchCount;
+			previousSelectedImage = std::max(0, stableDiffusion.getSelectedImageIndex());
+			previewSize = outputCount;
 			totalVideoFrames = 0;
 		}
 		stableDiffusion.setDiffused(false);
@@ -149,6 +163,7 @@ void ofApp::draw() {
 	};
 	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
 	static bool logOpenSettings{ true };
+	const bool isBusy = stableDiffusion.isGenerating() || stableDiffusion.isModelLoading;
 	gui.begin();
 	ImGui::StyleColorsDark();
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -194,6 +209,22 @@ void ofApp::draw() {
 	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Image((ImTextureID)(uintptr_t)textureVector[selectedImage].getTextureData().textureID, ImVec2(width, height));
+		const auto& result = stableDiffusion.getLastResult();
+		if (selectedImage >= 0 && selectedImage < static_cast<int>(result.images.size())) {
+			const auto& frame = result.images[static_cast<std::size_t>(selectedImage)];
+			if (frame.score.valid) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::Text("Score: %.3f", frame.score.score);
+				if (!frame.score.scorer.empty()) {
+					ImGui::SameLine(0, 10);
+					ImGui::Text("Scorer: %s", frame.score.scorer.c_str());
+				}
+			}
+			if (frame.isSelected) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::Text("Best-of-N Selection");
+			}
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Indent(-10);
 		if (ImGui::Button("Save")) {
@@ -225,7 +256,8 @@ void ofApp::draw() {
 		addSoftReturnsToText(prompt, 500);
 		promptIsEdited = false;
 	}
-	if (ImGui::TreeNodeEx("Prompt", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+	const char* promptSectionLabel = isInstructImage ? "Instruction" : "Prompt";
+	if (ImGui::TreeNodeEx(promptSectionLabel, ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		Funcs::MyInputTextMultiline("##MyStr1", &prompt, ImVec2(512, 150), ImGuiInputTextFlags_CallbackResize);
 		if (ImGui::IsItemDeactivatedAfterEdit()) {
@@ -252,7 +284,7 @@ void ofApp::draw() {
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
-		if (stableDiffusion.diffused) {
+		if (isBusy) {
 			ImGui::BeginDisabled();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
@@ -294,39 +326,77 @@ void ofApp::draw() {
 		ImGui::SameLine(0, 5);
 		ImGui::Text(&modelName[0]);
 		ImGui::Dummy(ImVec2(0, 10));
-		static int e = 0;
-		if (ImGui::RadioButton("Text to Image", &e, 0)) {
-			isTextToImage = true;
-			isImageToVideo = false;
+		if (stableDiffusion.getLastError().empty()) {
+			ImGui::Text("Status: %s", isBusy ? "Running" : "Idle");
+		} else {
+			ImGui::TextWrapped("Status: %s", stableDiffusion.getLastError().c_str());
 		}
-		ImGui::SameLine(0, 10);
-		if (ImGui::RadioButton("Image to Image", &e, 1)) {
-			isTextToImage = false;
-			isImageToVideo = false;
+		if (progressSteps > 0 && isBusy) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Text("Progress %d / %d (%.2fs)", progressStep, progressSteps, progressTime);
 		}
-		ImGui::SameLine(0, 10);
-		if (ImGui::RadioButton("Image to Video", &e, 2)) {
-			isTextToImage = false;
-			isImageToVideo = true;
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::BeginCombo("Image Mode", imageMode, ImGuiComboFlags_NoArrowButton)) {
+			for (int n = 0; n < IM_ARRAYSIZE(imageModeArray); n++) {
+				const bool is_selected = (imageMode == imageModeArray[n]);
+				if (ImGui::Selectable(imageModeArray[n], is_selected)) {
+					applySelectedImageMode(static_cast<ofxStableDiffusionImageMode>(n));
+				}
+				if (is_selected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		if (!isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::BeginCombo("Selection", selectionMode, ImGuiComboFlags_NoArrowButton)) {
+				for (int n = 0; n < IM_ARRAYSIZE(selectionModeArray); n++) {
+					const bool is_selected = (selectionMode == selectionModeArray[n]);
+					if (ImGui::Selectable(selectionModeArray[n], is_selected)) {
+						selectionMode = selectionModeArray[n];
+						selectionModeEnum = static_cast<ofxStableDiffusionImageSelectionMode>(n);
+						stableDiffusion.setImageSelectionMode(selectionModeEnum);
+					}
+					if (is_selected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TextWrapped("Ranking callback is bridge-driven. Attach a CLIP scorer from ofxGgml to enable Best-of-N reranking.");
+		}
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Checkbox("Generate Video", &isImageToVideo);
+		if (isInstructImage) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TextWrapped("InstructImage applies an editing instruction to the source image.");
+		} else if (imageModeEnum == ofxStableDiffusionImageMode::Variation) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TextWrapped("Variation keeps the source composition closer and uses a lighter denoise strength.");
+		} else if (imageModeEnum == ofxStableDiffusionImageMode::Restyle) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TextWrapped("Restyle pushes the source image further toward the prompt aesthetic.");
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
-			if (!stableDiffusion.diffused && isTAESD) {
+			if (!isBusy && isTAESD) {
 				taesdPath = "data/models/taesd/taesd.safetensors";
 
 			}
-			else if (!stableDiffusion.diffused && !isTAESD) {
+			else if (!isBusy && !isTAESD) {
 				taesdPath = "";
 
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("VAE Tiling", &vaeTiling)) {
-				if (!stableDiffusion.diffused) {
+				if (!isBusy) {
 
 				}
 		}
-		if (!isTextToImage) {
+		if (usesInputImageMode() || isImageToVideo) {
 			ImGui::Dummy(ImVec2(0, 10));
 			if (ImGui::Button("Load Image")) {
 				ofFileDialogResult result = ofSystemLoadDialog("Load Image", false, "");
@@ -365,6 +435,20 @@ void ofApp::draw() {
 			ImGui::SliderFloat("Augmentation Level", &augmentationLevel, 0.0f, 1.0f);
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::SliderFloat("Min CFG", &minCfg, 0.0f, 20.0f);
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::BeginCombo("Video Mode", videoMode, ImGuiComboFlags_NoArrowButton)) {
+				for (int n = 0; n < IM_ARRAYSIZE(videoModeArray); n++) {
+					const bool is_selected = (videoMode == videoModeArray[n]);
+					if (ImGui::Selectable(videoModeArray[n], is_selected)) {
+						videoMode = videoModeArray[n];
+						stableDiffusion.setVideoGenerationMode(static_cast<ofxStableDiffusionVideoMode>(n));
+					}
+					if (is_selected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderInt("Clip Skip Layers", &clipSkip, -1, 33);
@@ -417,7 +501,7 @@ void ofApp::draw() {
 			}
 			ImGui::EndCombo();
 		}
-		if (!isTextToImage) {
+		if (usesInputImageMode() || isImageToVideo) {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::SliderFloat("Strength", &strength, 0, 1);
 		}
@@ -431,16 +515,19 @@ void ofApp::draw() {
 				allocate();
 			}
 		}
-		if (stableDiffusion.diffused) {
+		if (isBusy) {
 			ImGui::EndDisabled();
 		}
 		ImGui::TreePop();
 	}
-	if (stableDiffusion.diffused) {
+	if (isBusy) {
 		ImGui::BeginDisabled();
 	}
 	ImGui::Dummy(ImVec2(0, 10));
 	if (ImGui::Button("Generate")) {
+		progressStep = 0;
+		progressSteps = 0;
+		progressTime = 0.0f;
 		if (isImageToVideo) {
 			isPlaying = false;
 			totalVideoFrames = 0;
@@ -458,41 +545,29 @@ void ofApp::draw() {
 				strength,
 				seed);
 		}
-		else if (isTextToImage) {
-			stableDiffusion.txt2img(prompt,
-				negativePrompt,
-				clipSkip,
-				cfgScale,
-				width,
-				height,
-				sampleMethodEnum,
-				sampleSteps,
-				seed,
-				batchCount,
-				controlImage,
-				controlStrength,
-				styleStrength,
-				normalizeInput,
-				inputIdImagesPath);
-		}
 		else {
-			stableDiffusion.img2img(inputImage,
-				prompt,
-				negativePrompt,
-				clipSkip,
-				cfgScale,
-				width,
-				height,
-				sampleMethodEnum,
-				sampleSteps,
-				strength,
-				seed,
-				batchCount,
-				controlImage,
-				controlStrength,
-				styleStrength,
-				normalizeInput,
-				inputIdImagesPath);
+			ofxStableDiffusionImageRequest request;
+			request.mode = imageModeEnum;
+			request.selectionMode = selectionModeEnum;
+			request.initImage = inputImage;
+			request.prompt = prompt;
+			request.instruction = isInstructImage ? prompt : "";
+			request.negativePrompt = negativePrompt;
+			request.clipSkip = clipSkip;
+			request.cfgScale = cfgScale;
+			request.width = width;
+			request.height = height;
+			request.sampleMethod = sampleMethodEnum;
+			request.sampleSteps = sampleSteps;
+			request.strength = strength;
+			request.seed = seed;
+			request.batchCount = batchCount;
+			request.controlCond = controlImage;
+			request.controlStrength = controlStrength;
+			request.styleStrength = styleStrength;
+			request.normalizeInput = normalizeInput;
+			request.inputIdImagesPath = inputIdImagesPath;
+			stableDiffusion.generate(request);
 		}
 	}
 	if (totalVideoFrames > 0) {
@@ -510,8 +585,14 @@ void ofApp::draw() {
 			previousSelectedImage = currentFrame;
 			isPlaying = false;
 		}
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button("Save Frames")) {
+			stableDiffusion.saveVideoFrames(
+				ofGetTimestampString("output/ofxStableDiffusion-video-%Y-%m-%d-%H-%M-%S"),
+				"frame");
+		}
 	}
-	if (stableDiffusion.diffused) {
+	if (isBusy) {
 		ImGui::EndDisabled();
 	}
 	ImGui::End();
@@ -532,12 +613,12 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 		tmpStr += str[curChr];
 		textSize = ImGui::CalcTextSize(tmpStr.c_str()).x;
 		if (textSize > multilineWidth) {
-			int lastSpace = tmpStr.size() - 1;
+			int lastSpace = static_cast<int>(tmpStr.size()) - 1;
 			while (tmpStr[lastSpace] != ' ' && lastSpace > 0) {
 				lastSpace--;
 			}
 			if (lastSpace == 0) {
-				lastSpace = tmpStr.size() - 2;
+				lastSpace = static_cast<int>(tmpStr.size()) - 2;
 			}
 			finalStr += tmpStr.substr(0, lastSpace + 1) + "\r\n";
 			if (lastSpace + 1 > tmpStr.size()) {
@@ -555,8 +636,26 @@ void ofApp::addSoftReturnsToText(std::string& str, float multilineWidth) {
 }
 
 //--------------------------------------------------------------
+void ofApp::applySelectedImageMode(ofxStableDiffusionImageMode mode) {
+	imageModeEnum = mode;
+	imageMode = imageModeArray[static_cast<int>(mode)];
+	isTextToImage = (mode == ofxStableDiffusionImageMode::TextToImage);
+	isInstructImage = (mode == ofxStableDiffusionImageMode::InstructImage);
+	stableDiffusion.setImageGenerationMode(mode);
+	cfgScale = ofxStableDiffusionDefaultCfgScaleForImageMode(mode);
+	if (usesInputImageMode()) {
+		strength = ofxStableDiffusionDefaultStrengthForImageMode(mode);
+	}
+}
+
+//--------------------------------------------------------------
+bool ofApp::usesInputImageMode() const {
+	return ofxStableDiffusionImageModeUsesInputImage(imageModeEnum);
+}
+
+//--------------------------------------------------------------
 void ofApp::allocate() {
-	for (int i = 0; i < 16; i++) {
+	for (int i = 0; i < maxPreviewTextures; i++) {
 		if (textureVector[i].isAllocated()) {
 			textureVector[i].clear();
 		}
