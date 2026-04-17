@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0 - 2026-04-17
+
+### Added
+
+- **Video Animation and Interpolation** (Feature #18): Advanced video generation with keyframe support
+  - Prompt interpolation between keyframes with smooth transitions
+  - Parameter animation for CFG scale, strength, and other settings
+  - Seed sequence support for incremental seed variation across frames
+  - Multiple interpolation modes: Linear, Smooth (cosine), EaseIn, EaseOut, EaseInOut
+  - `ofxStableDiffusionPromptKeyframe` structure for prompt-based animations
+  - `ofxStableDiffusionKeyframe` structure for parameter animations
+  - `ofxStableDiffusionVideoAnimationSettings` for animation configuration
+  - Helper functions for creating animated video requests
+  - Frame-specific parameter getter functions (prompt, cfgScale, strength, seed)
+
+- **Video Export Enhancements** (Feature #19): Improved video metadata and export capabilities
+  - Automatic frame metadata generation (JSON format)
+  - Generation parameter embedding for each frame
+  - Video parameter export to JSON file
+  - Complete generation history tracking per frame
+  - Export helper functions for metadata and parameters
+
 ## 1.1.0 - 2026-04-17
 
 ### Added

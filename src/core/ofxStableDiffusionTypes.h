@@ -5,6 +5,7 @@
 #include "ofxStableDiffusionImageHelpers.h"
 #include "ofxStableDiffusionRankingHelpers.h"
 #include "../../libs/stable-diffusion/include/stable-diffusion.h"
+#include "../video/ofxStableDiffusionVideoAnimation.h"
 
 #include <cstdint>
 #include <string>
@@ -90,6 +91,16 @@ struct ofxStableDiffusionVideoRequest {
 	float strength = 0.5f;
 	int64_t seed = -1;
 	ofxStableDiffusionVideoMode mode = ofxStableDiffusionVideoMode::Standard;
+
+	// Animation settings (optional)
+	ofxStableDiffusionVideoAnimationSettings animationSettings;
+
+	// Helper to check if animation is enabled
+	bool hasAnimation() const {
+		return animationSettings.enablePromptInterpolation ||
+		       animationSettings.enableParameterAnimation ||
+		       animationSettings.useSeedSequence;
+	}
 };
 
 struct ofxStableDiffusionImageFrame {

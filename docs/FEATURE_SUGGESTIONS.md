@@ -240,20 +240,34 @@ sd.generate(request);
 - Style extraction from reference images
 - Semantic search in generated image batches
 
-### 18. Animation and Interpolation
+### 18. Animation and Interpolation ✅ **COMPLETED (v1.2.0)**
 
-**Suggested Enhancement**:
-- Keyframe-based animation
-- Prompt interpolation
-- Smooth parameter transitions
-- Video-to-video
+**Implementation Status**: Fully implemented with comprehensive keyframe and interpolation support.
 
-### 19. Export and Metadata
+**Implemented Features**:
+- ✅ Prompt keyframe interpolation with smooth transitions
+- ✅ Parameter keyframe animation (CFG scale, strength)
+- ✅ Seed sequence support for frame variation
+- ✅ Multiple interpolation modes (Linear, Smooth, EaseIn, EaseOut, EaseInOut)
+- ✅ Helper functions for creating animated video requests
+- ✅ Frame-specific parameter getters
 
-**Suggested Enhancement**:
+**Suggested Future Enhancements**:
+- Video-to-video support (requires stable-diffusion.cpp updates)
+
+### 19. Export and Metadata ✅ **COMPLETED (v1.2.0)**
+
+**Implementation Status**: Comprehensive metadata and export features implemented.
+
+**Implemented Features**:
+- ✅ Frame-by-frame metadata generation (JSON format)
+- ✅ Generation parameter tracking per frame
+- ✅ Video parameter export to JSON file
+- ✅ Complete generation history tracking
+
+**Suggested Future Enhancements**:
 - PNG metadata embedding (generation parameters)
-- JSON export of settings
-- Reproducible generation from metadata
+- Reproducible generation from metadata files
 
 ### 20. Platform-Specific Optimizations
 
