@@ -56,6 +56,13 @@ public:
 	/// lifetime of any subsequent img2img / img2vid call.
 	void loadImage(const ofPixels& pixels);
 
+	/// Replace the active LoRA/LoCon stack for subsequent generations.
+	void setLoras(const std::vector<ofxStableDiffusionLora>& loras_);
+	std::vector<ofxStableDiffusionLora> getLoras() const;
+
+	/// Reload embeddings by rebuilding the context with the current (or provided) embed directory.
+	void reloadEmbeddings(const std::string& embedDir = "");
+
 	bool isDiffused() const;
 	void setDiffused(bool diffused);
 	/// Returned buffers are owned by the addon; they become invalid after a new
@@ -237,6 +244,7 @@ public:
 	rng_type_t rngType = STD_DEFAULT_RNG;
 	std::string controlImagePath;
 	float controlStrength = 0.9f;
+	std::vector<ofxStableDiffusionLora> loras;
 
 	sd_image_t inputImage = {0, 0, 0, nullptr};
 	sd_image_t* outputImages = nullptr;

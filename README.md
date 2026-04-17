@@ -72,6 +72,19 @@ request.width = 512;
 request.height = 512;
 request.sampleSteps = 20;
 sd.generate(request);
+
+// Optional: apply a stack of LoRA/LoCon adapters per request
+ofxStableDiffusionLora loraA;
+loraA.path = "data/loras/edge.safetensors";
+loraA.strength = 0.7f;
+request.loras = {loraA};
+sd.generate(request);
+
+// Update the active LoRA stack globally
+sd.setLoras({loraA});
+
+// Hot-reload textual-inversion embeddings (reloads the context)
+sd.reloadEmbeddings("data/embeddings");
 ```
 
 ### Error Handling
