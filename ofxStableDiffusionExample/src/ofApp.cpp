@@ -708,6 +708,7 @@ void ofApp::draw() {
 		ImGui::EndDisabled();
 	}
 	ImGui::End();
+	ImGui::PopStyleVar(5);
 	gui.end();
 }
 

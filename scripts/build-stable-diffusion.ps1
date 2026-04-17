@@ -8,9 +8,11 @@ param(
     [string]$Generator = "",
     [int]$Jobs = 0,
     [switch]$Clean,
-    [switch]$CpuOnly,
-    [switch]$Cuda,
+    [Alias('Cpu')][switch]$CpuOnly,
+    [Alias('Gpu')][switch]$Cuda,
     [switch]$Vulkan,
+    [switch]$Metal,
+    [switch]$Auto,
     [switch]$DryRun
 )
 
@@ -21,6 +23,26 @@ function Write-Step {
     Write-Host "==> $Message"
 }
 
+function Test-IsWindowsHost {
+    return $env:OS -eq 'Windows_NT'
+}
+
+function Test-IsMacHost {
+    return [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::MacOSX
+}
+
+function Invoke-External {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
+    }
+}
+
 function Get-CommandPathOrNull {
     param([string]$Name)
     try {
@@ -28,6 +50,71 @@ function Get-CommandPathOrNull {
     } catch {
         return $null
     }
+}
+
+function Test-CudaAvailable {
+    if ($env:CUDA_PATH -and (Test-Path -LiteralPath $env:CUDA_PATH)) {
+        return $true
+    }
+    return [bool](Get-CommandPathOrNull 'nvcc.exe')
+}
+
+function Test-VulkanAvailable {
+    if ($env:VULKAN_SDK -and (Test-Path -LiteralPath $env:VULKAN_SDK)) {
+        return $true
+    }
+    return [bool](Get-CommandPathOrNull 'glslc.exe') -or
+        [bool](Get-CommandPathOrNull 'vulkaninfo.exe')
+}
+
+function Test-MetalAvailable {
+    if (-not (Test-IsMacHost)) {
+        return $false
+    }
+    return [bool](Get-CommandPathOrNull 'xcrun')
+}
+
+function Get-ShortBuildDir {
+    param(
+        [string]$AddonRoot,
+        [switch]$DryRun
+    )
+
+    $hashBytes = [System.Security.Cryptography.SHA1]::Create().ComputeHash(
+        [System.Text.Encoding]::UTF8.GetBytes($AddonRoot))
+    $hash = [System.BitConverter]::ToString($hashBytes).Replace('-', '').Substring(0, 10).ToLowerInvariant()
+    $candidateRoots = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($env:OFXSD_SHORT_BUILD_ROOT)) {
+        $candidateRoots += $env:OFXSD_SHORT_BUILD_ROOT
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:PUBLIC)) {
+        $candidateRoots += (Join-Path $env:PUBLIC 'sd')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $candidateRoots += (Join-Path $env:LOCALAPPDATA 'sd')
+    }
+
+    $tempRoot = [System.IO.Path]::GetTempPath()
+    if (-not [string]::IsNullOrWhiteSpace($tempRoot)) {
+        $candidateRoots += (Join-Path $tempRoot 'sd')
+    }
+
+    foreach ($root in ($candidateRoots | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)) {
+        $candidate = Join-Path $root $hash
+        if ($DryRun) {
+            return $candidate
+        }
+
+        try {
+            New-Item -ItemType Directory -Force -Path $root | Out-Null
+            return $candidate
+        } catch {
+            continue
+        }
+    }
+
+    return Join-Path $tempRoot "ofxsd-build-$hash"
 }
 
 function Find-FirstFile {
@@ -54,7 +141,8 @@ function Find-FirstFile {
 function Copy-IfPresent {
     param(
         [string]$Path,
-        [string]$Destination
+        [string]$Destination,
+        [switch]$AllowLockedDestination
     )
 
     if (-not $Path) {
@@ -66,7 +154,15 @@ function Copy-IfPresent {
         return
     }
 
-    Copy-Item -LiteralPath $Path -Destination $Destination -Force
+    try {
+        Copy-Item -LiteralPath $Path -Destination $Destination -Force
+    } catch [System.IO.IOException] {
+        if ($AllowLockedDestination) {
+            Write-Warning "Skipping copy into $Destination because the destination file is in use. Close the running example app and re-run setup if you want the latest runtime staged there."
+            return
+        }
+        throw
+    }
 }
 
 function Get-VendoredValue {
@@ -95,9 +191,7 @@ $addonRoot = (Resolve-Path (Join-Path $scriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($SourceDir)) {
     $SourceDir = Join-Path $addonRoot 'libs\stable-diffusion\source'
 }
-if ([string]::IsNullOrWhiteSpace($BuildDir)) {
-    $BuildDir = Join-Path $addonRoot 'libs\stable-diffusion\build'
-}
+$buildDirWasImplicit = [string]::IsNullOrWhiteSpace($BuildDir)
 if ([string]::IsNullOrWhiteSpace($InstallIncludeDir)) {
     $InstallIncludeDir = Join-Path $addonRoot 'libs\stable-diffusion\include'
 }
@@ -109,6 +203,32 @@ if ([string]::IsNullOrWhiteSpace($ExampleBinDir)) {
 }
 if ($Jobs -le 0) {
     $Jobs = [Math]::Max(1, [Environment]::ProcessorCount)
+}
+
+$enableCuda = $false
+$enableVulkan = $false
+$enableMetal = $false
+$backendMode = "auto-detect"
+
+if ($CpuOnly) {
+    $backendMode = "cpu-only"
+} elseif ($Cuda -or $Vulkan -or $Metal) {
+    $backendMode = "explicit"
+    $enableCuda = $Cuda
+    $enableVulkan = $Vulkan
+    $enableMetal = $Metal
+} else {
+    $enableCuda = Test-CudaAvailable
+    $enableVulkan = Test-VulkanAvailable
+    $enableMetal = Test-MetalAvailable
+}
+
+if ($buildDirWasImplicit) {
+    if ((Test-IsWindowsHost) -and $enableVulkan) {
+        $BuildDir = Get-ShortBuildDir -AddonRoot $addonRoot -DryRun:$DryRun
+    } else {
+        $BuildDir = Join-Path $addonRoot 'libs\stable-diffusion\build'
+    }
 }
 
 $cmake = Get-CommandPathOrNull 'cmake.exe'
@@ -177,20 +297,25 @@ if (-not [string]::IsNullOrWhiteSpace($Generator)) {
     $configureArgs += @('-G', $Generator)
 }
 
-if ($CpuOnly) {
-    $configureArgs += @('-DSD_CUDA=OFF', '-DSD_VULKAN=OFF')
-} else {
-    $configureArgs += @(
-        ('-DSD_CUDA=' + ($(if ($Cuda) { 'ON' } else { 'OFF' }))),
-        ('-DSD_VULKAN=' + ($(if ($Vulkan) { 'ON' } else { 'OFF' })))
-    )
-}
+$configureArgs += @(
+    ('-DSD_CUDA=' + ($(if ($enableCuda) { 'ON' } else { 'OFF' }))),
+    ('-DSD_VULKAN=' + ($(if ($enableVulkan) { 'ON' } else { 'OFF' }))),
+    ('-DSD_METAL=' + ($(if ($enableMetal) { 'ON' } else { 'OFF' })))
+)
 
 Write-Step "Configuring stable-diffusion native library"
+Write-Host ("    Backend mode: {0} (CUDA={1}, Vulkan={2}, Metal={3})" -f
+    $backendMode,
+    $(if ($enableCuda) { 'ON' } else { 'OFF' }),
+    $(if ($enableVulkan) { 'ON' } else { 'OFF' }),
+    $(if ($enableMetal) { 'ON' } else { 'OFF' }))
+if ($buildDirWasImplicit -and (Test-IsWindowsHost) -and $enableVulkan) {
+    Write-Host "    Using short Windows build dir for Vulkan: $BuildDir"
+}
 if ($DryRun) {
     Write-Host "$cmake $($configureArgs -join ' ')"
 } else {
-    & $cmake @configureArgs
+    Invoke-External -FilePath $cmake -Arguments $configureArgs
 }
 
 $buildArgs = @(
@@ -203,7 +328,7 @@ Write-Step "Building stable-diffusion ($Configuration)"
 if ($DryRun) {
     Write-Host "$cmake $($buildArgs -join ' ')"
 } else {
-    & $cmake @buildArgs
+    Invoke-External -FilePath $cmake -Arguments $buildArgs
 }
 
 $headerPath = Find-FirstFile -Root $SourceDir -Names @('stable-diffusion.h')
@@ -224,7 +349,7 @@ Write-Step "Staging stable-diffusion artifacts into the addon"
 Copy-IfPresent -Path $dllPath -Destination $InstallLibDir
 Copy-IfPresent -Path $libPath -Destination $InstallLibDir
 if ($ExampleBinDir) {
-    Copy-IfPresent -Path $dllPath -Destination $ExampleBinDir
+    Copy-IfPresent -Path $dllPath -Destination $ExampleBinDir -AllowLockedDestination
 }
 
 Write-Host ""

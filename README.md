@@ -150,8 +150,42 @@ Rebuild helpers:
 - `scripts/build-stable-diffusion.ps1`
 - `scripts/build-stable-diffusion.bat`
 - `scripts/build-stable-diffusion.sh`
+- `scripts/download-stable-diffusion-release.ps1`
+- `scripts/setup_addon.ps1`
+- `scripts/setup_windows.bat`
 
 More detail: [docs/NATIVE_BUILD.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/docs/NATIVE_BUILD.md)
+
+Backend flags now follow the same style as `ofxGgml`:
+
+- `--auto` / `-Auto`
+  Auto-detect supported GPU backends (default)
+- `--cpu`, `--cpu-only` / `-CpuOnly`
+  Force CPU-only native builds
+- `--gpu`, `--cuda` / `-Cuda`
+  Enable CUDA explicitly
+- `--vulkan` / `-Vulkan`
+  Enable Vulkan explicitly
+- `--metal` / `-Metal`
+  Enable Metal explicitly where supported
+
+For Windows, `scripts/setup_windows.bat` and `scripts/setup_addon.ps1` also
+support an optional prebuilt-runtime path:
+
+- `--use-release`
+  Stage a pinned upstream Windows release instead of compiling from source
+- `--release-tag TAG`
+  Override the upstream GitHub release tag used with `--use-release`
+- `--release-variant auto|cpu|noavx|avx|avx2|avx512|cuda12`
+  Choose the prebuilt runtime flavor
+
+`--auto` remains the default setup behavior. The prebuilt-release path is
+explicit opt-in and is currently intended for Windows CPU/CUDA staging. Windows
+Vulkan still falls back to source builds.
+
+When an upstream Windows zip does not include `stable-diffusion.lib`, the addon
+setup script synthesizes the Visual Studio import library from the downloaded
+DLL exports automatically.
 
 ## Current Native Source Status
 
@@ -161,6 +195,11 @@ under `libs/stable-diffusion/source`, pinned to:
 - upstream repo: `https://github.com/leejet/stable-diffusion.cpp`
 - upstream commit: `a564fdf642780d1df123f1c413b19961375b8346`
 - vendored on: `2026-04-17`
+
+The optional Windows prebuilt-runtime flow is currently pinned to the upstream
+GitHub release tag `master-572-1b4e9be`, which was the latest upstream release
+published on `2026-04-16`. Override it with `--release-tag` if you want a
+different upstream runtime. Source: [stable-diffusion.cpp releases](https://github.com/leejet/stable-diffusion.cpp/releases)
 
 The addon now includes the upstream header directly through
 `libs/stable-diffusion/include/stable-diffusion.h`, without re-exporting the

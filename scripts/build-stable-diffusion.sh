@@ -9,9 +9,11 @@ INSTALL_INCLUDE_DIR="$ADDON_ROOT/libs/stable-diffusion/include"
 INSTALL_LIB_DIR="$ADDON_ROOT/libs/stable-diffusion/lib/Linux64"
 JOBS="${JOBS:-}"
 CLEAN=0
+AUTO=1
 CPU_ONLY=0
 CUDA=0
 VULKAN=0
+METAL=0
 CONFIGURATION="Release"
 
 write_step() {
@@ -23,6 +25,21 @@ die() {
 	exit 1
 }
 
+detect_cuda() {
+	[[ -n "${CUDA_PATH:-}" && -d "${CUDA_PATH:-}" ]] && return 0
+	command -v nvcc >/dev/null 2>&1
+}
+
+detect_vulkan() {
+	[[ -n "${VULKAN_SDK:-}" && -d "${VULKAN_SDK:-}" ]] && return 0
+	command -v glslc >/dev/null 2>&1 || command -v vulkaninfo >/dev/null 2>&1
+}
+
+detect_metal() {
+	[[ "$(uname -s 2>/dev/null || echo unknown)" == "Darwin" ]] || return 1
+	command -v xcrun >/dev/null 2>&1
+}
+
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--source-dir) SOURCE_DIR="$2"; shift 2 ;;
@@ -32,9 +49,34 @@ while [[ $# -gt 0 ]]; do
 		--jobs) JOBS="$2"; shift 2 ;;
 		--config) CONFIGURATION="$2"; shift 2 ;;
 		--clean) CLEAN=1; shift ;;
-		--cpu-only) CPU_ONLY=1; shift ;;
-		--cuda) CUDA=1; shift ;;
-		--vulkan) VULKAN=1; shift ;;
+		--cpu|--cpu-only) CPU_ONLY=1; CUDA=0; VULKAN=0; METAL=0; AUTO=0; shift ;;
+		--gpu|--cuda) CPU_ONLY=0; CUDA=1; AUTO=0; shift ;;
+		--vulkan) CPU_ONLY=0; VULKAN=1; AUTO=0; shift ;;
+		--metal) CPU_ONLY=0; METAL=1; AUTO=0; shift ;;
+		--auto) AUTO=1; CPU_ONLY=0; CUDA=0; VULKAN=0; METAL=0; shift ;;
+		--help|-h)
+			cat <<'EOF'
+build-stable-diffusion.sh - Build the bundled stable-diffusion.cpp runtime.
+
+Usage:
+  ./scripts/build-stable-diffusion.sh [OPTIONS]
+
+Options:
+  --cpu, --cpu-only      Build CPU backend only
+  --auto                 Auto-detect GPU backends (default)
+  --gpu, --cuda          Enable CUDA backend
+  --vulkan               Enable Vulkan backend
+  --metal                Enable Metal backend (macOS only)
+  --jobs N               Parallel build jobs
+  --config NAME          Build configuration (default: Release)
+  --clean                Remove previous build directory before building
+  --source-dir DIR       Override vendored source directory
+  --build-dir DIR        Override build directory
+  --install-lib-dir DIR  Override staged library directory
+  --help                 Show this help message
+EOF
+			exit 0
+			;;
 		*)
 			die "Unknown option: $1"
 			;;
@@ -60,37 +102,59 @@ fi
 
 mkdir -p "$BUILD_DIR" "$INSTALL_INCLUDE_DIR" "$INSTALL_LIB_DIR"
 
+ENABLE_CUDA=0
+ENABLE_VULKAN=0
+ENABLE_METAL=0
+BACKEND_MODE="auto-detect"
+
+if [[ "$CPU_ONLY" -eq 1 ]]; then
+	BACKEND_MODE="cpu-only"
+elif [[ "$CUDA" -eq 1 || "$VULKAN" -eq 1 || "$METAL" -eq 1 ]]; then
+	BACKEND_MODE="explicit"
+	ENABLE_CUDA="$CUDA"
+	ENABLE_VULKAN="$VULKAN"
+	ENABLE_METAL="$METAL"
+else
+	if detect_cuda; then
+		ENABLE_CUDA=1
+	fi
+	if detect_vulkan; then
+		ENABLE_VULKAN=1
+	fi
+	if detect_metal; then
+		ENABLE_METAL=1
+	fi
+fi
+
 CMAKE_ARGS=(
 	-S "$SOURCE_DIR"
 	-B "$BUILD_DIR"
 	-DCMAKE_BUILD_TYPE="$CONFIGURATION"
-	-DBUILD_SHARED_LIBS=ON
-	-DSD_BUILD_SHARED_LIB=ON
-	-DSD_BUILD_TESTS=OFF
+	-DSD_BUILD_SHARED_LIBS=ON
 	-DSD_BUILD_EXAMPLES=OFF
+	-DSD_CUDA=$([[ "$ENABLE_CUDA" -eq 1 ]] && echo ON || echo OFF)
+	-DSD_VULKAN=$([[ "$ENABLE_VULKAN" -eq 1 ]] && echo ON || echo OFF)
+	-DSD_METAL=$([[ "$ENABLE_METAL" -eq 1 ]] && echo ON || echo OFF)
 )
 
-if [[ "$CPU_ONLY" -eq 1 ]]; then
-	CMAKE_ARGS+=(-DGGML_CUDA=OFF -DGGML_VULKAN=OFF)
-else
-	CMAKE_ARGS+=(-DGGML_CUDA=$([[ "$CUDA" -eq 1 ]] && echo ON || echo OFF))
-	CMAKE_ARGS+=(-DGGML_VULKAN=$([[ "$VULKAN" -eq 1 ]] && echo ON || echo OFF))
-fi
-
 write_step "Configuring stable-diffusion native library"
+printf '    Backend mode: %s (CUDA=%s, Vulkan=%s, Metal=%s)\n' \
+	"$BACKEND_MODE" \
+	"$([[ "$ENABLE_CUDA" -eq 1 ]] && echo ON || echo OFF)" \
+	"$([[ "$ENABLE_VULKAN" -eq 1 ]] && echo ON || echo OFF)" \
+	"$([[ "$ENABLE_METAL" -eq 1 ]] && echo ON || echo OFF)"
 cmake "${CMAKE_ARGS[@]}"
 
 write_step "Building stable-diffusion ($CONFIGURATION)"
 cmake --build "$BUILD_DIR" --config "$CONFIGURATION" --parallel "$JOBS"
 
 HEADER_PATH="$(find "$SOURCE_DIR" -name stable-diffusion.h | head -n 1 || true)"
-DLL_PATH="$(find "$BUILD_DIR" -name 'libstable-diffusion.so' | head -n 1 || true)"
+DLL_PATH="$(find "$BUILD_DIR" \( -name 'libstable-diffusion.so' -o -name 'libstable-diffusion.dylib' \) | head -n 1 || true)"
 
 [[ -n "$HEADER_PATH" ]] || die "stable-diffusion.h was not found under $SOURCE_DIR"
-[[ -n "$DLL_PATH" ]] || die "libstable-diffusion.so was not found under $BUILD_DIR"
+[[ -n "$DLL_PATH" ]] || die "stable-diffusion runtime library was not found under $BUILD_DIR"
 
 write_step "Staging stable-diffusion artifacts into the addon"
-cp -f "$HEADER_PATH" "$INSTALL_INCLUDE_DIR/"
 cp -f "$DLL_PATH" "$INSTALL_LIB_DIR/"
 
 printf '\nstable-diffusion native build complete.\n'

@@ -10,6 +10,8 @@
 - Best-of-N image ranking support with callback-based reranking and per-image score metadata
 - Expanded video presentation modes: `Standard`, `Loop`, `PingPong`, and `Boomerang`
 - Native rebuild scripts for Windows, batch-shell, and POSIX-shell workflows
+- Windows setup entrypoints via `scripts/setup_addon.ps1` and `scripts/setup_windows.bat`
+- Optional Windows prebuilt-runtime staging via `scripts/download-stable-diffusion-release.ps1`
 - Architecture and native build documentation under `docs/`
 - A lightweight CMake-based unit test suite for video helper behavior
 - A vendored current-master `stable-diffusion.cpp` source snapshot, pinned to `a564fdf642780d1df123f1c413b19961375b8346`
@@ -23,6 +25,9 @@
 - Added a bridge-friendly CLIP rerank seam so `ofxGgml` can score and reorder outputs without native binary coupling
 - Improved example-app UX with explicit busy states, progress/error feedback, video-mode controls, and frame-sequence export
 - Updated native rebuild/staging so the script targets current upstream CMake flags and preserves the addon compatibility header while refreshing DLL/lib artifacts
+- Aligned native build/setup flags with `ofxGgml` style, including `auto`, `cpu-only`, `cuda`, `vulkan`, and `metal` backend selection behavior
+- Kept `--auto` as the default setup mode while adding an explicit `--use-release` path for pinned upstream Windows CPU/CUDA runtime staging
+- Added automatic import-library synthesis from upstream Windows release DLL exports when the zip omits `stable-diffusion.lib`
 
 ### Notes
 
