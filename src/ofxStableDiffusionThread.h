@@ -2,6 +2,7 @@
 
 #include "ofMain.h"
 #include "../libs/stable-diffusion/include/stable-diffusion.h"
+#include <vector>
 
 class stableDiffusionThread : public ofThread {
 public:
@@ -14,4 +15,5 @@ private:
 	void threadedFunction();
 	bool isSdCtxLoaded = false;
 	bool isUpscalerCtxLoaded = false;
+	std::vector<sd_lora_t> loraBuffer;
 };

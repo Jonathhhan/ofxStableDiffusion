@@ -218,6 +218,60 @@ void ofxStableDiffusion::configureContext(const ofxStableDiffusionContextSetting
 }
 
 //--------------------------------------------------------------
+void ofxStableDiffusion::reloadEmbeddings(const std::string& embedDir) {
+	std::string targetEmbedDir = embedDir.empty() ? embedDirCStr : embedDir;
+	if (!embedDir.empty()) {
+		embedDirCStr = embedDir;
+	}
+	newSdCtx(modelPath,
+		vaePath,
+		taesdPath,
+		controlNetPathCStr,
+		loraModelDir,
+		targetEmbedDir,
+		stackedIdEmbedDirCStr,
+		vaeDecodeOnly,
+		vaeTiling,
+		freeParamsImmediately,
+		nThreads,
+		wType,
+		rngType,
+		schedule,
+		keepClipOnCpu,
+		keepControlNetCpu,
+		keepVaeOnCpu);
+}
+
+//--------------------------------------------------------------
+std::vector<std::pair<std::string, std::string>> ofxStableDiffusion::listEmbeddings() const {
+	std::vector<std::pair<std::string, std::string>> results;
+	const std::string targetDir = embedDirCStr;
+	if (targetDir.empty()) {
+		return results;
+	}
+
+	ofDirectory dir(targetDir);
+	if (!dir.exists()) {
+		return results;
+	}
+	dir.allowExt("pt");
+	dir.allowExt("ckpt");
+	dir.allowExt("safetensors");
+	dir.allowExt("bin");
+	dir.allowExt("gguf");
+	dir.listDir();
+
+	for (std::size_t i = 0; i < dir.size(); ++i) {
+		const ofFile& file = dir.getFile(static_cast<int>(i));
+		if (!file.isFile()) {
+			continue;
+		}
+		results.emplace_back(file.getBaseName(), file.getAbsolutePath());
+	}
+	return results;
+}
+
+//--------------------------------------------------------------
 void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request) {
 	const ofxStableDiffusionTask task = ofxStableDiffusionTaskForImageMode(request.mode);
 	if (!validateImageRequestAndSetError(request, task)) {
@@ -418,6 +472,18 @@ void ofxStableDiffusion::setImageRankCallback(ofxSdImageRankCallback cb) {
 }
 
 //--------------------------------------------------------------
+void ofxStableDiffusion::setLoras(const std::vector<ofxStableDiffusionLora>& loras_) {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	loras = loras_;
+}
+
+//--------------------------------------------------------------
+std::vector<ofxStableDiffusionLora> ofxStableDiffusion::getLoras() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return loras;
+}
+
+//--------------------------------------------------------------
 int ofxStableDiffusion::getSelectedImageIndex() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	return lastResult.selectedImageIndex;
@@ -568,6 +634,7 @@ void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 	styleStrength = request.styleStrength;
 	normalizeInput = request.normalizeInput;
 	inputIdImagesPath = request.inputIdImagesPath;
+	loras = request.loras;
 }
 
 //--------------------------------------------------------------
@@ -586,6 +653,7 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 	strength = request.strength;
 	seed = static_cast<int>(request.seed);
 	videoMode = request.mode;
+	loras = request.loras;
 }
 
 //--------------------------------------------------------------
@@ -716,6 +784,7 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	request.styleStrength = styleStrength_;
 	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
+	request.loras = loras;
 
 	if (!validateImageRequestAndSetError(request, ofxStableDiffusionTask::TextToImage)) {
 		return;
@@ -769,6 +838,7 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	request.styleStrength = styleStrength_;
 	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
+	request.loras = loras;
 
 	if (!validateImageRequestAndSetError(request, ofxStableDiffusionTask::ImageToImage)) {
 		return;
@@ -820,6 +890,7 @@ void ofxStableDiffusion::instructImage(sd_image_t initImage_,
 	request.controlStrength = controlStrength_;
 	request.styleStrength = styleStrength;
 	request.normalizeInput = normalizeInput_;
+	request.loras = loras;
 
 	if (!validateImageRequestAndSetError(request, ofxStableDiffusionTask::InstructImage)) {
 		return;
@@ -862,6 +933,7 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 	request.strength = strength_;
 	request.seed = seed_;
 	request.mode = videoMode;
+	request.loras = loras;
 
 	if (!validateVideoRequestAndSetError(request)) {
 		return;

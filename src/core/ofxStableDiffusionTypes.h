@@ -42,6 +42,16 @@ struct ofxStableDiffusionContextSettings {
 	bool keepVaeOnCpu = false;
 };
 
+struct ofxStableDiffusionLora {
+	std::string path;
+	float strength = 1.0f;
+	bool isHighNoise = false;
+
+	bool isValid() const {
+		return !path.empty();
+	}
+};
+
 struct ofxStableDiffusionUpscalerSettings {
 	std::string modelPath;
 	int nThreads = -1;
@@ -74,6 +84,7 @@ struct ofxStableDiffusionImageRequest {
 	float maskBlur = 4.0f;  // Blur radius for mask edge softening
 	bool normalizeInput = true;
 	std::string inputIdImagesPath;
+	std::vector<ofxStableDiffusionLora> loras;
 };
 
 struct ofxStableDiffusionVideoRequest {
@@ -91,6 +102,7 @@ struct ofxStableDiffusionVideoRequest {
 	float strength = 0.5f;
 	int64_t seed = -1;
 	ofxStableDiffusionVideoMode mode = ofxStableDiffusionVideoMode::Standard;
+	std::vector<ofxStableDiffusionLora> loras;
 
 	// Animation settings (optional)
 	ofxStableDiffusionVideoAnimationSettings animationSettings;

@@ -183,6 +183,7 @@ sd_img_gen_params_t buildImageParams(
 	ofxStableDiffusion* sd,
 	sd_ctx_t* sdCtx,
 	const std::string& effectivePrompt,
+	std::vector<sd_lora_t>& loraBuffer,
 	std::vector<ofPixels>& pmPixels,
 	std::vector<sd_image_t>& pmImageViews) {
 	sd_img_gen_params_t params{};
@@ -210,6 +211,17 @@ sd_img_gen_params_t buildImageParams(
 	params.control_strength = sd->controlStrength;
 	params.vae_tiling_params = makeTilingParams(sd->vaeTiling);
 
+	loraBuffer.clear();
+	loraBuffer.reserve(sd->loras.size());
+	for (const auto& lora : sd->loras) {
+		if (!lora.isValid()) {
+			continue;
+		}
+		loraBuffer.push_back({lora.isHighNoise, lora.strength, lora.path.c_str()});
+	}
+	params.loras = loraBuffer.empty() ? nullptr : loraBuffer.data();
+	params.lora_count = static_cast<uint32_t>(loraBuffer.size());
+
 	if (!sd->stackedIdEmbedDirCStr.empty() && !sd->inputIdImagesPath.empty()) {
 		collectPhotoMakerImages(sd->inputIdImagesPath, pmPixels, pmImageViews);
 		if (!pmImageViews.empty()) {
@@ -223,7 +235,7 @@ sd_img_gen_params_t buildImageParams(
 	return params;
 }
 
-sd_vid_gen_params_t buildVideoParams(ofxStableDiffusion* sd, sd_ctx_t* sdCtx) {
+sd_vid_gen_params_t buildVideoParams(ofxStableDiffusion* sd, sd_ctx_t* sdCtx, std::vector<sd_lora_t>& loraBuffer) {
 	sd_vid_gen_params_t params{};
 	sd_vid_gen_params_init(&params);
 
@@ -245,6 +257,16 @@ sd_vid_gen_params_t buildVideoParams(ofxStableDiffusion* sd, sd_ctx_t* sdCtx) {
 	params.seed = sd->seed;
 	params.video_frames = sd->videoFrames;
 	params.vae_tiling_params = makeTilingParams(sd->vaeTiling);
+	loraBuffer.clear();
+	loraBuffer.reserve(sd->loras.size());
+	for (const auto& lora : sd->loras) {
+		if (!lora.isValid()) {
+			continue;
+		}
+		loraBuffer.push_back({lora.isHighNoise, lora.strength, lora.path.c_str()});
+	}
+	params.loras = loraBuffer.empty() ? nullptr : loraBuffer.data();
+	params.lora_count = static_cast<uint32_t>(loraBuffer.size());
 	return params;
 }
 
@@ -314,7 +336,7 @@ void stableDiffusionThread::threadedFunction() {
 	}
 
 	if (sd->activeTask == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo) {
-		sd_vid_gen_params_t params = buildVideoParams(sd, sdCtx);
+		sd_vid_gen_params_t params = buildVideoParams(sd, sdCtx, loraBuffer);
 		int generatedFrameCount = 0;
 		sd_image_t* output = generate_video(sdCtx, &params, &generatedFrameCount);
 		const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
@@ -333,7 +355,7 @@ void stableDiffusionThread::threadedFunction() {
 	std::vector<ofPixels> pmPixels;
 	std::vector<sd_image_t> pmImageViews;
 	sd_img_gen_params_t params =
-		buildImageParams(sd, sdCtx, effectivePrompt, pmPixels, pmImageViews);
+		buildImageParams(sd, sdCtx, effectivePrompt, loraBuffer, pmPixels, pmImageViews);
 	sd_image_t* output = generate_image(sdCtx, &params);
 
 	if (output && sd->isESRGAN) {

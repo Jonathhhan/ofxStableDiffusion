@@ -27,6 +27,10 @@ class ofApp : public ofBaseApp {
 		void applySelectedImageMode(ofxStableDiffusionImageMode mode);
 		void configureExampleRanker();
 		bool usesInputImageMode() const;
+		std::vector<std::pair<std::string, std::string>> listEmbeddingFiles() const;
+		std::vector<std::pair<std::string, std::string>> listLoraFiles() const;
+		void loadAllLoras(float strength = 1.0f);
+		void clearLoras();
 
 		std::vector<ofTexture> textureVector;
 		ofFbo fbo;
@@ -67,6 +71,7 @@ class ofApp : public ofBaseApp {
 		std::string esrganPath;
 		std::string stackedIdEmbedDir;
 		std::string inputIdImagesPath;
+		std::vector<ofxStableDiffusionLora> loras;
 		sample_method_t sampleMethodEnum;
 		int sampleSteps;
 		bool promptIsEdited;
