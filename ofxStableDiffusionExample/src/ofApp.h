@@ -25,6 +25,7 @@ class ofApp : public ofBaseApp {
 		void addSoftReturnsToText(std::string& str, float multilineWidth);
 		void allocate();
 		void applySelectedImageMode(ofxStableDiffusionImageMode mode);
+		void configureExampleRanker();
 		bool usesInputImageMode() const;
 
 		std::vector<ofTexture> textureVector;
@@ -32,7 +33,9 @@ class ofApp : public ofBaseApp {
 		ofImage image;
 		ofPixels pixels;
 		std::string prompt;
+		std::string instruction;
 		std::string negativePrompt;
+		std::string rankingPrompt;
 		int width;
 		int height;
 		float cfgScale;
@@ -112,6 +115,7 @@ class ofApp : public ofBaseApp {
 		int progressStep = 0;
 		int progressSteps = 0;
 		float progressTime = 0.0f;
+		bool useDemoRanking = false;
 		std::string imageName;
 		ofxImGui::Gui gui;
 		ofxStableDiffusion stableDiffusion;

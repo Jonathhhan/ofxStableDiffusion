@@ -1,5 +1,80 @@
 #include "ofApp.h"
 
+#include <algorithm>
+#include <cctype>
+#include <sstream>
+
+namespace {
+
+std::string lowerCopy(const std::string& value) {
+	std::string lowered = value;
+	std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+		return static_cast<char>(std::tolower(c));
+	});
+	return lowered;
+}
+
+bool containsKeyword(const std::string& haystack, const std::string& needle) {
+	return haystack.find(needle) != std::string::npos;
+}
+
+float computeBrightnessScore(const ofPixels& pixels) {
+	if (!pixels.isAllocated() || pixels.getNumChannels() < 3) {
+		return 0.0f;
+	}
+	const std::size_t pixelCount =
+		static_cast<std::size_t>(pixels.getWidth()) *
+		static_cast<std::size_t>(pixels.getHeight());
+	if (pixelCount == 0) {
+		return 0.0f;
+	}
+	const unsigned char* data = pixels.getData();
+	const std::size_t channels =
+		static_cast<std::size_t>(pixels.getNumChannels());
+	double brightnessSum = 0.0;
+	double colorfulnessSum = 0.0;
+	for (std::size_t i = 0; i < pixelCount; ++i) {
+		const std::size_t offset = i * static_cast<std::size_t>(channels);
+		const float r = static_cast<float>(data[offset + 0]) / 255.0f;
+		const float g = static_cast<float>(data[offset + 1]) / 255.0f;
+		const float b = static_cast<float>(data[offset + 2]) / 255.0f;
+		const float maxChannel = std::max(r, std::max(g, b));
+		const float minChannel = std::min(r, std::min(g, b));
+		brightnessSum += (r + g + b) / 3.0f;
+		colorfulnessSum += (maxChannel - minChannel);
+	}
+	const float meanBrightness =
+		static_cast<float>(brightnessSum / static_cast<double>(pixelCount));
+	const float meanColorfulness =
+		static_cast<float>(colorfulnessSum / static_cast<double>(pixelCount));
+	return 0.65f * meanBrightness + 0.35f * meanColorfulness;
+}
+
+float computeHeuristicPromptScore(const std::string& rankingPrompt, const ofPixels& pixels) {
+	float score = computeBrightnessScore(pixels);
+	const std::string lowered = lowerCopy(rankingPrompt);
+	if (lowered.empty()) {
+		return score;
+	}
+
+	if (containsKeyword(lowered, "bright") || containsKeyword(lowered, "light")) {
+		score += 0.15f;
+	}
+	if (containsKeyword(lowered, "dark") || containsKeyword(lowered, "moody")) {
+		score -= 0.15f;
+	}
+	if (containsKeyword(lowered, "color") || containsKeyword(lowered, "vivid") ||
+		containsKeyword(lowered, "neon") || containsKeyword(lowered, "futur")) {
+		score += 0.1f;
+	}
+	if (containsKeyword(lowered, "soft") || containsKeyword(lowered, "muted")) {
+		score -= 0.05f;
+	}
+	return score;
+}
+
+} // namespace
+
 //--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
@@ -15,6 +90,8 @@ void ofApp::setup() {
 	loraModelDir = ""; // "data/models/lora";
 	vaePath = ""; // "data/models/vae/vae.safetensors";
 	prompt = "animal with futuristic clothes"; // "man img, man with futuristic clothes";
+	instruction = "edit the source image so the subject feels more futuristic while keeping the composition readable";
+	rankingPrompt = "bright futuristic vivid cinematic";
 	esrganPath = ""; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth"; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 	controlImagePath = ""; // "data/openpose.jpeg";
 	stackedIdEmbedDir = ""; // "data/models/photomaker/photomaker-v1.safetensors";
@@ -81,6 +158,7 @@ void ofApp::setup() {
 		progressSteps = steps;
 		progressTime = time;
 	});
+	configureExampleRanker();
 	stableDiffusion.newSdCtx(modelPath,
 		vaePath,
 		taesdPath,
@@ -256,8 +334,7 @@ void ofApp::draw() {
 		addSoftReturnsToText(prompt, 500);
 		promptIsEdited = false;
 	}
-	const char* promptSectionLabel = isInstructImage ? "Instruction" : "Prompt";
-	if (ImGui::TreeNodeEx(promptSectionLabel, ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("Prompt", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
 		Funcs::MyInputTextMultiline("##MyStr1", &prompt, ImVec2(512, 150), ImGuiInputTextFlags_CallbackResize);
 		if (ImGui::IsItemDeactivatedAfterEdit()) {
@@ -267,6 +344,18 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
+	}
+	if (isInstructImage) {
+		if (ImGui::TreeNodeEx("Instruction", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Dummy(ImVec2(0, 10));
+			Funcs::MyInputTextMultiline("##MyStrInstruction", &instruction, ImVec2(512, 110), ImGuiInputTextFlags_CallbackResize);
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				instruction.erase(std::remove(instruction.begin(), instruction.end(), '\r'), instruction.end());
+				instruction.erase(std::remove(instruction.begin(), instruction.end(), '\n'), instruction.end());
+			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TreePop();
+		}
 	}
 	if (negativePromptIsEdited) {
 		addSoftReturnsToText(negativePrompt, 500);
@@ -357,6 +446,7 @@ void ofApp::draw() {
 						selectionMode = selectionModeArray[n];
 						selectionModeEnum = static_cast<ofxStableDiffusionImageSelectionMode>(n);
 						stableDiffusion.setImageSelectionMode(selectionModeEnum);
+						configureExampleRanker();
 					}
 					if (is_selected) {
 						ImGui::SetItemDefaultFocus();
@@ -365,13 +455,34 @@ void ofApp::draw() {
 				ImGui::EndCombo();
 			}
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TextWrapped("Ranking callback is bridge-driven. Attach a CLIP scorer from ofxGgml to enable Best-of-N reranking.");
+			if (selectionModeEnum != ofxStableDiffusionImageSelectionMode::KeepOrder) {
+				ImGui::Checkbox("Use Demo Ranking Callback", &useDemoRanking);
+				if (ImGui::IsItemEdited()) {
+					configureExampleRanker();
+				}
+				ImGui::Dummy(ImVec2(0, 10));
+				Funcs::MyInputTextMultiline(
+					"Ranking Prompt",
+					&rankingPrompt,
+					ImVec2(512, 80),
+					ImGuiInputTextFlags_CallbackResize);
+				ImGui::Dummy(ImVec2(0, 10));
+				if (useDemoRanking) {
+					ImGui::TextWrapped(
+						"This example scorer is local and heuristic. It demonstrates the Best-of-N API, but real semantic reranking belongs on the ofxGgml CLIP side.");
+				} else {
+					ImGui::TextWrapped(
+						"Attach a CLIP scorer from ofxGgml for semantic Best-of-N reranking, or enable the demo callback here to preview the ranking workflow.");
+				}
+			} else {
+				ImGui::TextWrapped("KeepOrder leaves outputs untouched. Switch to Rerank or BestOnly to exercise the ranking API.");
+			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("Generate Video", &isImageToVideo);
 		if (isInstructImage) {
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TextWrapped("InstructImage applies an editing instruction to the source image.");
+			ImGui::TextWrapped("InstructImage uses the prompt as overall target context and the instruction field as the concrete edit request.");
 		} else if (imageModeEnum == ofxStableDiffusionImageMode::Variation) {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::TextWrapped("Variation keeps the source composition closer and uses a lighter denoise strength.");
@@ -528,6 +639,7 @@ void ofApp::draw() {
 		progressStep = 0;
 		progressSteps = 0;
 		progressTime = 0.0f;
+		configureExampleRanker();
 		if (isImageToVideo) {
 			isPlaying = false;
 			totalVideoFrames = 0;
@@ -551,7 +663,7 @@ void ofApp::draw() {
 			request.selectionMode = selectionModeEnum;
 			request.initImage = inputImage;
 			request.prompt = prompt;
-			request.instruction = isInstructImage ? prompt : "";
+			request.instruction = isInstructImage ? instruction : "";
 			request.negativePrompt = negativePrompt;
 			request.clipSkip = clipSkip;
 			request.cfgScale = cfgScale;
@@ -646,6 +758,44 @@ void ofApp::applySelectedImageMode(ofxStableDiffusionImageMode mode) {
 	if (usesInputImageMode()) {
 		strength = ofxStableDiffusionDefaultStrengthForImageMode(mode);
 	}
+}
+
+//--------------------------------------------------------------
+void ofApp::configureExampleRanker() {
+	if (!useDemoRanking ||
+		selectionModeEnum == ofxStableDiffusionImageSelectionMode::KeepOrder) {
+		stableDiffusion.setImageRankCallback({});
+		return;
+	}
+
+	stableDiffusion.setImageRankCallback(
+		[this](
+			const ofxStableDiffusionImageRequest& request,
+			const std::vector<ofxStableDiffusionImageFrame>& images) {
+			std::vector<ofxStableDiffusionImageScore> scores;
+			scores.reserve(images.size());
+			const std::string effectiveRankingPrompt =
+				rankingPrompt.empty()
+					? (request.instruction.empty() ? request.prompt : request.instruction)
+					: rankingPrompt;
+			for (const auto& frame : images) {
+				ofxStableDiffusionImageScore score;
+				if (frame.isAllocated()) {
+					score.valid = true;
+					score.score = computeHeuristicPromptScore(
+						effectiveRankingPrompt,
+						frame.pixels);
+					score.scorer = "ExampleHeuristic";
+					score.summary =
+						"Standalone demo scorer using prompt keywords plus brightness/colorfulness heuristics";
+				} else {
+					score.scorer = "ExampleHeuristic";
+					score.summary = "Frame is not allocated";
+				}
+				scores.push_back(std::move(score));
+			}
+			return scores;
+		});
 }
 
 //--------------------------------------------------------------
