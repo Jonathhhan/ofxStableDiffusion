@@ -371,6 +371,7 @@ int64_t ofxStableDiffusion::hashStringToSeed(const std::string& text) {
 bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	if (thread.isThreadRunning()) {
 		ofLogWarning("ofxStableDiffusion") << "Ignoring request while another task is still running";
+		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
 		return false;
 	}
 
@@ -523,6 +524,27 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	float styleStrength_,
 	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
+	if (thread.isThreadRunning()) {
+		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
+		return;
+	}
+
+	std::string validationError;
+	ofxStableDiffusionErrorCode errorCode = validateDimensions(width_, height_, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = ofxStableDiffusionImageMode::TextToImage;
+		activeTask = ofxStableDiffusionTask::TextToImage;
+		setLastError(errorCode, validationError);
+		return;
+	}
+	errorCode = validateBatchCount(batchCount_, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = ofxStableDiffusionImageMode::TextToImage;
+		activeTask = ofxStableDiffusionTask::TextToImage;
+		setLastError(errorCode, validationError);
+		return;
+	}
+
 	if (!beginBackgroundTask(ofxStableDiffusionTask::TextToImage)) {
 		return;
 	}
@@ -570,6 +592,34 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	float styleStrength_,
 	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
+	if (thread.isThreadRunning()) {
+		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
+		return;
+	}
+
+	if (initImage_.data == nullptr) {
+		imageMode = ofxStableDiffusionImageMode::ImageToImage;
+		activeTask = ofxStableDiffusionTask::ImageToImage;
+		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Image-to-image requires an input image");
+		return;
+	}
+
+	std::string validationError;
+	ofxStableDiffusionErrorCode errorCode = validateDimensions(width_, height_, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = ofxStableDiffusionImageMode::ImageToImage;
+		activeTask = ofxStableDiffusionTask::ImageToImage;
+		setLastError(errorCode, validationError);
+		return;
+	}
+	errorCode = validateBatchCount(batchCount_, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = ofxStableDiffusionImageMode::ImageToImage;
+		activeTask = ofxStableDiffusionTask::ImageToImage;
+		setLastError(errorCode, validationError);
+		return;
+	}
+
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToImage)) {
 		return;
 	}
@@ -616,6 +666,34 @@ void ofxStableDiffusion::instructImage(sd_image_t initImage_,
 	sd_image_t* controlCond_,
 	float controlStrength_,
 	bool normalizeInput_) {
+	if (thread.isThreadRunning()) {
+		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
+		return;
+	}
+
+	if (initImage_.data == nullptr) {
+		imageMode = ofxStableDiffusionImageMode::InstructImage;
+		activeTask = ofxStableDiffusionTask::InstructImage;
+		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Instruct image requires an input image");
+		return;
+	}
+
+	std::string validationError;
+	ofxStableDiffusionErrorCode errorCode = validateDimensions(width_, height_, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = ofxStableDiffusionImageMode::InstructImage;
+		activeTask = ofxStableDiffusionTask::InstructImage;
+		setLastError(errorCode, validationError);
+		return;
+	}
+	errorCode = validateBatchCount(batchCount_, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = ofxStableDiffusionImageMode::InstructImage;
+		activeTask = ofxStableDiffusionTask::InstructImage;
+		setLastError(errorCode, validationError);
+		return;
+	}
+
 	if (!beginBackgroundTask(ofxStableDiffusionTask::InstructImage)) {
 		return;
 	}
@@ -659,6 +737,30 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 	int sampleSteps_,
 	float strength_,
 	int64_t seed_) {
+	if (thread.isThreadRunning()) {
+		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
+		return;
+	}
+
+	if (initImage_.data == nullptr) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Image-to-video requires an input image");
+		return;
+	}
+
+	std::string validationError;
+	ofxStableDiffusionErrorCode errorCode = validateDimensions(width_, height_, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		setLastError(errorCode, validationError);
+		return;
+	}
+	if (videoFrames_ <= 0 || videoFrames_ > 100) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		setLastError(ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100");
+		return;
+	}
+
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToVideo)) {
 		return;
 	}
