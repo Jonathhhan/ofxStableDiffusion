@@ -74,6 +74,60 @@ request.sampleSteps = 20;
 sd.generate(request);
 ```
 
+### Error Handling
+
+The addon provides advanced error handling with error codes, messages, suggestions, and history tracking:
+
+```cpp
+ofxStableDiffusionImageRequest request;
+request.width = 513;  // Invalid: not a multiple of 64
+request.height = 512;
+request.batchCount = 20;  // Invalid: exceeds maximum of 16
+
+sd.generate(request);
+
+// Check for errors programmatically
+if (sd.getLastErrorCode() != ofxStableDiffusionErrorCode::None) {
+    // Get detailed error information
+    const auto& errorInfo = sd.getLastErrorInfo();
+    ofLogError() << "Error: " << errorInfo.message;
+    ofLogError() << "Suggestion: " << errorInfo.suggestion;
+    ofLogError() << "Error code: " << ofxStableDiffusionErrorCodeLabel(errorInfo.code);
+}
+
+// Or use the simple string-based error (backward compatible)
+if (!sd.getLastError().empty()) {
+    ofLogError() << "Error: " << sd.getLastError();
+}
+
+// Access error history for debugging
+const auto& history = sd.getErrorHistory();
+for (const auto& error : history) {
+    ofLogNotice() << "[" << error.timestampMicros << "] "
+                  << error.message << " -> " << error.suggestion;
+}
+
+// Clear error history
+sd.clearErrorHistory();
+```
+
+**Available Error Codes:**
+- `None` - No error
+- `ModelNotFound` - Model file not found
+- `ModelCorrupted` - Model file corrupted
+- `ModelLoadFailed` - Model loading failed
+- `OutOfMemory` - Insufficient memory
+- `InvalidDimensions` - Invalid width/height
+- `InvalidBatchCount` - Invalid batch count
+- `InvalidFrameCount` - Invalid video frame count
+- `MissingInputImage` - Input image required but not provided
+- `GenerationFailed` - Generation process failed
+- `ThreadBusy` - Another task is running
+- `UpscaleFailed` - Upscaling failed
+- `Unknown` - Unknown error
+
+Each error code automatically provides an actionable suggestion to help resolve the issue.
+
 ### Legacy compatibility API
 
 The older `newSdCtx`, `txt2img`, `img2img`, and `img2vid` entry points are still
