@@ -91,6 +91,58 @@ const char * ofxStableDiffusionVideoModeLabel(ofxStableDiffusionVideoMode mode) 
 	return ofxStableDiffusionVideoModeName(mode);
 }
 
+const char * ofxStableDiffusionErrorCodeLabel(ofxStableDiffusionErrorCode code) {
+	switch (code) {
+	case ofxStableDiffusionErrorCode::ModelNotFound: return "ModelNotFound";
+	case ofxStableDiffusionErrorCode::ModelCorrupted: return "ModelCorrupted";
+	case ofxStableDiffusionErrorCode::ModelLoadFailed: return "ModelLoadFailed";
+	case ofxStableDiffusionErrorCode::OutOfMemory: return "OutOfMemory";
+	case ofxStableDiffusionErrorCode::InvalidDimensions: return "InvalidDimensions";
+	case ofxStableDiffusionErrorCode::InvalidBatchCount: return "InvalidBatchCount";
+	case ofxStableDiffusionErrorCode::InvalidFrameCount: return "InvalidFrameCount";
+	case ofxStableDiffusionErrorCode::MissingInputImage: return "MissingInputImage";
+	case ofxStableDiffusionErrorCode::GenerationFailed: return "GenerationFailed";
+	case ofxStableDiffusionErrorCode::ThreadBusy: return "ThreadBusy";
+	case ofxStableDiffusionErrorCode::UpscaleFailed: return "UpscaleFailed";
+	case ofxStableDiffusionErrorCode::Unknown: return "Unknown";
+	case ofxStableDiffusionErrorCode::None:
+	default:
+		return "None";
+	}
+}
+
+std::string ofxStableDiffusionErrorCodeSuggestion(ofxStableDiffusionErrorCode code) {
+	switch (code) {
+	case ofxStableDiffusionErrorCode::ModelNotFound:
+		return "Verify the model file path exists and is accessible";
+	case ofxStableDiffusionErrorCode::ModelCorrupted:
+		return "Re-download the model file or try a different model";
+	case ofxStableDiffusionErrorCode::ModelLoadFailed:
+		return "Check model format compatibility and ensure sufficient RAM/VRAM";
+	case ofxStableDiffusionErrorCode::OutOfMemory:
+		return "Reduce batch count, image dimensions, or enable VAE tiling";
+	case ofxStableDiffusionErrorCode::InvalidDimensions:
+		return "Use positive multiples of 64 (e.g., 512, 768, 1024) for width and height";
+	case ofxStableDiffusionErrorCode::InvalidBatchCount:
+		return "Set batch count between 1 and 16";
+	case ofxStableDiffusionErrorCode::InvalidFrameCount:
+		return "Set frame count between 1 and 100";
+	case ofxStableDiffusionErrorCode::MissingInputImage:
+		return "Load an input image using loadImage() before calling this operation";
+	case ofxStableDiffusionErrorCode::GenerationFailed:
+		return "Check model compatibility and system resources";
+	case ofxStableDiffusionErrorCode::ThreadBusy:
+		return "Wait for current generation to complete or use isGenerating() to check status";
+	case ofxStableDiffusionErrorCode::UpscaleFailed:
+		return "Verify upscaler model path and compatibility";
+	case ofxStableDiffusionErrorCode::Unknown:
+		return "Check logs for more details";
+	case ofxStableDiffusionErrorCode::None:
+	default:
+		return "";
+	}
+}
+
 std::vector<ofxStableDiffusionImageFrame> ofxStableDiffusionBuildVideoFrames(
 	const std::vector<ofxStableDiffusionImageFrame> & sourceFrames,
 	ofxStableDiffusionVideoMode mode) {

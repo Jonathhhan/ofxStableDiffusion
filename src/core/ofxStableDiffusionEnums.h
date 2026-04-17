@@ -26,3 +26,19 @@ enum class ofxStableDiffusionVideoMode {
 	PingPong,
 	Boomerang
 };
+
+enum class ofxStableDiffusionErrorCode {
+	None = 0,
+	ModelNotFound,
+	ModelCorrupted,
+	ModelLoadFailed,
+	OutOfMemory,
+	InvalidDimensions,
+	InvalidBatchCount,
+	InvalidFrameCount,
+	MissingInputImage,
+	GenerationFailed,
+	ThreadBusy,
+	UpscaleFailed,
+	Unknown
+};

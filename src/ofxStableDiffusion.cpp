@@ -36,18 +36,73 @@ ofxStableDiffusion::~ofxStableDiffusion() {
 }
 
 //--------------------------------------------------------------
+static ofxStableDiffusionErrorCode validateDimensions(int width, int height, std::string& errorMsg) {
+	if (width <= 0 || height <= 0) {
+		errorMsg = "Width and height must be positive values";
+		return ofxStableDiffusionErrorCode::InvalidDimensions;
+	}
+	if (width > 2048 || height > 2048) {
+		errorMsg = "Width and height must not exceed 2048 pixels";
+		return ofxStableDiffusionErrorCode::InvalidDimensions;
+	}
+	if (width % 64 != 0) {
+		errorMsg = "Width must be a multiple of 64 (recommended: 512, 768, 1024)";
+		return ofxStableDiffusionErrorCode::InvalidDimensions;
+	}
+	if (height % 64 != 0) {
+		errorMsg = "Height must be a multiple of 64 (recommended: 512, 768, 1024)";
+		return ofxStableDiffusionErrorCode::InvalidDimensions;
+	}
+	return ofxStableDiffusionErrorCode::None;
+}
+
+//--------------------------------------------------------------
+static ofxStableDiffusionErrorCode validateBatchCount(int batchCount, std::string& errorMsg) {
+	if (batchCount <= 0) {
+		errorMsg = "Batch count must be positive";
+		return ofxStableDiffusionErrorCode::InvalidBatchCount;
+	}
+	if (batchCount > 16) {
+		errorMsg = "Batch count exceeds maximum of 16 (risk of out-of-memory)";
+		return ofxStableDiffusionErrorCode::InvalidBatchCount;
+	}
+	return ofxStableDiffusionErrorCode::None;
+}
+
+//--------------------------------------------------------------
 void ofxStableDiffusion::configureContext(const ofxStableDiffusionContextSettings& settings) {
 	applyContextSettings(settings);
 }
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request) {
+	std::string validationError;
+	ofxStableDiffusionErrorCode errorCode;
+
+	// Validate dimensions
+	errorCode = validateDimensions(request.width, request.height, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = request.mode;
+		activeTask = ofxStableDiffusionTaskForImageMode(request.mode);
+		setLastError(errorCode, validationError);
+		return;
+	}
+
+	// Validate batch count
+	errorCode = validateBatchCount(request.batchCount, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		imageMode = request.mode;
+		activeTask = ofxStableDiffusionTaskForImageMode(request.mode);
+		setLastError(errorCode, validationError);
+		return;
+	}
+
 	const sd_image_t candidateInputImage =
 		request.initImage.data != nullptr ? request.initImage : inputImage;
 	if (ofxStableDiffusionImageModeUsesInputImage(request.mode) && candidateInputImage.data == nullptr) {
 		imageMode = request.mode;
 		activeTask = ofxStableDiffusionTaskForImageMode(request.mode);
-		setLastError("Selected image mode requires an input image");
+		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Selected image mode requires an input image");
 		return;
 	}
 
@@ -60,6 +115,24 @@ void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request)
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::generateVideo(const ofxStableDiffusionVideoRequest& request) {
+	std::string validationError;
+	ofxStableDiffusionErrorCode errorCode;
+
+	// Validate dimensions
+	errorCode = validateDimensions(request.width, request.height, validationError);
+	if (errorCode != ofxStableDiffusionErrorCode::None) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		setLastError(errorCode, validationError);
+		return;
+	}
+
+	// Validate frame count
+	if (request.frameCount <= 0 || request.frameCount > 100) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		setLastError(ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100");
+		return;
+	}
+
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToVideo)) {
 		return;
 	}
@@ -140,6 +213,26 @@ int ofxStableDiffusion::getOutputCount() const {
 //--------------------------------------------------------------
 const std::string& ofxStableDiffusion::getLastError() const {
 	return lastError;
+}
+
+//--------------------------------------------------------------
+ofxStableDiffusionErrorCode ofxStableDiffusion::getLastErrorCode() const {
+	return lastErrorInfo.code;
+}
+
+//--------------------------------------------------------------
+const ofxStableDiffusionError& ofxStableDiffusion::getLastErrorInfo() const {
+	return lastErrorInfo;
+}
+
+//--------------------------------------------------------------
+const std::vector<ofxStableDiffusionError>& ofxStableDiffusion::getErrorHistory() const {
+	return errorHistory;
+}
+
+//--------------------------------------------------------------
+void ofxStableDiffusion::clearErrorHistory() {
+	errorHistory.clear();
 }
 
 //--------------------------------------------------------------
@@ -638,8 +731,19 @@ void ofxStableDiffusion::clearOutputState() {
 }
 
 //--------------------------------------------------------------
-void ofxStableDiffusion::setLastError(const std::string& errorMessage) {
+void ofxStableDiffusion::setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code) {
 	lastError = errorMessage;
+	lastErrorInfo.code = code;
+	lastErrorInfo.message = errorMessage;
+	lastErrorInfo.suggestion = ofxStableDiffusionErrorCodeSuggestion(code);
+	lastErrorInfo.timestampMicros = ofGetElapsedTimeMicros();
+
+	// Add to error history
+	errorHistory.push_back(lastErrorInfo);
+	if (errorHistory.size() > maxErrorHistorySize) {
+		errorHistory.erase(errorHistory.begin());
+	}
+
 	lastResult.success = false;
 	lastResult.task = activeTask;
 	lastResult.imageMode = imageMode;
@@ -649,8 +753,14 @@ void ofxStableDiffusion::setLastError(const std::string& errorMessage) {
 }
 
 //--------------------------------------------------------------
+void ofxStableDiffusion::setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage) {
+	setLastError(errorMessage, code);
+}
+
+//--------------------------------------------------------------
 void ofxStableDiffusion::clearLastError() {
 	lastError.clear();
+	lastErrorInfo = ofxStableDiffusionError();
 	lastResult.error.clear();
 }
 

@@ -21,6 +21,8 @@ meta:
 	ADDON_AUTHOR = Jonathan Frank
 	ADDON_TAGS = "Stable Diffusion" "Artificial Intelligence" "Image Generation"
 	ADDON_URL = https://github.com/Jonathhhan/ofxStableDiffusion
+	ADDON_DEPENDENCIES =
+	ADDON_MIN_OF_VERSION = 0.11.0
 
 common:
 	ADDON_INCLUDES += libs/stable-diffusion/include
