@@ -1,5 +1,6 @@
 #include "ofxStableDiffusionThread.h"
 #include "ofxStableDiffusion.h"
+#include "core/ofxStableDiffusionMemoryHelpers.h"
 
 #include <vector>
 
@@ -318,8 +319,9 @@ void stableDiffusionThread::threadedFunction() {
 		sd_image_t* output = generate_video(sdCtx, &params, &generatedFrameCount);
 		const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
 		if (!output || generatedFrameCount <= 0) {
-			sd->activeTask = ofxStableDiffusionTask::None;
+			ofxSdReleaseImageArray(output, generatedFrameCount);
 			sd->setLastError("Image-to-video generation returned no frames");
+			sd->activeTask = ofxStableDiffusionTask::None;
 			return;
 		}
 		sd->captureVideoResults(output, generatedFrameCount, sd->seed, elapsedMs);
@@ -334,9 +336,25 @@ void stableDiffusionThread::threadedFunction() {
 		buildImageParams(sd, sdCtx, effectivePrompt, pmPixels, pmImageViews);
 	sd_image_t* output = generate_image(sdCtx, &params);
 
-	if (output && sd->isESRGAN && upscalerCtx) {
+	if (output && sd->isESRGAN) {
+		if (!upscalerCtx) {
+			ofxSdReleaseImageArray(output, sd->batchCount);
+			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Upscaler context is not loaded");
+			sd->activeTask = ofxStableDiffusionTask::None;
+			return;
+		}
+
 		for (int i = 0; i < sd->batchCount; i++) {
-			output[i] = upscale(upscalerCtx, output[i], sd->esrganMultiplier);
+			sd_image_t upscaled = upscale(upscalerCtx, output[i], sd->esrganMultiplier);
+			if (!upscaled.data) {
+				ofxSdReleaseImage(output[i]);
+				ofxSdReleaseImageArray(output, sd->batchCount);
+				sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Upscaling failed for one or more images");
+				sd->activeTask = ofxStableDiffusionTask::None;
+				return;
+			}
+			ofxSdReleaseImage(output[i]);
+			output[i] = upscaled;
 		}
 	}
 
