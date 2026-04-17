@@ -18,6 +18,7 @@ ofxStableDiffusionExample/bin/*.lib
 ofxStableDiffusionExample/bin/*.pdb
 ofxStableDiffusionExample/bin/stable-diffusion.dll
 ofxStableDiffusionExample/bin/libs/
+ofxStableDiffusionExample/bin/data/models/
 
 # CMake / test output
 Testing/

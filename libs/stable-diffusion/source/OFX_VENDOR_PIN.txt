@@ -1,0 +1,8 @@
+Upstream repository: https://github.com/leejet/stable-diffusion.cpp
+Upstream commit: a564fdf642780d1df123f1c413b19961375b8346
+Vendored on: 2026-04-17
+
+Notes:
+- This vendored tree includes the upstream submodules required for native builds.
+- The addon compatibility shim lives in ../include/stable-diffusion.h.
+- Native artifact staging is handled by ../../scripts/build-stable-diffusion.ps1.

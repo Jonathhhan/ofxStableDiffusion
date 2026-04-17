@@ -69,6 +69,26 @@ function Copy-IfPresent {
     Copy-Item -LiteralPath $Path -Destination $Destination -Force
 }
 
+function Get-VendoredValue {
+    param(
+        [string]$Path,
+        [string]$Prefix
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+
+    $line = Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue |
+        Where-Object { $_ -like "$Prefix*" } |
+        Select-Object -First 1
+    if (-not $line) {
+        return $null
+    }
+
+    return $line.Substring($Prefix.Length).Trim()
+}
+
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $addonRoot = (Resolve-Path (Join-Path $scriptRoot '..')).Path
 
@@ -131,26 +151,38 @@ if (-not $DryRun) {
     }
 }
 
+$vendorPinPath = Join-Path $SourceDir 'OFX_VENDOR_PIN.txt'
+$vendoredCommit = Get-VendoredValue -Path $vendorPinPath -Prefix 'Upstream commit:'
+$vendoredVersion = $null
+if ($vendoredCommit) {
+    $vendoredVersion = "vendored-$($vendoredCommit.Substring(0, [Math]::Min(7, $vendoredCommit.Length)))"
+}
+
 $configureArgs = @(
     '-S', $SourceDir,
     '-B', $BuildDir,
     "-DCMAKE_BUILD_TYPE=$Configuration",
-    '-DBUILD_SHARED_LIBS=ON',
-    '-DSD_BUILD_SHARED_LIB=ON',
-    '-DSD_BUILD_TESTS=OFF',
+    '-DSD_BUILD_SHARED_LIBS=ON',
     '-DSD_BUILD_EXAMPLES=OFF'
 )
+
+if ($vendoredCommit) {
+    $configureArgs += @(
+        "-DSDCPP_BUILD_COMMIT=$vendoredCommit",
+        "-DSDCPP_BUILD_VERSION=$vendoredVersion"
+    )
+}
 
 if (-not [string]::IsNullOrWhiteSpace($Generator)) {
     $configureArgs += @('-G', $Generator)
 }
 
 if ($CpuOnly) {
-    $configureArgs += @('-DGGML_CUDA=OFF', '-DGGML_VULKAN=OFF')
+    $configureArgs += @('-DSD_CUDA=OFF', '-DSD_VULKAN=OFF')
 } else {
     $configureArgs += @(
-        ('-DGGML_CUDA=' + ($(if ($Cuda) { 'ON' } else { 'OFF' }))),
-        ('-DGGML_VULKAN=' + ($(if ($Vulkan) { 'ON' } else { 'OFF' })))
+        ('-DSD_CUDA=' + ($(if ($Cuda) { 'ON' } else { 'OFF' }))),
+        ('-DSD_VULKAN=' + ($(if ($Vulkan) { 'ON' } else { 'OFF' })))
     )
 }
 
@@ -189,7 +221,6 @@ if (-not $libPath) {
 }
 
 Write-Step "Staging stable-diffusion artifacts into the addon"
-Copy-IfPresent -Path $headerPath -Destination $InstallIncludeDir
 Copy-IfPresent -Path $dllPath -Destination $InstallLibDir
 Copy-IfPresent -Path $libPath -Destination $InstallLibDir
 if ($ExampleBinDir) {

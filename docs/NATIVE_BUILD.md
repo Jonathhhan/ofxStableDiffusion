@@ -8,7 +8,7 @@ of relying on a global install.
 - `libs/stable-diffusion/source`
   A vendored snapshot of upstream `stable-diffusion.cpp`
 - `libs/stable-diffusion/include`
-  The staged public header used by the addon wrapper
+  The addon compatibility header used by the wrapper and examples
 - `libs/stable-diffusion/lib/vs`
   Windows import library and runtime DLL
 - `libs/stable-diffusion/lib/Linux64`
@@ -41,13 +41,31 @@ The right place to integrate with `ofxGgml` is the addon/API layer.
 ./scripts/build-stable-diffusion.sh
 ```
 
-## Current Blocker
+## Current Pin
 
-This repository currently stages prebuilt native libraries, but does not yet
-vendor the full upstream source tree into `libs/stable-diffusion/source`.
+The addon currently vendors upstream `stable-diffusion.cpp` from:
 
-Until that snapshot is added, the build script will fail early with a clear
-message instead of producing a partial or mismatched build.
+- repo: `https://github.com/leejet/stable-diffusion.cpp`
+- commit: `a564fdf642780d1df123f1c413b19961375b8346`
+- vendored on: `2026-04-17`
+
+The vendored tree includes the required submodules so the native rebuild scripts
+can run end-to-end.
+
+## Compatibility Notes
+
+Current upstream master uses a newer parameter-struct based C API. The addon
+keeps `libs/stable-diffusion/include/stable-diffusion.h` as a small wrapper
+shim over `libs/stable-diffusion/source/include/stable-diffusion.h` so older
+addon-facing enum names such as `EULER_A`, `DPMPP2Mv2`, `DEFAULT`, `DISCRETE`,
+and `KARRAS` still compile.
+
+The native rebuild script stages:
+
+- `stable-diffusion.dll`
+- `stable-diffusion.lib`
+
+It intentionally does not overwrite the addon compatibility header.
 
 ## Recommended Pinning Policy
 

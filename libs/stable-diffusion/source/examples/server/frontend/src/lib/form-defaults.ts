@@ -1,0 +1,63 @@
+import type { GenerationForm } from "./types";
+
+export const CACHE_MODES = [
+    "disabled",
+    "easycache",
+    "ucache",
+    "dbcache",
+    "taylorseer",
+    "cache-dit",
+    "spectrum",
+] as const;
+
+export function createBlankForm(): GenerationForm {
+    return {
+        prompt: "",
+        negative_prompt: "",
+        width: 512,
+        height: 512,
+        batch_count: 1,
+        seed: -1,
+        clip_skip: -1,
+        strength: 0.75,
+        control_strength: 0.9,
+        output_format: "png",
+        output_compression: 100,
+        sample_params: {
+            scheduler: "default",
+            sample_method: "default",
+            sample_steps: 20,
+            eta: "",
+            shifted_timestep: 0,
+            flow_shift: "",
+            guidance: {
+                txt_cfg: 7,
+                img_cfg: "",
+                distilled_guidance: 3.5,
+                slg_layers: "7,8,9",
+                layer_start: 0.01,
+                layer_end: 0.2,
+                scale: 0,
+            },
+        },
+        init_image: null,
+        ref_images: [],
+        mask_image: null,
+        control_image: null,
+        lora: [],
+        vae_tiling_params: {
+            enabled: false,
+            tile_size_x: 0,
+            tile_size_y: 0,
+            target_overlap: 0.5,
+            rel_size_x: 0,
+            rel_size_y: 0,
+        },
+        cache: {
+            mode: "disabled",
+            option: "",
+            scm_mask: "",
+            scm_policy_dynamic: true,
+        },
+    };
+}

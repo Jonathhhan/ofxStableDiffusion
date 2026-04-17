@@ -100,9 +100,10 @@ The typed image request layer now exposes addon-level image modes:
 - `Variation`
 - `Restyle`
 
-`InstructImage` is implemented as a first-class wrapper mode on top of the
-bundled native `img2img` path, which keeps the addon compatible with the
-current bundled C API while still giving callers a clearer editing-oriented API.
+`InstructImage` is implemented as a first-class wrapper mode in the addon layer,
+with the wrapper mapping legacy-style request data onto the current upstream
+parameter-struct API while still keeping the editing-oriented API clear for
+callers.
 
 ## CLIP-Rerank Integration
 
@@ -152,12 +153,16 @@ More detail: [docs/NATIVE_BUILD.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260
 
 ## Current Native Source Status
 
-The repo currently includes staged native binaries and headers, but the full
-vendored upstream `stable-diffusion.cpp` source snapshot is not yet present in
-`libs/stable-diffusion/source`.
+The repo now includes a vendored upstream `stable-diffusion.cpp` source snapshot
+under `libs/stable-diffusion/source`, pinned to:
 
-That means the rebuild scripts are ready, but full native rebuilds stay blocked
-until a compatible upstream snapshot is pinned and vendored.
+- upstream repo: `https://github.com/leejet/stable-diffusion.cpp`
+- upstream commit: `a564fdf642780d1df123f1c413b19961375b8346`
+- vendored on: `2026-04-17`
+
+The addon keeps a small compatibility shim at
+`libs/stable-diffusion/include/stable-diffusion.h` so older addon-facing enum
+names remain usable while the native build targets current upstream.
 
 ## Testing
 

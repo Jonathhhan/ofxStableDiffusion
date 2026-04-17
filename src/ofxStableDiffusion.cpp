@@ -231,7 +231,7 @@ const char* ofxStableDiffusion::typeName(enum sd_type_t type) {
 
 //--------------------------------------------------------------
 int32_t ofxStableDiffusion::getNumPhysicalCores() {
-	return get_num_physical_cores();
+	return sd_get_num_physical_cores();
 }
 
 //--------------------------------------------------------------
@@ -307,9 +307,6 @@ void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 	}
 	instruction = request.instruction;
 	prompt = request.prompt;
-	if (request.mode == ofxStableDiffusionImageMode::InstructImage && !instruction.empty()) {
-		prompt = instruction;
-	}
 	negativePrompt = request.negativePrompt;
 	clipSkip = request.clipSkip;
 	cfgScale = request.cfgScale;
@@ -585,7 +582,7 @@ void ofxStableDiffusion::newUpscalerCtx(const std::string& esrganPath_,
 		free_upscaler_ctx(thread.upscalerCtx);
 		thread.upscalerCtx = nullptr;
 	}
-	thread.upscalerCtx = new_upscaler_ctx(esrganPath_.c_str(), nThreads_, wType_);
+	thread.upscalerCtx = new_upscaler_ctx(esrganPath_.c_str(), false, false, nThreads_, 0);
 }
 
 //--------------------------------------------------------------
@@ -607,7 +604,7 @@ sd_image_t ofxStableDiffusion::upscaleImage(sd_image_t inputImage_, uint32_t ups
 
 //--------------------------------------------------------------
 bool ofxStableDiffusion::convert(const char* inputPath_, const char* vaePath_, const char* outputPath_, sd_type_t outputType_) {
-	return ::convert(inputPath_, vaePath_, outputPath_, outputType_);
+	return ::convert(inputPath_, vaePath_, outputPath_, outputType_, nullptr, false);
 }
 
 //--------------------------------------------------------------
@@ -619,14 +616,18 @@ uint8_t* ofxStableDiffusion::preprocessCanny(uint8_t* img,
 	float weak,
 	float strong,
 	bool inverse) {
-	return preprocess_canny(img,
-		width_,
-		height_,
+	sd_image_t image{
+		static_cast<uint32_t>(width_),
+		static_cast<uint32_t>(height_),
+		1u,
+		img
+	};
+	return ::preprocess_canny(image,
 		highThreshold,
 		lowThreshold,
 		weak,
 		strong,
-		inverse);
+		inverse) ? img : nullptr;
 }
 
 //--------------------------------------------------------------

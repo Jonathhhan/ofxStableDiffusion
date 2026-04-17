@@ -12,16 +12,19 @@
 - Native rebuild scripts for Windows, batch-shell, and POSIX-shell workflows
 - Architecture and native build documentation under `docs/`
 - A lightweight CMake-based unit test suite for video helper behavior
+- A vendored current-master `stable-diffusion.cpp` source snapshot, pinned to `a564fdf642780d1df123f1c413b19961375b8346`
 
 ### Changed
 
 - Reworked the wrapper toward a more structured addon API while preserving the legacy `newSdCtx` / `txt2img` / `img2img` / `img2vid` surface
-- Added a first-class `InstructImage` wrapper mode over the existing native `img2img` backend
+- Migrated the native bridge to current upstream `stable-diffusion.cpp` master using the newer parameter-struct API under the hood
+- Added a compatibility shim header so existing addon-facing sample/scheduler enum names still compile against the newer upstream API
+- Added a first-class `InstructImage` wrapper mode over the addon request layer instead of relying on the older native `img2img` entry point
 - Added a bridge-friendly CLIP rerank seam so `ofxGgml` can score and reorder outputs without native binary coupling
 - Improved example-app UX with explicit busy states, progress/error feedback, video-mode controls, and frame-sequence export
-- Staged native library handling in the example and addon config so DLL/lib locations are explicit and reproducible
+- Updated native rebuild/staging so the script targets current upstream CMake flags and preserves the addon compatibility header while refreshing DLL/lib artifacts
 
 ### Notes
 
-- The addon still ships prebuilt native artifacts, but the vendored upstream `stable-diffusion.cpp` source snapshot has not been added yet
+- The addon still stages prebuilt native artifacts, but the full upstream source snapshot is now vendored in-repo and rebuildable
 - The intended integration path with `ofxGgml` remains wrapper-level coordination, not a shared native `ggml` binary
