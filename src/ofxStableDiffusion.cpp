@@ -348,6 +348,26 @@ bool ofxStableDiffusion::isGenerating() const {
 }
 
 //--------------------------------------------------------------
+int64_t ofxStableDiffusion::getLastUsedSeed() const {
+	return lastResult.actualSeedUsed;
+}
+
+//--------------------------------------------------------------
+const std::vector<int64_t>& ofxStableDiffusion::getSeedHistory() const {
+	return seedHistory;
+}
+
+//--------------------------------------------------------------
+void ofxStableDiffusion::clearSeedHistory() {
+	seedHistory.clear();
+}
+
+//--------------------------------------------------------------
+int64_t ofxStableDiffusion::hashStringToSeed(const std::string& text) {
+	return ofxStableDiffusionHashStringToSeed(text);
+}
+
+//--------------------------------------------------------------
 bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	if (thread.isThreadRunning()) {
 		ofLogWarning("ofxStableDiffusion") << "Ignoring request while another task is still running";
@@ -797,7 +817,14 @@ void ofxStableDiffusion::captureImageResults(sd_image_t* images, int count, int 
 	lastResult.imageMode = imageMode;
 	lastResult.selectionMode = imageSelectionMode;
 	lastResult.elapsedMs = elapsedMs;
+	lastResult.actualSeedUsed = seedValue;
 	lastResult.images.reserve(std::max(0, count));
+
+	// Add seed to history
+	seedHistory.push_back(seedValue);
+	if (seedHistory.size() > maxSeedHistorySize) {
+		seedHistory.erase(seedHistory.begin());
+	}
 
 	for (int i = 0; i < count; ++i) {
 		ofxStableDiffusionImageFrame frame;
@@ -820,9 +847,16 @@ void ofxStableDiffusion::captureVideoResults(sd_image_t* images, int count, int 
 	lastResult.success = true;
 	lastResult.task = activeTask;
 	lastResult.elapsedMs = elapsedMs;
+	lastResult.actualSeedUsed = seedValue;
 	lastResult.video.fps = fps;
 	lastResult.video.sourceFrameCount = count;
 	lastResult.video.mode = videoMode;
+
+	// Add seed to history
+	seedHistory.push_back(seedValue);
+	if (seedHistory.size() > maxSeedHistorySize) {
+		seedHistory.erase(seedHistory.begin());
+	}
 
 	std::vector<ofxStableDiffusionImageFrame> sourceFrames;
 	sourceFrames.reserve(std::max(0, count));

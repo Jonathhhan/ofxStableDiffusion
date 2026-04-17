@@ -8,6 +8,7 @@ enum class ofxStableDiffusionTask {
 	InstructImage,
 	ImageVariation,
 	ImageRestyle,
+	Inpainting,
 	ImageToVideo,
 	Upscale
 };
@@ -17,7 +18,8 @@ enum class ofxStableDiffusionImageMode {
 	ImageToImage,
 	InstructImage,
 	Variation,
-	Restyle
+	Restyle,
+	Inpainting
 };
 
 enum class ofxStableDiffusionVideoMode {

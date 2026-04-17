@@ -177,6 +177,18 @@ public:
 	/// Returns true if generation is currently in progress.
 	bool isGenerating() const;
 
+	/// Returns the actual seed used in the last generation (auto-generated if seed was -1).
+	int64_t getLastUsedSeed() const;
+
+	/// Returns the seed history from recent generations (up to 20 most recent).
+	const std::vector<int64_t>& getSeedHistory() const;
+
+	/// Clear the seed history.
+	void clearSeedHistory();
+
+	/// Hash a string to a deterministic seed value for reproducibility.
+	static int64_t hashStringToSeed(const std::string& text);
+
 	std::string prompt;
 	std::string instruction;
 	std::string negativePrompt;
@@ -264,5 +276,7 @@ private:
 	ofxStableDiffusionError lastErrorInfo;
 	std::vector<ofxStableDiffusionError> errorHistory;
 	static constexpr std::size_t maxErrorHistorySize = 10;
+	std::vector<int64_t> seedHistory;
+	static constexpr std::size_t maxSeedHistorySize = 20;
 	uint64_t taskStartMicros = 0;
 };

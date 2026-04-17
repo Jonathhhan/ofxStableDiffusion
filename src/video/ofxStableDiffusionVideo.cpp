@@ -2,6 +2,8 @@
 #include "../core/ofxStableDiffusionImageHelpers.h"
 #include "ofxStableDiffusionVideoHelpers.h"
 
+#include <functional>
+
 namespace {
 
 void appendFrameCopy(
@@ -70,6 +72,7 @@ const char * ofxStableDiffusionTaskLabel(ofxStableDiffusionTask task) {
 	case ofxStableDiffusionTask::InstructImage: return "InstructImage";
 	case ofxStableDiffusionTask::ImageVariation: return "ImageVariation";
 	case ofxStableDiffusionTask::ImageRestyle: return "ImageRestyle";
+	case ofxStableDiffusionTask::Inpainting: return "Inpainting";
 	case ofxStableDiffusionTask::ImageToVideo: return "ImageToVideo";
 	case ofxStableDiffusionTask::Upscale: return "Upscale";
 	case ofxStableDiffusionTask::None:
@@ -160,4 +163,14 @@ std::vector<ofxStableDiffusionImageFrame> ofxStableDiffusionBuildVideoFrames(
 	}
 
 	return frames;
+}
+
+int64_t ofxStableDiffusionHashStringToSeed(const std::string& text) {
+	if (text.empty()) {
+		return -1;
+	}
+	std::hash<std::string> hasher;
+	size_t hash = hasher(text);
+	// Convert to int64_t, ensuring we stay in valid seed range
+	return static_cast<int64_t>(hash & 0x7FFFFFFFFFFFFFFF);
 }
