@@ -34,7 +34,6 @@ public:
 	bool hasImageResult() const;
 	bool hasVideoResult() const;
 	int getOutputCount() const;
-	const std::string& getLastError() const;
 	ofxStableDiffusionErrorCode getLastErrorCode() const;
 	const ofxStableDiffusionError& getLastErrorInfo() const;
 	const std::vector<ofxStableDiffusionError>& getErrorHistory() const;
@@ -260,7 +259,6 @@ private:
 	ofxStableDiffusionVideoMode videoMode = ofxStableDiffusionVideoMode::Standard;
 	ofxStableDiffusionResult lastResult;
 	std::vector<sd_image_t> outputImageViews;
-	std::string lastError;
 	ofxStableDiffusionError lastErrorInfo;
 	std::vector<ofxStableDiffusionError> errorHistory;
 	static constexpr std::size_t maxErrorHistorySize = 10;

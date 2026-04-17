@@ -415,10 +415,11 @@ void ofApp::draw() {
 		ImGui::SameLine(0, 5);
 		ImGui::Text(&modelName[0]);
 		ImGui::Dummy(ImVec2(0, 10));
-		if (stableDiffusion.getLastError().empty()) {
+		const auto& errorInfo = stableDiffusion.getLastErrorInfo();
+		if (errorInfo.code == ofxStableDiffusionErrorCode::None) {
 			ImGui::Text("Status: %s", isBusy ? "Running" : "Idle");
 		} else {
-			ImGui::TextWrapped("Status: %s", stableDiffusion.getLastError().c_str());
+			ImGui::TextWrapped("Status: %s", errorInfo.message.c_str());
 		}
 		if (progressSteps > 0 && isBusy) {
 			ImGui::Dummy(ImVec2(0, 10));

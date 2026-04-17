@@ -211,11 +211,6 @@ int ofxStableDiffusion::getOutputCount() const {
 }
 
 //--------------------------------------------------------------
-const std::string& ofxStableDiffusion::getLastError() const {
-	return lastError;
-}
-
-//--------------------------------------------------------------
 ofxStableDiffusionErrorCode ofxStableDiffusion::getLastErrorCode() const {
 	return lastErrorInfo.code;
 }
@@ -732,7 +727,6 @@ void ofxStableDiffusion::clearOutputState() {
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code) {
-	lastError = errorMessage;
 	lastErrorInfo.code = code;
 	lastErrorInfo.message = errorMessage;
 	lastErrorInfo.suggestion = ofxStableDiffusionErrorCodeSuggestion(code);
@@ -759,7 +753,6 @@ void ofxStableDiffusion::setLastError(ofxStableDiffusionErrorCode code, const st
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::clearLastError() {
-	lastError.clear();
 	lastErrorInfo = ofxStableDiffusionError();
 	lastResult.error.clear();
 }

@@ -95,11 +95,6 @@ if (sd.getLastErrorCode() != ofxStableDiffusionErrorCode::None) {
     ofLogError() << "Error code: " << ofxStableDiffusionErrorCodeLabel(errorInfo.code);
 }
 
-// Or use the simple string-based error (backward compatible)
-if (!sd.getLastError().empty()) {
-    ofLogError() << "Error: " << sd.getLastError();
-}
-
 // Access error history for debugging
 const auto& history = sd.getErrorHistory();
 for (const auto& error : history) {
