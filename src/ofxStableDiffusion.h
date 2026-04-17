@@ -6,6 +6,7 @@
 #include "../libs/stable-diffusion/include/stable-diffusion.h"
 
 #include <functional>
+#include <mutex>
 #include <vector>
 
 /// Callback type for generation progress reporting.
@@ -28,16 +29,16 @@ public:
 	void setUpscalerSettings(const ofxStableDiffusionUpscalerSettings& settings);
 	ofxStableDiffusionContextSettings getContextSettings() const;
 	ofxStableDiffusionUpscalerSettings getUpscalerSettings() const;
-	const ofxStableDiffusionResult& getLastResult() const;
-	const std::vector<ofxStableDiffusionImageFrame>& getImages() const;
-	const ofxStableDiffusionVideoClip& getVideoClip() const;
+	ofxStableDiffusionResult getLastResult() const;
+	std::vector<ofxStableDiffusionImageFrame> getImages() const;
+	ofxStableDiffusionVideoClip getVideoClip() const;
 	bool hasImageResult() const;
 	bool hasVideoResult() const;
 	int getOutputCount() const;
-	const std::string& getLastError() const;
+	std::string getLastError() const;
 	ofxStableDiffusionErrorCode getLastErrorCode() const;
-	const ofxStableDiffusionError& getLastErrorInfo() const;
-	const std::vector<ofxStableDiffusionError>& getErrorHistory() const;
+	ofxStableDiffusionError getLastErrorInfo() const;
+	std::vector<ofxStableDiffusionError> getErrorHistory() const;
 	void clearErrorHistory();
 	int getVideoFrameIndexForTime(float seconds) const;
 	const ofPixels* getVideoFramePixels(int index) const;
@@ -57,6 +58,8 @@ public:
 
 	bool isDiffused() const;
 	void setDiffused(bool diffused);
+	/// Returned buffers are owned by the addon; they become invalid after a new
+	/// generation starts, output is cleared, or the addon is destroyed.
 	sd_image_t* returnImages() const;
 
 	/// Return the human-readable name for an sd_type_t enum value.
@@ -181,7 +184,7 @@ public:
 	int64_t getLastUsedSeed() const;
 
 	/// Returns the seed history from recent generations (up to 20 most recent).
-	const std::vector<int64_t>& getSeedHistory() const;
+	std::vector<int64_t> getSeedHistory() const;
 
 	/// Clear the seed history.
 	void clearSeedHistory();
@@ -254,14 +257,16 @@ private:
 	void applyContextSettings(const ofxStableDiffusionContextSettings& settings);
 	void applyImageRequest(const ofxStableDiffusionImageRequest& request);
 	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
+	bool validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task);
+	bool validateVideoRequestAndSetError(const ofxStableDiffusionVideoRequest& request);
 	void clearOutputState();
 	void setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::Unknown);
 	void setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage);
 	void clearLastError();
 	void captureImageResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
 	void captureVideoResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
-	void applyImageRanking(std::vector<ofxStableDiffusionImageFrame>& frames);
-	void rebuildLegacyOutputViews();
+	void applyImageRanking(std::vector<ofxStableDiffusionImageFrame>& frames, ofxStableDiffusionResult& result);
+	std::vector<sd_image_t> buildOutputImageViews(const ofxStableDiffusionResult& result) const;
 	ofPixels makePixelsCopy(const sd_image_t& image) const;
 
 	ofxStableDiffusionTask activeTask = ofxStableDiffusionTask::None;
@@ -279,4 +284,5 @@ private:
 	std::vector<int64_t> seedHistory;
 	static constexpr std::size_t maxSeedHistorySize = 20;
 	uint64_t taskStartMicros = 0;
+	mutable std::mutex stateMutex;
 };

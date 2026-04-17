@@ -103,6 +103,7 @@ const char * ofxStableDiffusionErrorCodeLabel(ofxStableDiffusionErrorCode code) 
 	case ofxStableDiffusionErrorCode::InvalidDimensions: return "InvalidDimensions";
 	case ofxStableDiffusionErrorCode::InvalidBatchCount: return "InvalidBatchCount";
 	case ofxStableDiffusionErrorCode::InvalidFrameCount: return "InvalidFrameCount";
+	case ofxStableDiffusionErrorCode::InvalidParameter: return "InvalidParameter";
 	case ofxStableDiffusionErrorCode::MissingInputImage: return "MissingInputImage";
 	case ofxStableDiffusionErrorCode::GenerationFailed: return "GenerationFailed";
 	case ofxStableDiffusionErrorCode::ThreadBusy: return "ThreadBusy";
@@ -130,6 +131,8 @@ std::string ofxStableDiffusionErrorCodeSuggestion(ofxStableDiffusionErrorCode co
 		return "Set batch count between 1 and 16";
 	case ofxStableDiffusionErrorCode::InvalidFrameCount:
 		return "Set frame count between 1 and 100";
+	case ofxStableDiffusionErrorCode::InvalidParameter:
+		return "Verify numeric parameters are within supported ranges";
 	case ofxStableDiffusionErrorCode::MissingInputImage:
 		return "Load an input image using loadImage() before calling this operation";
 	case ofxStableDiffusionErrorCode::GenerationFailed:
