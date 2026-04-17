@@ -37,3 +37,33 @@ target_include_directories(test_ranking_helpers PRIVATE
 )
 
 add_test(NAME ranking_helpers COMMAND test_ranking_helpers)
+
+add_executable(test_image_helpers_extended
+    test_image_helpers_extended.cpp
+)
+
+target_include_directories(test_image_helpers_extended PRIVATE
+    "${SRC_DIR}"
+)
+
+add_test(NAME image_helpers_extended COMMAND test_image_helpers_extended)
+
+add_executable(test_ranking_helpers_extended
+    test_ranking_helpers_extended.cpp
+)
+
+target_include_directories(test_ranking_helpers_extended PRIVATE
+    "${SRC_DIR}"
+)
+
+add_test(NAME ranking_helpers_extended COMMAND test_ranking_helpers_extended)
+
+add_executable(test_video_helpers_extended
+    test_video_helpers_extended.cpp
+)
+
+target_include_directories(test_video_helpers_extended PRIVATE
+    "${SRC_DIR}"
+)
+
+add_test(NAME video_helpers_extended COMMAND test_video_helpers_extended)
