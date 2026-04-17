@@ -10,6 +10,17 @@
 #include <string>
 #include <vector>
 
+struct ofxStableDiffusionError {
+	ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::None;
+	std::string message;
+	std::string suggestion;
+	uint64_t timestampMicros = 0;
+
+	bool hasError() const {
+		return code != ofxStableDiffusionErrorCode::None;
+	}
+};
+
 struct ofxStableDiffusionContextSettings {
 	std::string modelPath;
 	std::string vaePath;
@@ -147,6 +158,8 @@ const char * ofxStableDiffusionImageModeLabel(ofxStableDiffusionImageMode mode);
 const char * ofxStableDiffusionImageSelectionModeLabel(
 	ofxStableDiffusionImageSelectionMode mode);
 const char * ofxStableDiffusionVideoModeLabel(ofxStableDiffusionVideoMode mode);
+const char * ofxStableDiffusionErrorCodeLabel(ofxStableDiffusionErrorCode code);
+std::string ofxStableDiffusionErrorCodeSuggestion(ofxStableDiffusionErrorCode code);
 std::vector<ofxStableDiffusionImageFrame> ofxStableDiffusionBuildVideoFrames(
 	const std::vector<ofxStableDiffusionImageFrame> & sourceFrames,
 	ofxStableDiffusionVideoMode mode);

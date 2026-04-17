@@ -35,6 +35,10 @@ public:
 	bool hasVideoResult() const;
 	int getOutputCount() const;
 	const std::string& getLastError() const;
+	ofxStableDiffusionErrorCode getLastErrorCode() const;
+	const ofxStableDiffusionError& getLastErrorInfo() const;
+	const std::vector<ofxStableDiffusionError>& getErrorHistory() const;
+	void clearErrorHistory();
 	int getVideoFrameIndexForTime(float seconds) const;
 	const ofPixels* getVideoFramePixels(int index) const;
 	bool saveVideoFrames(const std::string& directory, const std::string& prefix = "frame") const;
@@ -239,7 +243,8 @@ private:
 	void applyImageRequest(const ofxStableDiffusionImageRequest& request);
 	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
 	void clearOutputState();
-	void setLastError(const std::string& errorMessage);
+	void setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::Unknown);
+	void setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage);
 	void clearLastError();
 	void captureImageResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
 	void captureVideoResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
@@ -256,5 +261,8 @@ private:
 	ofxStableDiffusionResult lastResult;
 	std::vector<sd_image_t> outputImageViews;
 	std::string lastError;
+	ofxStableDiffusionError lastErrorInfo;
+	std::vector<ofxStableDiffusionError> errorHistory;
+	static constexpr std::size_t maxErrorHistorySize = 10;
 	uint64_t taskStartMicros = 0;
 };
