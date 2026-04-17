@@ -6,6 +6,12 @@ text-to-image, image-to-image, image-to-video, and upscaling workflows.
 
 Current addon version: `1.0.0`
 
+## Requirements
+
+- **openFrameworks**: 0.11.0 or later (tested with 0.12.0)
+- **C++ Standard**: C++17 or later
+- **Platform Support**: Windows (x64), Linux (x64), macOS (experimental Metal support)
+
 The addon is now structured more like a production addon:
 
 - typed request/config/result objects
@@ -135,7 +141,7 @@ Why:
 - backend flags and ABI expectations can diverge
 - wrapper-level integration is more stable than native binary coupling
 
-More detail: [docs/ARCHITECTURE.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/docs/ARCHITECTURE.md)
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Native Runtime
 
@@ -154,7 +160,7 @@ Rebuild helpers:
 - `scripts/setup_addon.ps1`
 - `scripts/setup_windows.bat`
 
-More detail: [docs/NATIVE_BUILD.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/docs/NATIVE_BUILD.md)
+More detail: [docs/NATIVE_BUILD.md](docs/NATIVE_BUILD.md)
 
 Backend flags now follow the same style as `ofxGgml`:
 
@@ -224,7 +230,7 @@ You can also use:
 - `scripts/run-tests.ps1`
 - `scripts/run-tests.sh`
 
-Test notes: [tests/README.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/tests/README.md)
+Test notes: [tests/README.md](tests/README.md)
 
 ## Example
 
@@ -235,6 +241,49 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 - video-mode selection
 - frame export for generated clips
 
+## Troubleshooting
+
+### Model Loading Issues
+
+**Problem**: Model fails to load or crashes during loading
+- **Solution**: Verify the model file exists and is not corrupted
+- **Solution**: Check that the model format is compatible (`.safetensors`, `.ckpt`, or `.gguf`)
+- **Solution**: Ensure sufficient RAM/VRAM (models typically require 4-8GB+)
+
+### Out of Memory Errors
+
+**Problem**: Generation fails with OOM error
+- **Solution**: Reduce batch count (try `batchCount = 1`)
+- **Solution**: Reduce image dimensions (try 512x512 instead of higher)
+- **Solution**: Enable VAE tiling with `vaeTiling = true`
+- **Solution**: Use quantized models (Q4_0, Q5_0, etc.) for lower memory usage
+
+### Slow Generation
+
+**Problem**: Image generation takes too long
+- **Solution**: Increase thread count with `nThreads = -1` (auto-detect) or set manually
+- **Solution**: Reduce sample steps (try 10-20 steps for faster results)
+- **Solution**: Use smaller models like SD-Turbo for faster iteration
+- **Solution**: Enable GPU backend if available (`--cuda` or `--vulkan` during build)
+
+### Thread Safety
+
+**Note**: The addon is designed for single-threaded use from the main thread. Do not call `generate()` or `generateVideo()` from multiple threads simultaneously. The background thread is managed internally.
+
+### Invalid Input Dimensions
+
+**Problem**: Generation fails with dimension errors
+- **Solution**: Ensure width and height are positive multiples of 64 (e.g., 512, 768, 1024)
+- **Solution**: Most SD models work best with dimensions between 256-1024
+
+## Thread Safety Notes
+
+- The addon manages its own background thread for generation
+- All public API methods should be called from the main thread
+- Do not call `generate()` or `generateVideo()` while a previous generation is running
+- Use `isGenerating()` to check if generation is in progress
+- Progress callbacks are fired from the background thread - use thread-safe operations in callbacks
+
 ## Changelog
 
-See [CHANGELOG.md](/C:/Users/Jonathan%20Frank/Desktop/of_v20260406_vs_64_release/addons/ofxStableDiffusion/CHANGELOG.md).
+See [CHANGELOG.md](CHANGELOG.md).

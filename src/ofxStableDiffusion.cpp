@@ -36,12 +36,64 @@ ofxStableDiffusion::~ofxStableDiffusion() {
 }
 
 //--------------------------------------------------------------
+static bool validateDimensions(int width, int height, std::string& errorMsg) {
+	if (width <= 0 || height <= 0) {
+		errorMsg = "Width and height must be positive values";
+		return false;
+	}
+	if (width > 2048 || height > 2048) {
+		errorMsg = "Width and height must not exceed 2048 pixels";
+		return false;
+	}
+	if (width % 64 != 0) {
+		errorMsg = "Width must be a multiple of 64 (recommended: 512, 768, 1024)";
+		return false;
+	}
+	if (height % 64 != 0) {
+		errorMsg = "Height must be a multiple of 64 (recommended: 512, 768, 1024)";
+		return false;
+	}
+	return true;
+}
+
+//--------------------------------------------------------------
+static bool validateBatchCount(int batchCount, std::string& errorMsg) {
+	if (batchCount <= 0) {
+		errorMsg = "Batch count must be positive";
+		return false;
+	}
+	if (batchCount > 16) {
+		errorMsg = "Batch count exceeds maximum of 16 (risk of out-of-memory)";
+		return false;
+	}
+	return true;
+}
+
+//--------------------------------------------------------------
 void ofxStableDiffusion::configureContext(const ofxStableDiffusionContextSettings& settings) {
 	applyContextSettings(settings);
 }
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request) {
+	std::string validationError;
+
+	// Validate dimensions
+	if (!validateDimensions(request.width, request.height, validationError)) {
+		imageMode = request.mode;
+		activeTask = ofxStableDiffusionTaskForImageMode(request.mode);
+		setLastError(validationError);
+		return;
+	}
+
+	// Validate batch count
+	if (!validateBatchCount(request.batchCount, validationError)) {
+		imageMode = request.mode;
+		activeTask = ofxStableDiffusionTaskForImageMode(request.mode);
+		setLastError(validationError);
+		return;
+	}
+
 	const sd_image_t candidateInputImage =
 		request.initImage.data != nullptr ? request.initImage : inputImage;
 	if (ofxStableDiffusionImageModeUsesInputImage(request.mode) && candidateInputImage.data == nullptr) {
@@ -60,6 +112,22 @@ void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request)
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::generateVideo(const ofxStableDiffusionVideoRequest& request) {
+	std::string validationError;
+
+	// Validate dimensions
+	if (!validateDimensions(request.width, request.height, validationError)) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		setLastError(validationError);
+		return;
+	}
+
+	// Validate frame count
+	if (request.frameCount <= 0 || request.frameCount > 100) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		setLastError("Frame count must be between 1 and 100");
+		return;
+	}
+
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToVideo)) {
 		return;
 	}
