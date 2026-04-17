@@ -4,6 +4,8 @@
 [`stable-diffusion.cpp`](https://github.com/leejet/stable-diffusion.cpp) for
 text-to-image, image-to-image, image-to-video, and upscaling workflows.
 
+Current addon version: `1.0.0`
+
 The addon is now structured more like a production addon:
 
 - typed request/config/result objects

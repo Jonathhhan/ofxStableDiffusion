@@ -16,6 +16,7 @@
 
 meta:
 	ADDON_NAME = ofxStableDiffusion
+	ADDON_VERSION = 1.0.0
 	ADDON_DESCRIPTION = Stable Diffusion: https://github.com/leejet/stable-diffusion.cpp
 	ADDON_AUTHOR = Jonathan Frank
 	ADDON_TAGS = "Stable Diffusion" "Artificial Intelligence" "Image Generation"
