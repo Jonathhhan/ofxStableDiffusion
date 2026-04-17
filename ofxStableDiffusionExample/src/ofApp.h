@@ -85,6 +85,16 @@ class ofApp : public ofBaseApp {
 		sd_image_t* outputImages = nullptr;
 		sd_image_t* controlImage = nullptr;
 		bool isTextToImage;
+		bool isImageToVideo;
+		int videoFrames;
+		int motionBucketId;
+		int videoFps;
+		float augmentationLevel;
+		float minCfg;
+		bool isPlaying;
+		int currentFrame;
+		int totalVideoFrames;
+		float lastFrameTime;
 		int previewWidth;
 		std::string imageName;
 		ofxImGui::Gui gui;
