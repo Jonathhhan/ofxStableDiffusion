@@ -107,10 +107,8 @@ class ofApp : public ofBaseApp {
 		bool isInstructImage;
 		bool isImageToVideo;
 		int videoFrames;
-		int motionBucketId;
 		int videoFps;
-		float augmentationLevel;
-		float minCfg;
+		float vaceStrength;
 		bool isPlaying;
 		int currentFrame;
 		int totalVideoFrames;

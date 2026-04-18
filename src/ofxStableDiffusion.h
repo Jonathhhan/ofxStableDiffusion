@@ -81,23 +81,7 @@ public:
 	/// Set an optional progress callback that fires on each diffusion step.
 	void setProgressCallback(ofxSdProgressCallback cb);
 
-	void newSdCtx(const std::string& modelPath,
-		const std::string& vaePath,
-		const std::string& taesdPath,
-		const std::string& controlNetPathCStr,
-		const std::string& loraModelDir,
-		const std::string& embedDirCStr,
-		const std::string& stackedIdEmbedDirCStr,
-		bool vaeDecodeOnly,
-		bool vaeTiling,
-		bool freeParamsImmediately,
-		int nThreads,
-		enum sd_type_t wType,
-		enum rng_type_t rngType,
-		enum scheduler_t s,
-		bool keepClipOnCpu,
-		bool keepControlNetCpu,
-		bool keepVaeOnCpu);
+	void newSdCtx(const ofxStableDiffusionContextSettings& settings);
 	void freeSdCtx();
 
 	void txt2img(const std::string& prompt,
@@ -153,10 +137,7 @@ public:
 		int width,
 		int height,
 		int videoFrames,
-		int motionBucketId,
 		int fps,
-		float augmentationLevel,
-		float minCfg,
 		float cfgScale,
 		enum sample_method_t sampleMethod,
 		int sampleSteps,
@@ -210,10 +191,15 @@ public:
 	float cfgScale = 7.0f;
 	int batchCount = 1;
 	float strength = 0.5f;
-	int seed = -1;
+	int64_t seed = -1;
 	int clipSkip = -1;
+	// Context model paths
 	std::string modelPath;
 	std::string modelName;
+	std::string diffusionModelPath;
+	std::string clipLPath;
+	std::string clipGPath;
+	std::string t5xxlPath;
 	std::string taesdPath;
 	std::string controlNetPathCStr;
 	std::string embedDirCStr;
@@ -225,10 +211,8 @@ public:
 	sample_method_t sampleMethodEnum = EULER_A_SAMPLE_METHOD;
 	int sampleSteps = 20;
 	int videoFrames = 6;
-	int motionBucketId = 127;
 	int fps = 6;
-	float augmentationLevel = 0.0f;
-	float minCfg = 1.0f;
+	float vaceStrength = 1.0f;
 	bool vaeDecodeOnly = false;
 	bool vaeTiling = false;
 	bool freeParamsImmediately = false;
@@ -238,6 +222,9 @@ public:
 	bool keepClipOnCpu = false;
 	bool keepControlNetCpu = false;
 	bool keepVaeOnCpu = false;
+	bool offloadParamsToCpu = false;
+	bool flashAttn = false;
+	bool enableMmap = true;
 	float styleStrength = 20.0f;
 	bool normalizeInput = true;
 	int nThreads = -1;
@@ -245,11 +232,15 @@ public:
 	sd_type_t wType = SD_TYPE_COUNT;
 	scheduler_t schedule = SCHEDULER_COUNT;
 	rng_type_t rngType = STD_DEFAULT_RNG;
+	prediction_t prediction = EPS_PRED;
+	lora_apply_mode_t loraApplyMode = LORA_APPLY_AUTO;
 	std::string controlImagePath;
 	float controlStrength = 0.9f;
 	std::vector<ofxStableDiffusionLora> loras;
 
 	sd_image_t inputImage = {0, 0, 0, nullptr};
+	sd_image_t maskImage = {0, 0, 0, nullptr};
+	sd_image_t endImage = {0, 0, 0, nullptr};
 	sd_image_t* outputImages = nullptr;
 	sd_image_t* controlCond = nullptr;
 	stableDiffusionThread thread;

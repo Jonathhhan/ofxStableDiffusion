@@ -373,25 +373,19 @@ sd_ctx_t* ofxStableDiffusionModelManager::loadModelContext(const ofxStableDiffus
 	reportProgress(modelInfo.modelPath, 0.3f, "Loading model into memory");
 
 	// Load model using stable-diffusion.cpp API
-	sd_ctx_t* ctx = new_sd_ctx(
-		modelInfo.modelPath.c_str(),
-		modelInfo.vaePath.empty() ? "" : modelInfo.vaePath.c_str(),
-		modelInfo.taesdPath.empty() ? "" : modelInfo.taesdPath.c_str(),
-		modelInfo.controlNetPath.empty() ? "" : modelInfo.controlNetPath.c_str(),
-		modelInfo.loraModelDir.empty() ? "" : modelInfo.loraModelDir.c_str(),
-		"",  // embedDir
-		"",  // stackedIdEmbedDir
-		false,  // vaeDecodeOnly
-		false,  // vaeTiling
-		false,  // freeParamsImmediately
-		-1,  // nThreads (auto)
-		modelInfo.weightType,
-		STD_DEFAULT_RNG,
-		SCHEDULER_COUNT,  // default scheduler
-		false,  // keepClipOnCpu
-		false,  // keepControlNetCpu
-		false   // keepVaeOnCpu
-	);
+	sd_ctx_params_t ctxParams{};
+	sd_ctx_params_init(&ctxParams);
+	ctxParams.model_path     = modelInfo.modelPath.c_str();
+	ctxParams.vae_path       = modelInfo.vaePath.empty() ? nullptr : modelInfo.vaePath.c_str();
+	ctxParams.taesd_path     = modelInfo.taesdPath.empty() ? nullptr : modelInfo.taesdPath.c_str();
+	ctxParams.control_net_path = modelInfo.controlNetPath.empty() ? nullptr : modelInfo.controlNetPath.c_str();
+	ctxParams.vae_decode_only        = false;
+	ctxParams.free_params_immediately = false;
+	ctxParams.n_threads      = -1;  // auto
+	ctxParams.wtype          = modelInfo.weightType;
+	ctxParams.rng_type       = STD_DEFAULT_RNG;
+	ctxParams.sampler_rng_type = STD_DEFAULT_RNG;
+	sd_ctx_t* ctx = new_sd_ctx(&ctxParams);
 
 	if (!ctx) {
 		errorMessage = "Failed to create model context for: " + modelInfo.modelPath;

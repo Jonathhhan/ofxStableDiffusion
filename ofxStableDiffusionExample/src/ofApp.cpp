@@ -184,10 +184,8 @@ void ofApp::setup() {
 	isInstructImage = false;
 	isImageToVideo = false;
 	videoFrames = 6;
-	motionBucketId = 127;
 	videoFps = 6;
-	augmentationLevel = 0.0f;
-	minCfg = 1.0f;
+	vaceStrength = 1.0f;
 	isPlaying = false;
 	currentFrame = 0;
 	totalVideoFrames = 0;
@@ -214,23 +212,25 @@ void ofApp::setup() {
 		progressTime = time;
 	});
 	configureExampleRanker();
-	stableDiffusion.newSdCtx(modelPath,
-		vaePath,
-		taesdPath,
-		controlNetPath,
-		loraModelDir,
-		embedDir,
-		stackedIdEmbedDir,
-		vaeDecodeOnly,
-		vaeTiling,
-		freeParamsImmediately,
-		nThreads,
-		wType,
-		rngType,
-		schedule,
-		keepClipOnCpu,
-		keepControlNetCpu,
-		keepVaeOnCpu);
+	ofxStableDiffusionContextSettings settings;
+	settings.modelPath = modelPath;
+	settings.vaePath = vaePath;
+	settings.taesdPath = taesdPath;
+	settings.controlNetPath = controlNetPath;
+	settings.loraModelDir = loraModelDir;
+	settings.embedDir = embedDir;
+	settings.stackedIdEmbedDir = stackedIdEmbedDir;
+	settings.vaeDecodeOnly = vaeDecodeOnly;
+	settings.vaeTiling = vaeTiling;
+	settings.freeParamsImmediately = freeParamsImmediately;
+	settings.nThreads = nThreads;
+	settings.weightType = wType;
+	settings.rngType = rngType;
+	settings.schedule = schedule;
+	settings.keepClipOnCpu = keepClipOnCpu;
+	settings.keepControlNetCpu = keepControlNetCpu;
+	settings.keepVaeOnCpu = keepVaeOnCpu;
+	stableDiffusion.newSdCtx(settings);
 
 	// Initial embedding enumeration (best-effort).
 	auto embeds = stableDiffusion.listEmbeddings();
@@ -453,23 +453,25 @@ void ofApp::draw() {
 			if (result.bSuccess) {
 				modelPath = result.getPath();
 				modelName = result.getName();
-				stableDiffusion.newSdCtx(modelPath,
-					vaePath,
-					taesdPath,
-					controlNetPath,
-					loraModelDir,
-					embedDir,
-					stackedIdEmbedDir,
-					vaeDecodeOnly,
-					vaeTiling,
-					freeParamsImmediately,
-					nThreads,
-					wType,
-					rngType,
-					schedule,
-					keepClipOnCpu,
-					keepControlNetCpu,
-					keepVaeOnCpu);
+				ofxStableDiffusionContextSettings settings;
+				settings.modelPath = modelPath;
+				settings.vaePath = vaePath;
+				settings.taesdPath = taesdPath;
+				settings.controlNetPath = controlNetPath;
+				settings.loraModelDir = loraModelDir;
+				settings.embedDir = embedDir;
+				settings.stackedIdEmbedDir = stackedIdEmbedDir;
+				settings.vaeDecodeOnly = vaeDecodeOnly;
+				settings.vaeTiling = vaeTiling;
+				settings.freeParamsImmediately = freeParamsImmediately;
+				settings.nThreads = nThreads;
+				settings.weightType = wType;
+				settings.rngType = rngType;
+				settings.schedule = schedule;
+				settings.keepClipOnCpu = keepClipOnCpu;
+				settings.keepControlNetCpu = keepControlNetCpu;
+				settings.keepVaeOnCpu = keepVaeOnCpu;
+				stableDiffusion.newSdCtx(settings);
 			}
 		}
 		ImGui::SameLine(0, 5);
@@ -599,13 +601,9 @@ void ofApp::draw() {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::SliderInt("Video Frames", &videoFrames, 1, 16);
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderInt("Motion Bucket ID", &motionBucketId, 1, 255);
-			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::SliderInt("FPS", &videoFps, 1, 30);
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderFloat("Augmentation Level", &augmentationLevel, 0.0f, 1.0f);
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderFloat("Min CFG", &minCfg, 0.0f, 20.0f);
+			ImGui::SliderFloat("VACE Strength", &vaceStrength, 0.0f, 1.0f);
 			ImGui::Dummy(ImVec2(0, 10));
 			if (ImGui::BeginCombo("Video Mode", videoMode, ImGuiComboFlags_NoArrowButton)) {
 				for (int n = 0; n < IM_ARRAYSIZE(videoModeArray); n++) {
@@ -703,19 +701,26 @@ void ofApp::draw() {
 		if (isImageToVideo) {
 			isPlaying = false;
 			totalVideoFrames = 0;
-			stableDiffusion.img2vid(inputImage,
-				width,
-				height,
-				videoFrames,
-				motionBucketId,
-				videoFps,
-				augmentationLevel,
-				minCfg,
-				cfgScale,
-				sampleMethodEnum,
-				sampleSteps,
-				strength,
-				seed);
+			ofxStableDiffusionVideoRequest request;
+			request.initImage = inputImage;
+			request.prompt = prompt;
+			request.negativePrompt = negativePrompt;
+			request.clipSkip = clipSkip;
+			request.width = width;
+			request.height = height;
+			request.frameCount = videoFrames;
+			request.fps = videoFps;
+			request.cfgScale = cfgScale;
+			request.sampleMethod = sampleMethodEnum;
+			request.sampleSteps = sampleSteps;
+			request.strength = strength;
+			request.seed = seed;
+			request.vaceStrength = vaceStrength;
+			request.mode = static_cast<ofxStableDiffusionVideoMode>(
+				std::distance(std::begin(videoModeArray),
+					std::find(std::begin(videoModeArray), std::end(videoModeArray), videoMode)));
+			request.loras = loras;
+			stableDiffusion.generateVideo(request);
 		}
 		else {
 			ofxStableDiffusionImageRequest request;

@@ -161,6 +161,10 @@ sd_ctx_params_t buildContextParams(
 	collectEmbeddings(sd->embedDirCStr, embeddingNames, embeddingPaths, embeddings);
 
 	params.model_path = emptyToNull(sd->modelPath);
+	params.clip_l_path = emptyToNull(sd->clipLPath);
+	params.clip_g_path = emptyToNull(sd->clipGPath);
+	params.t5xxl_path = emptyToNull(sd->t5xxlPath);
+	params.diffusion_model_path = emptyToNull(sd->diffusionModelPath);
 	params.vae_path = emptyToNull(sd->vaePath);
 	params.taesd_path = emptyToNull(sd->taesdPath);
 	params.control_net_path = emptyToNull(sd->controlNetPathCStr);
@@ -173,9 +177,15 @@ sd_ctx_params_t buildContextParams(
 	params.wtype = sd->wType;
 	params.rng_type = sd->rngType;
 	params.sampler_rng_type = sd->rngType;
+	params.prediction = sd->prediction;
+	params.lora_apply_mode = sd->loraApplyMode;
+	params.offload_params_to_cpu = sd->offloadParamsToCpu;
+	params.enable_mmap = sd->enableMmap;
 	params.keep_clip_on_cpu = sd->keepClipOnCpu;
 	params.keep_control_net_on_cpu = sd->keepControlNetCpu;
 	params.keep_vae_on_cpu = sd->keepVaeOnCpu;
+	params.flash_attn = sd->flashAttn;
+	params.diffusion_flash_attn = sd->flashAttn;
 	return params;
 }
 
@@ -195,6 +205,7 @@ sd_img_gen_params_t buildImageParams(
 	params.negative_prompt = emptyToNull(sd->negativePrompt);
 	params.clip_skip = sd->clipSkip;
 	params.init_image = sd->inputImage;
+	params.mask_image = sd->maskImage;
 	params.width = sd->width;
 	params.height = sd->height;
 	params.sample_params.sample_method = sampleMethod;
@@ -246,6 +257,7 @@ sd_vid_gen_params_t buildVideoParams(ofxStableDiffusion* sd, sd_ctx_t* sdCtx, st
 	params.negative_prompt = emptyToNull(sd->negativePrompt);
 	params.clip_skip = sd->clipSkip;
 	params.init_image = sd->inputImage;
+	params.end_image = sd->endImage;
 	params.width = sd->width;
 	params.height = sd->height;
 	params.sample_params.sample_method = sampleMethod;
@@ -256,6 +268,7 @@ sd_vid_gen_params_t buildVideoParams(ofxStableDiffusion* sd, sd_ctx_t* sdCtx, st
 	params.strength = sd->strength;
 	params.seed = sd->seed;
 	params.video_frames = sd->videoFrames;
+	params.vace_strength = sd->vaceStrength;
 	params.vae_tiling_params = makeTilingParams(sd->vaeTiling);
 	loraBuffer.clear();
 	loraBuffer.reserve(sd->loras.size());
@@ -346,7 +359,7 @@ void stableDiffusionThread::threadedFunction() {
 			sd->activeTask = ofxStableDiffusionTask::None;
 			return;
 		}
-		sd->captureVideoResults(output, generatedFrameCount, sd->seed, elapsedMs);
+		sd->captureVideoResults(output, generatedFrameCount, params.seed, elapsedMs);
 		sd->activeTask = ofxStableDiffusionTask::None;
 		return;
 	}
@@ -387,6 +400,6 @@ void stableDiffusionThread::threadedFunction() {
 		return;
 	}
 
-	sd->captureImageResults(output, sd->batchCount, sd->seed, elapsedMs);
+	sd->captureImageResults(output, sd->batchCount, params.seed, elapsedMs);
 	sd->activeTask = ofxStableDiffusionTask::None;
 }

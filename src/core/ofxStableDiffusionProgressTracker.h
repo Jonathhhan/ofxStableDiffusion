@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdint>
+#include <vector>
 
 /// Generation phase enum
 enum class ofxStableDiffusionPhase {
