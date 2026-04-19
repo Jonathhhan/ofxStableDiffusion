@@ -4,6 +4,7 @@
 #include "bridges/ofxStableDiffusionHoloscanBridge.h"
 #include "core/ofxStableDiffusionParameterTuningHelpers.h"
 #include "core/ofxStableDiffusionTypes.h"
+#include "video/ofxStableDiffusionVideoWorkflowHelpers.h"
 #include "ofxStableDiffusionThread.h"
 #include "../libs/stable-diffusion/include/stable-diffusion.h"
 

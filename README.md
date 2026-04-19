@@ -29,7 +29,8 @@ The addon is now structured more like a production addon:
 - Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
 - ESRGAN upscaling support
 - Progress callbacks for diffusion steps
-- Optional `ofxStableDiffusionHoloscanBridge` scaffold for live `frame -> conditioning -> diffusion -> preview` pipelines, with a clean fallback path when Holoscan is not installed yet
+- Optional `ofxStableDiffusionHoloscanBridge` scaffold for live `frame -> conditioning -> diffusion -> preview` pipelines, with a native Holoscan runtime path on Linux and a clean fallback path when Holoscan is not installed or the platform is not supported yet
+- `ofxStableDiffusionVideoWorkflowHelpers.h` for reusable video-generation presets, request validation, and richer render-manifest export on top of the existing request/result layer
 - Legacy entry points still available for wrapper-level migration
 - Standalone native runtime management instead of sharing `ggml` binaries across addons
 
@@ -40,7 +41,10 @@ The addon is now structured more like a production addon:
 - `src/core/`
   Enums and owned result types
 - `src/video/`
-  Video clip behavior and pure helper utilities
+  Video clip behavior, pure helper utilities, and reusable workflow helpers for:
+  - `FastPreview`, `LowVram`, `Balanced`, `Quality`, and `BatchStoryboard` presets
+  - preflight request validation before a longer render starts
+  - richer JSON render manifests that capture prompt, dimensions, fps, seed, LoRAs, and clip summary data
 - `libs/stable-diffusion/`
   Bundled header/libs and vendoring location for upstream native source
 - `scripts/`
@@ -317,6 +321,7 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 - busy-state gating
 - video-mode selection
 - a small `Holoscan Bridge` section for the new bridge MVP, including prompt handoff, loaded-image submission, and inline bridge preview
+  - the native Holoscan runtime path is Linux-only for now; Windows and other platforms stay on the addon fallback lane until that runtime is validated there
 - frame export plus JSON metadata for generated clips
 - optional end-frame morphing
 - prompt morph / seed-sequence animation controls

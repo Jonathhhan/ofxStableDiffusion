@@ -204,14 +204,18 @@ void ofApp::setupHoloscanBridge() {
 	holoscanPrompt = prompt;
 	holoscanNegativePrompt = negativePrompt;
 	ofxStableDiffusionHoloscanSettings settings;
-	settings.enabled = false;
+	settings.enabled = true;
 	settings.useEventScheduler = true;
 	settings.workerThreads = 2;
 	holoscanBridgeEnabled = holoscanBridge.setup(&stableDiffusion, settings);
 	if (holoscanBridgeEnabled) {
+	#if defined(TARGET_LINUX)
 		holoscanStatus = holoscanBridge.isHoloscanAvailable()
-			? "Holoscan bridge ready. SDK headers were detected."
-			: "Holoscan bridge ready in fallback mode. Install Holoscan later to replace the internal MVP scheduler.";
+			? "Holoscan bridge ready. Native Linux runtime detected."
+			: "Holoscan bridge ready in fallback mode. Install the Linux Holoscan SDK later to replace the addon fallback lane.";
+	#else
+		holoscanStatus = "Holoscan is Linux-only for now. The bridge stays on the addon fallback lane on this platform.";
+	#endif
 	} else {
 		holoscanStatus = holoscanBridge.getLastError();
 	}

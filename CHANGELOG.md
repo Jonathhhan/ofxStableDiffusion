@@ -5,7 +5,9 @@
 ### Added
 
 - Optional `ofxStableDiffusionHoloscanBridge` scaffolding for live `frame -> conditioning -> diffusion -> preview` workflows, designed as an addon-side bridge instead of a hard Holoscan dependency.
+  - The native Holoscan runtime path is Linux-only for now; other platforms stay on the addon fallback lane until that runtime is validated there.
 - A small example-side `Holoscan Bridge` panel for starting/stopping the bridge MVP, reusing current prompts, submitting the loaded image, and previewing the most recent bridge result.
+- `ofxStableDiffusionVideoWorkflowHelpers.h` with reusable video-generation presets, prompt-workflow validation, and richer render-manifest export helpers for request/result based pipelines.
 
 ## 1.2.0 - 2026-04-17
 
