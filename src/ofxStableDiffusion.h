@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ofMain.h"
+#include "bridges/ofxStableDiffusionHoloscanBridge.h"
+#include "core/ofxStableDiffusionParameterTuningHelpers.h"
 #include "core/ofxStableDiffusionTypes.h"
 #include "ofxStableDiffusionThread.h"
 #include "../libs/stable-diffusion/include/stable-diffusion.h"
@@ -29,6 +31,7 @@ public:
 	void setUpscalerSettings(const ofxStableDiffusionUpscalerSettings& settings);
 	ofxStableDiffusionContextSettings getContextSettings() const;
 	ofxStableDiffusionUpscalerSettings getUpscalerSettings() const;
+	ofxStableDiffusionCapabilities getCapabilities() const;
 	ofxStableDiffusionResult getLastResult() const;
 	std::vector<ofxStableDiffusionImageFrame> getImages() const;
 	ofxStableDiffusionVideoClip getVideoClip() const;
@@ -43,6 +46,11 @@ public:
 	int getVideoFrameIndexForTime(float seconds) const;
 	const ofPixels* getVideoFramePixels(int index) const;
 	bool saveVideoFrames(const std::string& directory, const std::string& prefix = "frame") const;
+	bool saveVideoMetadata(const std::string& path) const;
+	bool saveVideoFramesWithMetadata(
+		const std::string& directory,
+		const std::string& prefix = "frame",
+		const std::string& metadataFilename = "metadata.json") const;
 	void setVideoGenerationMode(ofxStableDiffusionVideoMode mode);
 	ofxStableDiffusionVideoMode getVideoGenerationMode() const;
 	void setImageGenerationMode(ofxStableDiffusionImageMode mode);
@@ -262,17 +270,37 @@ private:
 	bool validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task);
 	bool validateVideoRequestAndSetError(const ofxStableDiffusionVideoRequest& request);
 	void clearOutputState();
+	ofxStableDiffusionContextSettings captureContextSettingsNoLock() const;
+	ofxStableDiffusionUpscalerSettings captureUpscalerSettingsNoLock() const;
 	void setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::Unknown);
 	void setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage);
 	void clearLastError();
-	void captureImageResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
-	void captureVideoResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
-	void applyImageRanking(std::vector<ofxStableDiffusionImageFrame>& frames, ofxStableDiffusionResult& result);
+	void captureImageResults(
+		sd_image_t* images,
+		int count,
+		int64_t seedValue,
+		float elapsedMs,
+		ofxStableDiffusionTask task,
+		const ofxStableDiffusionImageRequest& request,
+		const ofxSdImageRankCallback& rankCallback);
+	void captureVideoResults(
+		sd_image_t* images,
+		int count,
+		int64_t seedValue,
+		const std::vector<int64_t>& frameSeeds,
+		const std::vector<ofxStableDiffusionGenerationParameters>& frameGeneration,
+		float elapsedMs,
+		ofxStableDiffusionTask task,
+		const ofxStableDiffusionVideoRequest& request);
+	void applyImageRanking(
+		std::vector<ofxStableDiffusionImageFrame>& frames,
+		ofxStableDiffusionResult& result,
+		const ofxStableDiffusionImageRequest& request,
+		const ofxSdImageRankCallback& rankCallback);
 	std::vector<sd_image_t> buildOutputImageViews(const ofxStableDiffusionResult& result) const;
 	ofPixels makePixelsCopy(const sd_image_t& image) const;
 
 	ofxStableDiffusionTask activeTask = ofxStableDiffusionTask::None;
-	ofxStableDiffusionImageRequest currentImageRequest;
 	ofxStableDiffusionImageMode imageMode = ofxStableDiffusionImageMode::TextToImage;
 	ofxStableDiffusionImageSelectionMode imageSelectionMode =
 		ofxStableDiffusionImageSelectionMode::KeepOrder;
@@ -286,5 +314,6 @@ private:
 	std::vector<int64_t> seedHistory;
 	static constexpr std::size_t maxSeedHistorySize = 20;
 	uint64_t taskStartMicros = 0;
+	stableDiffusionThread::OwnedImage loadedInputImage;
 	mutable std::mutex stateMutex;
 };

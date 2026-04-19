@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Optional `ofxStableDiffusionHoloscanBridge` scaffolding for live `frame -> conditioning -> diffusion -> preview` workflows, designed as an addon-side bridge instead of a hard Holoscan dependency.
+- A small example-side `Holoscan Bridge` panel for starting/stopping the bridge MVP, reusing current prompts, submitting the loaded image, and previewing the most recent bridge result.
+
 ## 1.2.0 - 2026-04-17
 
 ### Added

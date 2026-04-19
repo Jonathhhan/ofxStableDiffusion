@@ -29,6 +29,7 @@ The addon is now structured more like a production addon:
 - Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
 - ESRGAN upscaling support
 - Progress callbacks for diffusion steps
+- Optional `ofxStableDiffusionHoloscanBridge` scaffold for live `frame -> conditioning -> diffusion -> preview` pipelines, with a clean fallback path when Holoscan is not installed yet
 - Legacy entry points still available for wrapper-level migration
 - Standalone native runtime management instead of sharing `ggml` binaries across addons
 
@@ -153,6 +154,12 @@ to migrate immediately.
 ## Video Behavior
 
 Video generation returns owned frames through `ofxStableDiffusionVideoClip`.
+
+Animated requests can also drive per-frame prompt interpolation, parameter
+animation, and seed sequencing through `ofxStableDiffusionVideoRequest::animationSettings`.
+Each returned frame now carries the prompt / negative prompt / CFG / strength /
+seed values that were actually used, and clips can export both PNG sequences and
+JSON metadata.
 
 Supported playback/presentation modes:
 
@@ -309,7 +316,10 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 - progress/error status
 - busy-state gating
 - video-mode selection
-- frame export for generated clips
+- a small `Holoscan Bridge` section for the new bridge MVP, including prompt handoff, loaded-image submission, and inline bridge preview
+- frame export plus JSON metadata for generated clips
+- optional end-frame morphing
+- prompt morph / seed-sequence animation controls
 
 ## Troubleshooting
 

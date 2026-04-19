@@ -18,6 +18,33 @@ bool containsKeyword(const std::string& haystack, const std::string& needle) {
 	return haystack.find(needle) != std::string::npos;
 }
 
+bool loadImageFile(
+	const std::string& path,
+	int width,
+	int height,
+	ofImage& targetImage,
+	ofPixels& targetPixels,
+	sd_image_t& targetSdImage) {
+	ofFile file(path);
+	const std::string extension = ofToUpper(file.getExtension());
+	if (extension != "JPG" && extension != "JPEG" && extension != "PNG") {
+		return false;
+	}
+
+	if (!targetImage.load(path)) {
+		return false;
+	}
+	targetImage.resize(width, height);
+	targetPixels = targetImage.getPixels();
+	targetSdImage = {
+		static_cast<uint32_t>(targetPixels.getWidth()),
+		static_cast<uint32_t>(targetPixels.getHeight()),
+		static_cast<uint32_t>(targetPixels.getNumChannels()),
+		targetPixels.getData()
+	};
+	return true;
+}
+
 float computeBrightnessScore(const ofPixels& pixels) {
 	if (!pixels.isAllocated() || pixels.getNumChannels() < 3) {
 		return 0.0f;
@@ -73,6 +100,32 @@ float computeHeuristicPromptScore(const std::string& rankingPrompt, const ofPixe
 	return score;
 }
 
+int InputTextResizeCallback(ImGuiInputTextCallbackData* data) {
+	if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+		std::string* str = static_cast<std::string*>(data->UserData);
+		IM_ASSERT(data->Buf == str->c_str());
+		str->resize(data->BufTextLen);
+		data->Buf = str->data();
+	}
+	return 0;
+}
+
+bool InputTextMultilineString(
+	const char* label,
+	std::string* value,
+	const ImVec2& size = ImVec2(0, 0),
+	ImGuiInputTextFlags flags = 0) {
+	IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
+	return ImGui::InputTextMultiline(
+		label,
+		(char*)value->c_str(),
+		value->capacity() + 1,
+		size,
+		flags | ImGuiInputTextFlags_CallbackResize,
+		InputTextResizeCallback,
+		value);
+}
+
 } // namespace
 
 std::vector<std::pair<std::string, std::string>> ofApp::listEmbeddingFiles() const {
@@ -92,6 +145,23 @@ std::vector<std::pair<std::string, std::string>> ofApp::listEmbeddingFiles() con
 		out.emplace_back(f.getBaseName(), f.getAbsolutePath());
 	}
 	return out;
+}
+
+bool ofApp::loadImageIntoSlot(
+	const std::string& dialogTitle,
+	ofImage& targetImage,
+	ofPixels& targetPixels,
+	sd_image_t& targetSdImage,
+	std::string& targetName) {
+	ofFileDialogResult result = ofSystemLoadDialog(dialogTitle, false, "");
+	if (!result.bSuccess) {
+		return false;
+	}
+	if (!loadImageFile(result.getPath(), width, height, targetImage, targetPixels, targetSdImage)) {
+		return false;
+	}
+	targetName = result.getName();
+	return true;
 }
 
 std::vector<std::pair<std::string, std::string>> ofApp::listLoraFiles() const {
@@ -130,6 +200,87 @@ void ofApp::clearLoras() {
 	stableDiffusion.setLoras(loras);
 }
 
+void ofApp::setupHoloscanBridge() {
+	holoscanPrompt = prompt;
+	holoscanNegativePrompt = negativePrompt;
+	ofxStableDiffusionHoloscanSettings settings;
+	settings.enabled = false;
+	settings.useEventScheduler = true;
+	settings.workerThreads = 2;
+	holoscanBridgeEnabled = holoscanBridge.setup(&stableDiffusion, settings);
+	if (holoscanBridgeEnabled) {
+		holoscanStatus = holoscanBridge.isHoloscanAvailable()
+			? "Holoscan bridge ready. SDK headers were detected."
+			: "Holoscan bridge ready in fallback mode. Install Holoscan later to replace the internal MVP scheduler.";
+	} else {
+		holoscanStatus = holoscanBridge.getLastError();
+	}
+}
+
+void ofApp::drawHoloscanBridgeSection() {
+	if (!ImGui::TreeNodeEx("Holoscan Bridge", ImGuiStyleVar_WindowPadding)) {
+		return;
+	}
+
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::TextWrapped(
+		"This MVP keeps a live frame -> conditioning -> diffusion -> preview lane behind an optional Holoscan-oriented bridge.");
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::Text("Status: %s", holoscanStatus.empty() ? "Idle" : holoscanStatus.c_str());
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::Checkbox("Use current prompt fields", &holoscanBridgeUseCurrentPrompts);
+	if (holoscanBridgeUseCurrentPrompts) {
+		holoscanPrompt = prompt;
+		holoscanNegativePrompt = negativePrompt;
+	}
+	InputTextMultilineString(
+		"Bridge Prompt",
+		&holoscanPrompt,
+		ImVec2(512, 70),
+		ImGuiInputTextFlags_CallbackResize);
+	ImGui::Dummy(ImVec2(0, 10));
+	InputTextMultilineString(
+		"Bridge Negative",
+		&holoscanNegativePrompt,
+		ImVec2(512, 50),
+		ImGuiInputTextFlags_CallbackResize);
+	ImGui::Dummy(ImVec2(0, 10));
+	if (!holoscanBridgeRunning) {
+		if (ImGui::Button("Start Bridge")) {
+			holoscanBridge.submitPrompt(holoscanPrompt, holoscanNegativePrompt);
+			holoscanBridgeRunning = holoscanBridge.startImagePipeline();
+			holoscanStatus = holoscanBridgeRunning
+				? "Bridge pipeline started."
+				: holoscanBridge.getLastError();
+		}
+	} else {
+		if (ImGui::Button("Stop Bridge")) {
+			holoscanBridge.stop();
+			holoscanBridgeRunning = false;
+			holoscanStatus = "Bridge pipeline stopped.";
+		}
+	}
+	ImGui::SameLine(0, 10);
+	if (ImGui::Button("Send Loaded Image")) {
+		holoscanBridge.submitPrompt(holoscanPrompt, holoscanNegativePrompt);
+		if (pixels.isAllocated()) {
+			holoscanBridge.submitFrame(pixels, ofGetElapsedTimef(), imageName.empty() ? "loaded-image" : imageName);
+			holoscanStatus = "Queued loaded image for bridge processing.";
+		} else {
+			holoscanStatus = "Load an input image first.";
+		}
+	}
+	ImGui::Dummy(ImVec2(0, 10));
+	if (holoscanBridge.hasPreviewFrame()) {
+		ImGui::Image(
+			(ImTextureID)(uintptr_t)holoscanBridge.getPreviewTexture().getTextureData().textureID,
+			ImVec2(192, 192));
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Text("Completed bridge frames: %d", holoscanCompletedFrames);
+	}
+	ImGui::TreePop();
+}
+
 //--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
@@ -145,6 +296,7 @@ void ofApp::setup() {
 	loraModelDir = ""; // "data/models/lora";
 	vaePath = ""; // "data/models/vae/vae.safetensors";
 	prompt = "animal with futuristic clothes"; // "man img, man with futuristic clothes";
+	promptB = "animal with elegant retro-futuristic clothes";
 	instruction = "edit the source image so the subject feels more futuristic while keeping the composition readable";
 	rankingPrompt = "bright futuristic vivid cinematic";
 	esrganPath = ""; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth"; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
@@ -178,6 +330,7 @@ void ofApp::setup() {
 	sampleMethod = "DPMPP2Mv2_SAMPLE_METHOD";
 	sampleMethodEnum = DPMPP2Mv2_SAMPLE_METHOD;
 	videoMode = "Standard";
+	interpolationMode = "Smooth";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
@@ -186,6 +339,10 @@ void ofApp::setup() {
 	videoFrames = 6;
 	videoFps = 6;
 	vaceStrength = 1.0f;
+	enablePromptInterpolation = false;
+	useSeedSequence = false;
+	useEndFrame = false;
+	seedIncrement = 1;
 	isPlaying = false;
 	currentFrame = 0;
 	totalVideoFrames = 0;
@@ -231,6 +388,10 @@ void ofApp::setup() {
 	settings.keepControlNetCpu = keepControlNetCpu;
 	settings.keepVaeOnCpu = keepVaeOnCpu;
 	stableDiffusion.newSdCtx(settings);
+	applyRecommendedImageParameters();
+	applyRecommendedVideoParameters();
+	clampCurrentParametersToProfiles();
+	setupHoloscanBridge();
 
 	// Initial embedding enumeration (best-effort).
 	auto embeds = stableDiffusion.listEmbeddings();
@@ -240,6 +401,20 @@ void ofApp::setup() {
 
 //--------------------------------------------------------------
 void ofApp::update() {
+	if (holoscanBridgeRunning) {
+		holoscanBridge.update();
+		auto completedFrames = holoscanBridge.consumeFinishedImages();
+		if (!completedFrames.empty()) {
+			holoscanCompletedFrames += static_cast<int>(completedFrames.size());
+			holoscanStatus =
+				"Completed " + ofToString(holoscanCompletedFrames) + " bridge frames.";
+		}
+		const std::string bridgeError = holoscanBridge.getLastError();
+		if (!bridgeError.empty()) {
+			holoscanStatus = bridgeError;
+		}
+	}
+
 	if (stableDiffusion.isDiffused()) {
 		outputImages = stableDiffusion.returnImages();
 		if (isImageToVideo) {
@@ -433,6 +608,7 @@ void ofApp::draw() {
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
+		const auto capabilities = stableDiffusion.getCapabilities();
 		if (isBusy) {
 			ImGui::BeginDisabled();
 		}
@@ -472,6 +648,9 @@ void ofApp::draw() {
 				settings.keepControlNetCpu = keepControlNetCpu;
 				settings.keepVaeOnCpu = keepVaeOnCpu;
 				stableDiffusion.newSdCtx(settings);
+				applyRecommendedImageParameters();
+				applyRecommendedVideoParameters();
+				clampCurrentParametersToProfiles();
 			}
 		}
 		ImGui::SameLine(0, 5);
@@ -486,6 +665,8 @@ void ofApp::draw() {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Text("Progress %d / %d (%.2fs)", progressStep, progressSteps, progressTime);
 		}
+		ImGui::Dummy(ImVec2(0, 10));
+		drawHoloscanBridgeSection();
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Image Mode", imageMode, ImGuiComboFlags_NoArrowButton)) {
 			for (int n = 0; n < IM_ARRAYSIZE(imageModeArray); n++) {
@@ -542,6 +723,30 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("Generate Video", &isImageToVideo);
+		if (ImGui::IsItemEdited()) {
+			if (isImageToVideo) {
+				applyRecommendedVideoParameters();
+			} else {
+				applyRecommendedImageParameters();
+			}
+			clampCurrentParametersToProfiles();
+		}
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Text(
+			"Model Family: %s",
+			ofxStableDiffusionModelFamilyLabel(capabilities.modelFamily));
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::TextWrapped(
+			"%s",
+			isImageToVideo ? videoParameterProfile.summary : imageParameterProfile.summary);
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button(isImageToVideo ? "Apply Recommended Video Tuning" : "Apply Recommended Image Tuning")) {
+			if (isImageToVideo) {
+				applyRecommendedVideoParameters();
+			} else {
+				applyRecommendedImageParameters();
+			}
+		}
 		if (isInstructImage) {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::TextWrapped("InstructImage uses the prompt as overall target context and the instruction field as the concrete edit request.");
@@ -551,6 +756,9 @@ void ofApp::draw() {
 		} else if (imageModeEnum == ofxStableDiffusionImageMode::Restyle) {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::TextWrapped("Restyle pushes the source image further toward the prompt aesthetic.");
+		} else if (imageModeEnum == ofxStableDiffusionImageMode::Inpainting) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TextWrapped("Inpainting uses the source image plus a mask image. White areas are repainted and black areas are preserved.");
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
@@ -572,24 +780,8 @@ void ofApp::draw() {
 		if (usesInputImageMode() || isImageToVideo) {
 			ImGui::Dummy(ImVec2(0, 10));
 			if (ImGui::Button("Load Image")) {
-				ofFileDialogResult result = ofSystemLoadDialog("Load Image", false, "");
-				if (result.bSuccess) {
-					imageName = result.getName();
-					ofFile file(result.getPath());
-					string fileExtension = ofToUpper(file.getExtension());
-					if (fileExtension == "JPG" || fileExtension == "JPEG" || fileExtension == "PNG") {
-						image.load(result.getPath());
-
-
-						fbo.begin();
-						image.draw(0, 0, width, height);
-						fbo.end();
-						fbo.getTexture().readToPixels(pixels);
-						inputImage = { (uint32_t)width,
-						  (uint32_t)height,
-						  3,
-						  pixels.getData() };
-					}
+				if (loadImageIntoSlot("Load Image", image, pixels, inputImage, imageName)) {
+					allocate();
 				}
 			}
 			ImGui::SameLine(0, 5);
@@ -597,13 +789,68 @@ void ofApp::draw() {
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
 		}
+		if (imageModeEnum == ofxStableDiffusionImageMode::Inpainting) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("Use Mask", &useMaskGuide);
+			if (useMaskGuide) {
+				ImGui::Dummy(ImVec2(0, 10));
+				if (ImGui::Button("Load Mask")) {
+					loadImageIntoSlot("Load Mask Image", maskGuideImage, maskGuidePixels, maskGuideInput, maskImageName);
+				}
+				ImGui::SameLine(0, 5);
+				ImGui::Text("%s", maskImageName.empty() ? "No mask loaded" : maskImageName.c_str());
+				if (maskGuideImage.isAllocated()) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::Image(
+						(ImTextureID)(uintptr_t)maskGuideImage.getTexture().getTextureData().textureID,
+						ImVec2(128, 128));
+				}
+			}
+		}
+		if (!controlNetPath.empty() && !isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("Use Control Image", &useControlGuide);
+			if (useControlGuide) {
+				ImGui::Dummy(ImVec2(0, 10));
+				if (ImGui::Button("Load Control Image")) {
+					loadImageIntoSlot(
+						"Load Control Image",
+						controlGuideImage,
+						controlGuidePixels,
+						controlGuideInput,
+						controlGuideName);
+				}
+				ImGui::SameLine(0, 5);
+				ImGui::Text("%s", controlGuideName.empty() ? "No control image loaded" : controlGuideName.c_str());
+				if (controlGuideImage.isAllocated()) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::Image(
+						(ImTextureID)(uintptr_t)controlGuideImage.getTexture().getTextureData().textureID,
+						ImVec2(128, 128));
+				}
+			}
+		}
 		if (isImageToVideo) {
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderInt("Video Frames", &videoFrames, 1, 16);
+			ImGui::SliderInt(
+				"Video Frames",
+				&videoFrames,
+				videoParameterProfile.minFrameCount,
+				videoParameterProfile.maxFrameCount);
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderInt("FPS", &videoFps, 1, 30);
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderFloat("VACE Strength", &vaceStrength, 0.0f, 1.0f);
+			ImGui::SliderInt(
+				"FPS",
+				&videoFps,
+				videoParameterProfile.minFps,
+				videoParameterProfile.maxFps);
+			if (videoParameterProfile.supportsVaceStrength) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::SliderFloat(
+					"VACE Strength",
+					&vaceStrength,
+					videoParameterProfile.minVaceStrength,
+					videoParameterProfile.maxVaceStrength);
+			}
 			ImGui::Dummy(ImVec2(0, 10));
 			if (ImGui::BeginCombo("Video Mode", videoMode, ImGuiComboFlags_NoArrowButton)) {
 				for (int n = 0; n < IM_ARRAYSIZE(videoModeArray); n++) {
@@ -618,15 +865,88 @@ void ofApp::draw() {
 				}
 				ImGui::EndCombo();
 			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("Prompt Morph", &enablePromptInterpolation);
+			if (enablePromptInterpolation) {
+				ImGui::Dummy(ImVec2(0, 10));
+				Funcs::MyInputTextMultiline(
+					"Prompt B",
+					&promptB,
+					ImVec2(512, 80),
+					ImGuiInputTextFlags_CallbackResize);
+				ImGui::Dummy(ImVec2(0, 10));
+				if (ImGui::BeginCombo("Interpolation", interpolationMode, ImGuiComboFlags_NoArrowButton)) {
+					for (int n = 0; n < IM_ARRAYSIZE(interpolationModeArray); n++) {
+						const bool is_selected = (interpolationMode == interpolationModeArray[n]);
+						if (ImGui::Selectable(interpolationModeArray[n], is_selected)) {
+							interpolationMode = interpolationModeArray[n];
+							interpolationModeEnum = static_cast<ofxStableDiffusionInterpolationMode>(n);
+						}
+						if (is_selected) {
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+					ImGui::EndCombo();
+				}
+			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("Seed Sequence", &useSeedSequence);
+			if (useSeedSequence) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::InputInt("Seed Increment", &seedIncrement, 1, 10);
+			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("Use End Frame", &useEndFrame);
+			if (useEndFrame) {
+				ImGui::Dummy(ImVec2(0, 10));
+				if (ImGui::Button("Load End Frame")) {
+					ofFileDialogResult result = ofSystemLoadDialog("Load End Frame", false, "");
+					if (result.bSuccess) {
+						endImageName = result.getName();
+						if (endFrameImage.load(result.getPath())) {
+							endFrameImage.resize(width, height);
+							endFramePixels = endFrameImage.getPixels();
+							endInputImage = {
+								static_cast<uint32_t>(endFramePixels.getWidth()),
+								static_cast<uint32_t>(endFramePixels.getHeight()),
+								static_cast<uint32_t>(endFramePixels.getNumChannels()),
+								endFramePixels.getData()
+							};
+						}
+					}
+				}
+				ImGui::SameLine(0, 5);
+				ImGui::Text("%s", endImageName.empty() ? "No end frame loaded" : endImageName.c_str());
+				if (endFrameImage.isAllocated()) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::Image(
+						(ImTextureID)(uintptr_t)endFrameImage.getTexture().getTextureData().textureID,
+						ImVec2(128, 128));
+				}
+			}
 		}
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderInt("Clip Skip Layers", &clipSkip, -1, 33);
+		if (isImageToVideo ? videoParameterProfile.supportsClipSkip : imageParameterProfile.supportsClipSkip) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderInt(
+				"Clip Skip Layers",
+				&clipSkip,
+				isImageToVideo ? videoParameterProfile.minClipSkip : imageParameterProfile.minClipSkip,
+				isImageToVideo ? videoParameterProfile.maxClipSkip : imageParameterProfile.maxClipSkip);
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat("Control Strength", &controlStrength, 0, 2);
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderFloat("CFG Scale", &cfgScale, 0, 20);
+		ImGui::SliderFloat(
+			"CFG Scale",
+			&cfgScale,
+			isImageToVideo ? videoParameterProfile.minCfgScale : imageParameterProfile.minCfgScale,
+			isImageToVideo ? videoParameterProfile.maxCfgScale : imageParameterProfile.maxCfgScale);
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderInt("Sample Steps", &sampleSteps, 1, 50);
+		ImGui::SliderInt(
+			"Sample Steps",
+			&sampleSteps,
+			isImageToVideo ? videoParameterProfile.minSampleSteps : imageParameterProfile.minSampleSteps,
+			isImageToVideo ? videoParameterProfile.maxSampleSteps : imageParameterProfile.maxSampleSteps);
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Width", imageWidth, ImGuiComboFlags_NoArrowButton)) {
 			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
@@ -670,9 +990,14 @@ void ofApp::draw() {
 			}
 			ImGui::EndCombo();
 		}
-		if (usesInputImageMode() || isImageToVideo) {
+		if ((isImageToVideo && videoParameterProfile.maxStrength > videoParameterProfile.minStrength) ||
+			(!isImageToVideo && imageParameterProfile.supportsStrength)) {
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderFloat("Strength", &strength, 0, 1);
+			ImGui::SliderFloat(
+				"Strength",
+				&strength,
+				isImageToVideo ? videoParameterProfile.minStrength : imageParameterProfile.minStrength,
+				isImageToVideo ? videoParameterProfile.maxStrength : imageParameterProfile.maxStrength);
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::InputInt("Seed", &seed, 1, 100);
@@ -698,11 +1023,13 @@ void ofApp::draw() {
 		progressSteps = 0;
 		progressTime = 0.0f;
 		configureExampleRanker();
+		clampCurrentParametersToProfiles();
 		if (isImageToVideo) {
 			isPlaying = false;
 			totalVideoFrames = 0;
 			ofxStableDiffusionVideoRequest request;
 			request.initImage = inputImage;
+			request.endImage = (useEndFrame && endInputImage.data != nullptr) ? endInputImage : sd_image_t{0, 0, 0, nullptr};
 			request.prompt = prompt;
 			request.negativePrompt = negativePrompt;
 			request.clipSkip = clipSkip;
@@ -720,6 +1047,18 @@ void ofApp::draw() {
 				std::distance(std::begin(videoModeArray),
 					std::find(std::begin(videoModeArray), std::end(videoModeArray), videoMode)));
 			request.loras = loras;
+			if (enablePromptInterpolation && !promptB.empty() && videoFrames > 1) {
+				request.animationSettings.enablePromptInterpolation = true;
+				request.animationSettings.promptInterpolationMode = interpolationModeEnum;
+				request.animationSettings.promptKeyframes = {
+					{0, prompt},
+					{videoFrames - 1, promptB}
+				};
+			}
+			if (useSeedSequence) {
+				request.animationSettings.useSeedSequence = true;
+				request.animationSettings.seedIncrement = seedIncrement;
+			}
 			stableDiffusion.generateVideo(request);
 		}
 		else {
@@ -739,7 +1078,14 @@ void ofApp::draw() {
 			request.strength = strength;
 			request.seed = seed;
 			request.batchCount = batchCount;
-			request.controlCond = controlImage;
+			request.maskImage =
+				(imageModeEnum == ofxStableDiffusionImageMode::Inpainting && useMaskGuide && maskGuideInput.data != nullptr) ?
+					maskGuideInput :
+					sd_image_t{0, 0, 0, nullptr};
+			request.controlCond =
+				(useControlGuide && controlGuideInput.data != nullptr) ?
+					&controlGuideInput :
+					nullptr;
 			request.controlStrength = controlStrength;
 			request.styleStrength = styleStrength;
 			request.normalizeInput = normalizeInput;
@@ -764,9 +1110,31 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Save Frames")) {
-			stableDiffusion.saveVideoFrames(
+			stableDiffusion.saveVideoFramesWithMetadata(
 				ofGetTimestampString("output/ofxStableDiffusion-video-%Y-%m-%d-%H-%M-%S"),
-				"frame");
+				"frame",
+				"metadata.json");
+		}
+		const auto clip = stableDiffusion.getVideoClip();
+		if (currentFrame >= 0 && currentFrame < static_cast<int>(clip.frames.size())) {
+			const auto& frame = clip.frames[static_cast<std::size_t>(currentFrame)];
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Text("Seed: %lld", static_cast<long long>(frame.seed));
+			if (!frame.generation.prompt.empty()) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::TextWrapped("Frame Prompt: %s", frame.generation.prompt.c_str());
+			}
+			if (!frame.generation.negativePrompt.empty()) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::TextWrapped("Frame Negative Prompt: %s", frame.generation.negativePrompt.c_str());
+			}
+			if (frame.generation.cfgScale >= 0.0f || frame.generation.strength >= 0.0f) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::Text(
+					"CFG %.2f  Strength %.2f",
+					frame.generation.cfgScale,
+					frame.generation.strength);
+			}
 		}
 	}
 	if (isBusy) {
@@ -820,9 +1188,61 @@ void ofApp::applySelectedImageMode(ofxStableDiffusionImageMode mode) {
 	isTextToImage = (mode == ofxStableDiffusionImageMode::TextToImage);
 	isInstructImage = (mode == ofxStableDiffusionImageMode::InstructImage);
 	stableDiffusion.setImageGenerationMode(mode);
-	cfgScale = ofxStableDiffusionDefaultCfgScaleForImageMode(mode);
-	if (usesInputImageMode()) {
-		strength = ofxStableDiffusionDefaultStrengthForImageMode(mode);
+	applyRecommendedImageParameters();
+	clampCurrentParametersToProfiles();
+}
+
+//--------------------------------------------------------------
+void ofApp::applyRecommendedImageParameters() {
+	imageParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
+		stableDiffusion.getContextSettings(),
+		imageModeEnum);
+	cfgScale = imageParameterProfile.defaultCfgScale;
+	sampleSteps = imageParameterProfile.defaultSampleSteps;
+	clipSkip = imageParameterProfile.defaultClipSkip;
+	if (imageParameterProfile.supportsStrength) {
+		strength = imageParameterProfile.defaultStrength;
+	}
+}
+
+//--------------------------------------------------------------
+void ofApp::applyRecommendedVideoParameters() {
+	videoParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveVideoProfile(
+		stableDiffusion.getContextSettings());
+	cfgScale = videoParameterProfile.defaultCfgScale;
+	sampleSteps = videoParameterProfile.defaultSampleSteps;
+	strength = videoParameterProfile.defaultStrength;
+	clipSkip = videoParameterProfile.defaultClipSkip;
+	videoFrames = videoParameterProfile.defaultFrameCount;
+	videoFps = videoParameterProfile.defaultFps;
+	vaceStrength = videoParameterProfile.defaultVaceStrength;
+}
+
+//--------------------------------------------------------------
+void ofApp::clampCurrentParametersToProfiles() {
+	imageParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
+		stableDiffusion.getContextSettings(),
+		imageModeEnum);
+	videoParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveVideoProfile(
+		stableDiffusion.getContextSettings());
+
+	if (isImageToVideo) {
+		ofxStableDiffusionParameterTuningHelpers::clampVideoParametersToProfile(
+			videoParameterProfile,
+			cfgScale,
+			sampleSteps,
+			strength,
+			clipSkip,
+			vaceStrength,
+			videoFrames,
+			videoFps);
+	} else {
+		ofxStableDiffusionParameterTuningHelpers::clampImageParametersToProfile(
+			imageParameterProfile,
+			cfgScale,
+			sampleSteps,
+			strength,
+			clipSkip);
 	}
 }
 
@@ -888,12 +1308,36 @@ void ofApp::allocate() {
 		fbo.end();
 		fbo.getTexture().readToPixels(pixels);
 		inputImage = { (uint32_t)width, (uint32_t)height, 3, pixels.getData() };
-		delete controlImage;
-		controlImage = NULL;
-		controlImage = new sd_image_t{ (uint32_t)width,
-		  (uint32_t)height,
-		  3,
-		  pixels.getData() };
+	}
+	if (endFrameImage.isAllocated()) {
+		endFrameImage.resize(width, height);
+		endFramePixels = endFrameImage.getPixels();
+		endInputImage = {
+			static_cast<uint32_t>(endFramePixels.getWidth()),
+			static_cast<uint32_t>(endFramePixels.getHeight()),
+			static_cast<uint32_t>(endFramePixels.getNumChannels()),
+			endFramePixels.getData()
+		};
+	}
+	if (maskGuideImage.isAllocated()) {
+		maskGuideImage.resize(width, height);
+		maskGuidePixels = maskGuideImage.getPixels();
+		maskGuideInput = {
+			static_cast<uint32_t>(maskGuidePixels.getWidth()),
+			static_cast<uint32_t>(maskGuidePixels.getHeight()),
+			static_cast<uint32_t>(maskGuidePixels.getNumChannels()),
+			maskGuidePixels.getData()
+		};
+	}
+	if (controlGuideImage.isAllocated()) {
+		controlGuideImage.resize(width, height);
+		controlGuidePixels = controlGuideImage.getPixels();
+		controlGuideInput = {
+			static_cast<uint32_t>(controlGuidePixels.getWidth()),
+			static_cast<uint32_t>(controlGuidePixels.getHeight()),
+			static_cast<uint32_t>(controlGuidePixels.getNumChannels()),
+			controlGuidePixels.getData()
+		};
 	}
 }
 
