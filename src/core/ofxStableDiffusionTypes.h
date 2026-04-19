@@ -4,9 +4,8 @@
 #include "ofxStableDiffusionEnums.h"
 #include "ofxStableDiffusionImageHelpers.h"
 #include "ofxStableDiffusionRankingHelpers.h"
-#include "../../libs/stable-diffusion/include/stable-diffusion.h"
 #include "../video/ofxStableDiffusionVideoAnimation.h"
-
+#include "../../libs/stable-diffusion/include/stable-diffusion.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -80,6 +79,63 @@ struct ofxStableDiffusionUpscalerSettings {
 	bool enabled = false;
 };
 
+enum class ofxStableDiffusionModelFamily {
+	Unknown = 0,
+	SD1,
+	SD2,
+	SDXL,
+	SD3,
+	FLUX,
+	FLUXFill,
+	FLUXControl,
+	FLUX2,
+	WAN,
+	WANI2V,
+	WANTI2V,
+	WANFLF2V,
+	WANVACE
+};
+
+struct ofxStableDiffusionCapabilities {
+	bool contextConfigured = false;
+	bool runtimeResolved = false;
+	ofxStableDiffusionModelFamily modelFamily = ofxStableDiffusionModelFamily::Unknown;
+	bool textToImage = false;
+	bool imageToImage = false;
+	bool instructImage = false;
+	bool variation = false;
+	bool restyle = false;
+	bool inpainting = false;
+	bool imageToVideo = false;
+	bool videoEndFrame = false;
+	bool videoAnimation = false;
+	bool videoMetadataExport = true;
+	bool lora = false;
+	bool embeddings = false;
+	bool controlNet = false;
+	bool photoMaker = false;
+	bool controlNetConfigured = false;
+	bool photoMakerConfigured = false;
+	bool nativeControlModel = false;
+	bool upscaling = false;
+	bool splitModelPaths = false;
+	bool mmap = true;
+	bool flashAttention = false;
+
+	bool supportsImageMode(ofxStableDiffusionImageMode mode) const {
+		switch (mode) {
+		case ofxStableDiffusionImageMode::TextToImage: return textToImage;
+		case ofxStableDiffusionImageMode::ImageToImage: return imageToImage;
+		case ofxStableDiffusionImageMode::InstructImage: return instructImage;
+		case ofxStableDiffusionImageMode::Variation: return variation;
+		case ofxStableDiffusionImageMode::Restyle: return restyle;
+		case ofxStableDiffusionImageMode::Inpainting: return inpainting;
+		default:
+			return false;
+		}
+	}
+};
+
 struct ofxStableDiffusionImageRequest {
 	ofxStableDiffusionImageMode mode = ofxStableDiffusionImageMode::TextToImage;
 	ofxStableDiffusionImageSelectionMode selectionMode =
@@ -101,7 +157,6 @@ struct ofxStableDiffusionImageRequest {
 	sd_image_t * controlCond = nullptr;
 	float controlStrength = 0.9f;
 	float styleStrength = 20.0f;
-	float maskBlur = 4.0f;  // Blur radius for mask edge softening
 	bool normalizeInput = true;
 	std::string inputIdImagesPath;
 	std::vector<ofxStableDiffusionLora> loras;
@@ -127,23 +182,28 @@ struct ofxStableDiffusionVideoRequest {
 	float vaceStrength = 1.0f;
 	ofxStableDiffusionVideoMode mode = ofxStableDiffusionVideoMode::Standard;
 	std::vector<ofxStableDiffusionLora> loras;
-
-	// Animation settings (optional)
 	ofxStableDiffusionVideoAnimationSettings animationSettings;
 
-	// Helper to check if animation is enabled
 	bool hasAnimation() const {
 		return animationSettings.enablePromptInterpolation ||
-		       animationSettings.enableParameterAnimation ||
-		       animationSettings.useSeedSequence;
+			animationSettings.enableParameterAnimation ||
+			animationSettings.useSeedSequence;
 	}
+};
+
+struct ofxStableDiffusionGenerationParameters {
+	std::string prompt;
+	std::string negativePrompt;
+	float cfgScale = -1.0f;
+	float strength = -1.0f;
 };
 
 struct ofxStableDiffusionImageFrame {
 	ofPixels pixels;
 	int index = 0;
 	int sourceIndex = 0;
-	int seed = -1;
+	int64_t seed = -1;
+	ofxStableDiffusionGenerationParameters generation;
 	bool isSelected = false;
 	ofxStableDiffusionImageScore score;
 
@@ -175,9 +235,15 @@ struct ofxStableDiffusionVideoClip {
 	float durationSeconds() const;
 	int frameIndexForTime(float seconds) const;
 	const ofxStableDiffusionImageFrame * frameForTime(float seconds) const;
+	std::vector<int64_t> seeds() const;
 	bool saveFrameSequence(
 		const std::string & directory,
 		const std::string & prefix = "frame") const;
+	bool saveMetadataJson(const std::string & path) const;
+	bool saveFrameSequenceWithMetadata(
+		const std::string & directory,
+		const std::string & prefix = "frame",
+		const std::string & metadataFilename = "metadata.json") const;
 };
 
 struct ofxStableDiffusionResult {

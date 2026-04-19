@@ -29,6 +29,8 @@ The addon is now structured more like a production addon:
 - Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
 - ESRGAN upscaling support
 - Progress callbacks for diffusion steps
+- `getCapabilities()` plus capability/model-family helpers for UI gating and backend-aware workflows
+- parameter-tuning helpers for image/video defaults, ranges, and clamping by model family
 - Optional `ofxStableDiffusionHoloscanBridge` scaffold for live `frame -> conditioning -> diffusion -> preview` pipelines, with a native Holoscan runtime path on Linux and a clean fallback path when Holoscan is not installed or the platform is not supported yet
 - `ofxStableDiffusionVideoWorkflowHelpers.h` for reusable video-generation presets, request validation, and richer render-manifest export on top of the existing request/result layer
 - Legacy entry points still available for wrapper-level migration
@@ -93,6 +95,26 @@ sd.reloadEmbeddings("data/embeddings");
 
 // List currently discoverable embeddings (name, absolute path)
 const auto embeddings = sd.listEmbeddings();
+
+// Inspect what the currently configured model/runtime can actually do
+const auto capabilities = sd.getCapabilities();
+
+// Save generated video frames plus a JSON sidecar with per-frame prompts/seeds
+sd.saveVideoFramesWithMetadata("output/storyboard", "shot");
+```
+
+The parameter-tuning helpers can also be used outside the wrapper instance when
+you want model-family-aware defaults before building a request:
+
+```cpp
+const auto imageProfile =
+    ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
+        context,
+        ofxStableDiffusionImageMode::Restyle);
+
+request.cfgScale = imageProfile.defaultCfgScale;
+request.sampleSteps = imageProfile.defaultSampleSteps;
+request.strength = imageProfile.defaultStrength;
 ```
 
 ### Error Handling
@@ -164,6 +186,13 @@ animation, and seed sequencing through `ofxStableDiffusionVideoRequest::animatio
 Each returned frame now carries the prompt / negative prompt / CFG / strength /
 seed values that were actually used, and clips can export both PNG sequences and
 JSON metadata.
+
+Useful video-export helpers:
+
+- `ofxStableDiffusionVideoClip::saveMetadataJson(...)`
+- `ofxStableDiffusionVideoClip::saveFrameSequenceWithMetadata(...)`
+- `ofxStableDiffusion::saveVideoMetadata(...)`
+- `ofxStableDiffusion::saveVideoFramesWithMetadata(...)`
 
 Supported playback/presentation modes:
 

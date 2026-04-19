@@ -4,6 +4,10 @@
 
 ### Added
 
+- `getCapabilities()` plus capability/model-family helpers for backend-aware UI gating and workflow routing.
+- Parameter tuning helpers for image/video defaults, range clamping, and model-family-specific guidance.
+- Video clip metadata export helpers on both `ofxStableDiffusionVideoClip` and the wrapper API.
+- Request-owned thread task payloads for image/video generation so background work no longer depends on mutable wrapper state during a run.
 - Optional `ofxStableDiffusionHoloscanBridge` scaffolding for live `frame -> conditioning -> diffusion -> preview` workflows, designed as an addon-side bridge instead of a hard Holoscan dependency.
   - The native Holoscan runtime path is Linux-only for now; other platforms stay on the addon fallback lane until that runtime is validated there.
 - A small example-side `Holoscan Bridge` panel for starting/stopping the bridge MVP, reusing current prompts, submitting the loaded image, and previewing the most recent bridge result.

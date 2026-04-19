@@ -16,9 +16,13 @@ ofxStableDiffusionExample/bin/*.exe
 ofxStableDiffusionExample/bin/*.exp
 ofxStableDiffusionExample/bin/*.lib
 ofxStableDiffusionExample/bin/*.pdb
+ofxStableDiffusionExample/bin/imgui.ini
 ofxStableDiffusionExample/bin/stable-diffusion.dll
 ofxStableDiffusionExample/bin/libs/
 ofxStableDiffusionExample/bin/data/models/
+
+# Native staging output
+libs/stable-diffusion/lib/vs/*.dll
 
 # CMake / test output
 Testing/

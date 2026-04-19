@@ -1,4 +1,5 @@
 #include "ofxStableDiffusion.h"
+#include "core/ofxStableDiffusionCapabilityHelpers.h"
 #include "core/ofxStableDiffusionMemoryHelpers.h"
 
 #include <algorithm>
@@ -15,13 +16,6 @@ void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	} else {
 		fputs(log, stderr);
 		fflush(stderr);
-	}
-}
-
-void sd_progress_cb(int step, int steps, float time, void* data) {
-	auto* self = static_cast<ofxStableDiffusion*>(data);
-	if (self && self->progressCallback) {
-		self->progressCallback(step, steps, time);
 	}
 }
 
@@ -106,13 +100,6 @@ ValidationResult validateStyleStrength(float styleStrength) {
 	return {};
 }
 
-ValidationResult validateMaskBlur(float maskBlur) {
-	if (maskBlur < 0.0f || maskBlur > 256.0f) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Mask blur must be between 0 and 256"};
-	}
-	return {};
-}
-
 ValidationResult validateVaceStrength(float vaceStrength) {
 	if (vaceStrength < 0.0f || vaceStrength > 1.0f) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "VACE strength must be between 0.0 and 1.0"};
@@ -148,7 +135,7 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	const ValidationResult styleResult = validateStyleStrength(request.styleStrength);
 	if (!styleResult.ok()) return styleResult;
 
-	return validateMaskBlur(request.maskBlur);
+	return {};
 }
 
 ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoRequest& request) {
@@ -255,39 +242,19 @@ void ofxStableDiffusion::setUpscalerSettings(const ofxStableDiffusionUpscalerSet
 
 ofxStableDiffusionContextSettings ofxStableDiffusion::getContextSettings() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	ofxStableDiffusionContextSettings settings;
-	settings.modelPath = modelPath;
-	settings.diffusionModelPath = diffusionModelPath;
-	settings.clipLPath = clipLPath;
-	settings.clipGPath = clipGPath;
-	settings.t5xxlPath = t5xxlPath;
-	settings.vaePath = vaePath;
-	settings.taesdPath = taesdPath;
-	settings.controlNetPath = controlNetPathCStr;
-	settings.loraModelDir = loraModelDir;
-	settings.embedDir = embedDirCStr;
-	settings.stackedIdEmbedDir = stackedIdEmbedDirCStr;
-	settings.vaeDecodeOnly = vaeDecodeOnly;
-	settings.vaeTiling = vaeTiling;
-	settings.freeParamsImmediately = freeParamsImmediately;
-	settings.nThreads = nThreads;
-	settings.weightType = wType;
-	settings.rngType = rngType;
-	settings.schedule = schedule;
-	settings.prediction = prediction;
-	settings.loraApplyMode = loraApplyMode;
-	settings.keepClipOnCpu = keepClipOnCpu;
-	settings.keepControlNetCpu = keepControlNetCpu;
-	settings.keepVaeOnCpu = keepVaeOnCpu;
-	settings.offloadParamsToCpu = offloadParamsToCpu;
-	settings.flashAttn = flashAttn;
-	settings.enableMmap = enableMmap;
-	return settings;
+	return captureContextSettingsNoLock();
 }
 
 ofxStableDiffusionUpscalerSettings ofxStableDiffusion::getUpscalerSettings() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	return {esrganPath, nThreads, wType, esrganMultiplier, isESRGAN};
+	return captureUpscalerSettingsNoLock();
+}
+
+ofxStableDiffusionCapabilities ofxStableDiffusion::getCapabilities() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return ofxStableDiffusionCapabilityHelpers::resolveCapabilities(
+		captureContextSettingsNoLock(),
+		captureUpscalerSettingsNoLock());
 }
 
 ofxStableDiffusionResult ofxStableDiffusion::getLastResult() const {
@@ -365,33 +332,51 @@ bool ofxStableDiffusion::saveVideoFrames(const std::string& directory, const std
 	return getVideoClip().saveFrameSequence(directory, prefix);
 }
 
+bool ofxStableDiffusion::saveVideoMetadata(const std::string& path) const {
+	return getVideoClip().saveMetadataJson(path);
+}
+
+bool ofxStableDiffusion::saveVideoFramesWithMetadata(
+	const std::string& directory,
+	const std::string& prefix,
+	const std::string& metadataFilename) const {
+	return getVideoClip().saveFrameSequenceWithMetadata(directory, prefix, metadataFilename);
+}
+
 void ofxStableDiffusion::setVideoGenerationMode(ofxStableDiffusionVideoMode mode) {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	videoMode = mode;
 }
 
 ofxStableDiffusionVideoMode ofxStableDiffusion::getVideoGenerationMode() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	return videoMode;
 }
 
 void ofxStableDiffusion::setImageGenerationMode(ofxStableDiffusionImageMode mode) {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	imageMode = mode;
 	isTextToImage = (mode == ofxStableDiffusionImageMode::TextToImage);
 	isImageToVideo = false;
 }
 
 ofxStableDiffusionImageMode ofxStableDiffusion::getImageGenerationMode() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	return imageMode;
 }
 
 void ofxStableDiffusion::setImageSelectionMode(ofxStableDiffusionImageSelectionMode mode) {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	imageSelectionMode = mode;
 }
 
 ofxStableDiffusionImageSelectionMode ofxStableDiffusion::getImageSelectionMode() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	return imageSelectionMode;
 }
 
 void ofxStableDiffusion::setImageRankCallback(ofxSdImageRankCallback cb) {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	imageRankCallback = cb;
 }
 
@@ -401,11 +386,18 @@ int ofxStableDiffusion::getSelectedImageIndex() const {
 }
 
 void ofxStableDiffusion::loadImage(const ofPixels& pixels) {
-	inputImage = {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	loadedInputImage.assign({
 		static_cast<uint32_t>(pixels.getWidth()),
 		static_cast<uint32_t>(pixels.getHeight()),
 		static_cast<uint32_t>(pixels.getNumChannels()),
 		const_cast<unsigned char*>(pixels.getData())
+	});
+	inputImage = {
+		loadedInputImage.image.width,
+		loadedInputImage.image.height,
+		loadedInputImage.image.channel,
+		loadedInputImage.image.data
 	};
 }
 
@@ -482,12 +474,8 @@ const char* ofxStableDiffusion::getSystemInfo() {
 }
 
 void ofxStableDiffusion::setProgressCallback(ofxSdProgressCallback cb) {
+	std::lock_guard<std::mutex> lock(stateMutex);
 	progressCallback = cb;
-	if (progressCallback) {
-		sd_set_progress_callback(sd_progress_cb, this);
-	} else {
-		sd_set_progress_callback(nullptr, nullptr);
-	}
 }
 
 void ofxStableDiffusion::newSdCtx(const ofxStableDiffusionContextSettings& settings) {
@@ -502,6 +490,13 @@ void ofxStableDiffusion::newSdCtx(const ofxStableDiffusionContextSettings& setti
 	}
 
 	applyContextSettings(settings);
+	stableDiffusionThread::ContextTaskData taskData;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		taskData.contextSettings = captureContextSettingsNoLock();
+		taskData.upscalerSettings = captureUpscalerSettingsNoLock();
+	}
+	thread.prepareContextTask(taskData);
 	thread.startThread();
 }
 
@@ -528,8 +523,12 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
 	ofxStableDiffusionImageRequest request;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		request.selectionMode = imageSelectionMode;
+		request.loras = loras;
+	}
 	request.mode = ofxStableDiffusionImageMode::TextToImage;
-	request.selectionMode = imageSelectionMode;
 	request.prompt = prompt_;
 	request.negativePrompt = negativePrompt_;
 	request.clipSkip = clipSkip_;
@@ -545,7 +544,6 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	request.styleStrength = styleStrength_;
 	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
-	request.loras = loras;
 	generate(request);
 }
 
@@ -567,8 +565,12 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
 	ofxStableDiffusionImageRequest request;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		request.selectionMode = imageSelectionMode;
+		request.loras = loras;
+	}
 	request.mode = ofxStableDiffusionImageMode::ImageToImage;
-	request.selectionMode = imageSelectionMode;
 	request.initImage = initImage_;
 	request.prompt = prompt_;
 	request.negativePrompt = negativePrompt_;
@@ -586,7 +588,6 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	request.styleStrength = styleStrength_;
 	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
-	request.loras = loras;
 	generate(request);
 }
 
@@ -606,8 +607,13 @@ void ofxStableDiffusion::instructImage(sd_image_t initImage_,
 	float controlStrength_,
 	bool normalizeInput_) {
 	ofxStableDiffusionImageRequest request;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		request.selectionMode = imageSelectionMode;
+		request.styleStrength = styleStrength;
+		request.loras = loras;
+	}
 	request.mode = ofxStableDiffusionImageMode::InstructImage;
-	request.selectionMode = imageSelectionMode;
 	request.initImage = initImage_;
 	request.prompt = instruction_;
 	request.instruction = instruction_;
@@ -623,9 +629,7 @@ void ofxStableDiffusion::instructImage(sd_image_t initImage_,
 	request.batchCount = batchCount_;
 	request.controlCond = controlCond_;
 	request.controlStrength = controlStrength_;
-	request.styleStrength = styleStrength;
 	request.normalizeInput = normalizeInput_;
-	request.loras = loras;
 	generate(request);
 }
 
@@ -640,10 +644,16 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 	float strength_,
 	int64_t seed_) {
 	ofxStableDiffusionVideoRequest request;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		request.prompt = prompt;
+		request.negativePrompt = negativePrompt;
+		request.clipSkip = clipSkip;
+		request.vaceStrength = vaceStrength;
+		request.mode = videoMode;
+		request.loras = loras;
+	}
 	request.initImage = initImage_;
-	request.prompt = prompt;
-	request.negativePrompt = negativePrompt;
-	request.clipSkip = clipSkip;
 	request.width = width_;
 	request.height = height_;
 	request.frameCount = videoFrames_;
@@ -653,20 +663,22 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 	request.sampleSteps = sampleSteps_;
 	request.strength = strength_;
 	request.seed = seed_;
-	request.vaceStrength = vaceStrength;
-	request.mode = videoMode;
-	request.loras = loras;
 	generateVideo(request);
 }
 
 void ofxStableDiffusion::newUpscalerCtx(const std::string& esrganPath_,
 	int nThreads_,
 	enum sd_type_t wType_) {
+	int requestedMultiplier = 4;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		requestedMultiplier = esrganMultiplier;
+	}
 	const ofxStableDiffusionUpscalerSettings requested{
 		esrganPath_,
 		nThreads_,
 		wType_,
-		esrganMultiplier,
+		requestedMultiplier,
 		true
 	};
 
@@ -791,6 +803,41 @@ bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	return true;
 }
 
+ofxStableDiffusionContextSettings ofxStableDiffusion::captureContextSettingsNoLock() const {
+	ofxStableDiffusionContextSettings settings;
+	settings.modelPath = modelPath;
+	settings.diffusionModelPath = diffusionModelPath;
+	settings.clipLPath = clipLPath;
+	settings.clipGPath = clipGPath;
+	settings.t5xxlPath = t5xxlPath;
+	settings.vaePath = vaePath;
+	settings.taesdPath = taesdPath;
+	settings.controlNetPath = controlNetPathCStr;
+	settings.loraModelDir = loraModelDir;
+	settings.embedDir = embedDirCStr;
+	settings.stackedIdEmbedDir = stackedIdEmbedDirCStr;
+	settings.vaeDecodeOnly = vaeDecodeOnly;
+	settings.vaeTiling = vaeTiling;
+	settings.freeParamsImmediately = freeParamsImmediately;
+	settings.nThreads = nThreads;
+	settings.weightType = wType;
+	settings.rngType = rngType;
+	settings.schedule = schedule;
+	settings.prediction = prediction;
+	settings.loraApplyMode = loraApplyMode;
+	settings.keepClipOnCpu = keepClipOnCpu;
+	settings.keepControlNetCpu = keepControlNetCpu;
+	settings.keepVaeOnCpu = keepVaeOnCpu;
+	settings.offloadParamsToCpu = offloadParamsToCpu;
+	settings.flashAttn = flashAttn;
+	settings.enableMmap = enableMmap;
+	return settings;
+}
+
+ofxStableDiffusionUpscalerSettings ofxStableDiffusion::captureUpscalerSettingsNoLock() const {
+	return {esrganPath, nThreads, wType, esrganMultiplier, isESRGAN};
+}
+
 void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSettings& settings) {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	modelPath = settings.modelPath;
@@ -823,54 +870,91 @@ void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSet
 }
 
 void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest& request) {
-	currentImageRequest = request;
-	imageMode = request.mode;
-	imageSelectionMode = request.selectionMode;
-	if (request.initImage.data != nullptr) {
-		inputImage = request.initImage;
-	} else if (!ofxStableDiffusionImageModeUsesInputImage(request.mode)) {
-		inputImage = {0, 0, 0, nullptr};
+	stableDiffusionThread::ImageTaskData taskData;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		taskData.task = activeTask;
+		taskData.contextSettings = captureContextSettingsNoLock();
+		taskData.upscalerSettings = captureUpscalerSettingsNoLock();
+		taskData.request = request;
+		if (request.initImage.data != nullptr) {
+			loadedInputImage.assign(request.initImage);
+			inputImage = loadedInputImage.image;
+		} else if (!ofxStableDiffusionImageModeUsesInputImage(request.mode)) {
+			inputImage = {0, 0, 0, nullptr};
+			loadedInputImage.clear();
+		}
+
+		if (ofxStableDiffusionImageModeUsesInputImage(request.mode) && inputImage.data != nullptr) {
+			taskData.initImage.assign(inputImage);
+		}
+		taskData.maskImage.assign(request.maskImage);
+		if (request.controlCond != nullptr) {
+			taskData.controlImage.assign(*request.controlCond);
+		}
+		taskData.syncViews();
+		taskData.progressCallback = progressCallback;
+		taskData.imageRankCallback = imageRankCallback;
+
+		imageMode = request.mode;
+		imageSelectionMode = request.selectionMode;
+		maskImage = request.maskImage;
+		endImage = {0, 0, 0, nullptr};
+		instruction = request.instruction;
+		prompt = request.prompt;
+		negativePrompt = request.negativePrompt;
+		clipSkip = request.clipSkip;
+		cfgScale = request.cfgScale;
+		width = request.width;
+		height = request.height;
+		sampleMethodEnum = request.sampleMethod;
+		sampleSteps = request.sampleSteps;
+		strength = request.strength;
+		seed = request.seed;
+		batchCount = request.batchCount;
+		controlCond = request.controlCond;
+		controlStrength = request.controlStrength;
+		styleStrength = request.styleStrength;
+		normalizeInput = request.normalizeInput;
+		inputIdImagesPath = request.inputIdImagesPath;
+		loras = request.loras;
 	}
-	maskImage = request.maskImage;
-	endImage = {0, 0, 0, nullptr};
-	instruction = request.instruction;
-	prompt = request.prompt;
-	negativePrompt = request.negativePrompt;
-	clipSkip = request.clipSkip;
-	cfgScale = request.cfgScale;
-	width = request.width;
-	height = request.height;
-	sampleMethodEnum = request.sampleMethod;
-	sampleSteps = request.sampleSteps;
-	strength = request.strength;
-	seed = request.seed;
-	batchCount = request.batchCount;
-	controlCond = request.controlCond;
-	controlStrength = request.controlStrength;
-	styleStrength = request.styleStrength;
-	normalizeInput = request.normalizeInput;
-	inputIdImagesPath = request.inputIdImagesPath;
-	loras = request.loras;
+	thread.prepareImageTask(taskData);
 }
 
 void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
-	inputImage = request.initImage;
-	endImage = request.endImage;
-	prompt = request.prompt;
-	negativePrompt = request.negativePrompt;
-	clipSkip = request.clipSkip;
-	width = request.width;
-	height = request.height;
-	videoFrames = request.frameCount;
-	fps = request.fps;
-	cfgScale = request.cfgScale;
-	sampleMethodEnum = request.sampleMethod;
-	sampleSteps = request.sampleSteps;
-	strength = request.strength;
-	seed = request.seed;
-	vaceStrength = request.vaceStrength;
-	videoMode = request.mode;
-	loras = request.loras;
+	stableDiffusionThread::VideoTaskData taskData;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		taskData.task = activeTask;
+		taskData.contextSettings = captureContextSettingsNoLock();
+		taskData.upscalerSettings = captureUpscalerSettingsNoLock();
+		taskData.request = request;
+		loadedInputImage.assign(request.initImage);
+		inputImage = loadedInputImage.image;
+		taskData.initImage.assign(inputImage);
+		taskData.endImage.assign(request.endImage);
+		taskData.syncViews();
+		taskData.progressCallback = progressCallback;
+
+		endImage = request.endImage;
+		prompt = request.prompt;
+		negativePrompt = request.negativePrompt;
+		clipSkip = request.clipSkip;
+		width = request.width;
+		height = request.height;
+		videoFrames = request.frameCount;
+		fps = request.fps;
+		cfgScale = request.cfgScale;
+		sampleMethodEnum = request.sampleMethod;
+		sampleSteps = request.sampleSteps;
+		strength = request.strength;
+		seed = request.seed;
+		vaceStrength = request.vaceStrength;
+		videoMode = request.mode;
+		loras = request.loras;
+	}
+	thread.prepareVideoTask(taskData);
 }
 
 bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task) {
@@ -882,8 +966,11 @@ bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusio
 		return false;
 	}
 
-	const sd_image_t candidateInputImage =
-		request.initImage.data != nullptr ? request.initImage : inputImage;
+	sd_image_t candidateInputImage = request.initImage;
+	if (candidateInputImage.data == nullptr) {
+		std::lock_guard<std::mutex> lock(stateMutex);
+		candidateInputImage = inputImage;
+	}
 	if (ofxStableDiffusionImageModeUsesInputImage(request.mode) && candidateInputImage.data == nullptr) {
 		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Selected image mode requires an input image");
 		return false;
@@ -977,12 +1064,19 @@ ofPixels ofxStableDiffusion::makePixelsCopy(const sd_image_t& image) const {
 	return pixels;
 }
 
-void ofxStableDiffusion::captureImageResults(sd_image_t* images, int count, int seedValue, float elapsedMs) {
+void ofxStableDiffusion::captureImageResults(
+	sd_image_t* images,
+	int count,
+	int64_t seedValue,
+	float elapsedMs,
+	ofxStableDiffusionTask task,
+	const ofxStableDiffusionImageRequest& request,
+	const ofxSdImageRankCallback& rankCallback) {
 	ofxStableDiffusionResult result;
 	result.success = true;
-	result.task = activeTask;
-	result.imageMode = imageMode;
-	result.selectionMode = imageSelectionMode;
+	result.task = task;
+	result.imageMode = request.mode;
+	result.selectionMode = request.selectionMode;
 	result.elapsedMs = elapsedMs;
 	result.actualSeedUsed = seedValue;
 	result.images.reserve(std::max(0, count));
@@ -992,11 +1086,15 @@ void ofxStableDiffusion::captureImageResults(sd_image_t* images, int count, int 
 		frame.index = i;
 		frame.sourceIndex = i;
 		frame.seed = seedValue;
+		frame.generation.prompt = request.prompt;
+		frame.generation.negativePrompt = request.negativePrompt;
+		frame.generation.cfgScale = request.cfgScale;
+		frame.generation.strength = request.strength;
 		frame.pixels = makePixelsCopy(images[i]);
 		result.images.push_back(std::move(frame));
 	}
 
-	applyImageRanking(result.images, result);
+	applyImageRanking(result.images, result, request, rankCallback);
 
 	{
 		std::lock_guard<std::mutex> lock(stateMutex);
@@ -1013,15 +1111,23 @@ void ofxStableDiffusion::captureImageResults(sd_image_t* images, int count, int 
 	ofxSdReleaseImageArray(images, count);
 }
 
-void ofxStableDiffusion::captureVideoResults(sd_image_t* images, int count, int seedValue, float elapsedMs) {
+void ofxStableDiffusion::captureVideoResults(
+	sd_image_t* images,
+	int count,
+	int64_t seedValue,
+	const std::vector<int64_t>& frameSeeds,
+	const std::vector<ofxStableDiffusionGenerationParameters>& frameGeneration,
+	float elapsedMs,
+	ofxStableDiffusionTask task,
+	const ofxStableDiffusionVideoRequest& request) {
 	ofxStableDiffusionResult result;
 	result.success = true;
-	result.task = activeTask;
+	result.task = task;
 	result.elapsedMs = elapsedMs;
 	result.actualSeedUsed = seedValue;
-	result.video.fps = fps;
+	result.video.fps = request.fps;
 	result.video.sourceFrameCount = count;
-	result.video.mode = videoMode;
+	result.video.mode = request.mode;
 
 	std::vector<ofxStableDiffusionImageFrame> sourceFrames;
 	sourceFrames.reserve(std::max(0, count));
@@ -1029,12 +1135,24 @@ void ofxStableDiffusion::captureVideoResults(sd_image_t* images, int count, int 
 		ofxStableDiffusionImageFrame frame;
 		frame.index = i;
 		frame.sourceIndex = i;
-		frame.seed = seedValue;
+		frame.seed =
+			static_cast<std::size_t>(i) < frameSeeds.size() ?
+				frameSeeds[static_cast<std::size_t>(i)] :
+				seedValue;
+		frame.generation =
+			static_cast<std::size_t>(i) < frameGeneration.size() ?
+				frameGeneration[static_cast<std::size_t>(i)] :
+				ofxStableDiffusionGenerationParameters{
+					request.prompt,
+					request.negativePrompt,
+					request.cfgScale,
+					request.strength
+				};
 		frame.pixels = makePixelsCopy(images[i]);
 		sourceFrames.push_back(std::move(frame));
 	}
 
-	result.video.frames = ofxStableDiffusionBuildVideoFrames(sourceFrames, videoMode);
+	result.video.frames = ofxStableDiffusionBuildVideoFrames(sourceFrames, request.mode);
 
 	{
 		std::lock_guard<std::mutex> lock(stateMutex);
@@ -1051,7 +1169,11 @@ void ofxStableDiffusion::captureVideoResults(sd_image_t* images, int count, int 
 	ofxSdReleaseImageArray(images, count);
 }
 
-void ofxStableDiffusion::applyImageRanking(std::vector<ofxStableDiffusionImageFrame>& frames, ofxStableDiffusionResult& result) {
+void ofxStableDiffusion::applyImageRanking(
+	std::vector<ofxStableDiffusionImageFrame>& frames,
+	ofxStableDiffusionResult& result,
+	const ofxStableDiffusionImageRequest& request,
+	const ofxSdImageRankCallback& rankCallback) {
 	result.rankingApplied = false;
 	result.selectedImageIndex = frames.empty() ? -1 : 0;
 	if (frames.empty()) {
@@ -1062,12 +1184,12 @@ void ofxStableDiffusion::applyImageRanking(std::vector<ofxStableDiffusionImageFr
 		frame.isSelected = false;
 	}
 
-	if (!imageRankCallback) {
+	if (!rankCallback) {
 		frames.front().isSelected = true;
 		return;
 	}
 
-	const std::vector<ofxStableDiffusionImageScore> scores = imageRankCallback(currentImageRequest, frames);
+	const std::vector<ofxStableDiffusionImageScore> scores = rankCallback(request, frames);
 	if (scores.size() != frames.size()) {
 		frames.front().isSelected = true;
 		return;
@@ -1085,15 +1207,15 @@ void ofxStableDiffusion::applyImageRanking(std::vector<ofxStableDiffusionImageFr
 
 	result.rankingApplied = true;
 	const int bestSourceIndex = static_cast<int>(order.front());
-	if (imageSelectionMode == ofxStableDiffusionImageSelectionMode::Rerank ||
-		imageSelectionMode == ofxStableDiffusionImageSelectionMode::BestOnly) {
+	if (request.selectionMode == ofxStableDiffusionImageSelectionMode::Rerank ||
+		request.selectionMode == ofxStableDiffusionImageSelectionMode::BestOnly) {
 		std::vector<ofxStableDiffusionImageFrame> ranked;
 		ranked.reserve(frames.size());
 		for (const std::size_t index : order) {
 			ranked.push_back(frames[index]);
 		}
 		frames = std::move(ranked);
-		if (imageSelectionMode == ofxStableDiffusionImageSelectionMode::BestOnly && !frames.empty()) {
+		if (request.selectionMode == ofxStableDiffusionImageSelectionMode::BestOnly && !frames.empty()) {
 			frames.resize(1);
 		}
 	}

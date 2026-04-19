@@ -41,6 +41,15 @@ const ofxStableDiffusionImageFrame * ofxStableDiffusionVideoClip::frameForTime(f
 	return &frames[static_cast<std::size_t>(index)];
 }
 
+std::vector<int64_t> ofxStableDiffusionVideoClip::seeds() const {
+	std::vector<int64_t> output;
+	output.reserve(frames.size());
+	for (const auto& frame : frames) {
+		output.push_back(frame.seed);
+	}
+	return output;
+}
+
 bool ofxStableDiffusionVideoClip::saveFrameSequence(
 	const std::string & directory,
 	const std::string & prefix) const {
@@ -62,6 +71,56 @@ bool ofxStableDiffusionVideoClip::saveFrameSequence(
 	}
 
 	return true;
+}
+
+bool ofxStableDiffusionVideoClip::saveMetadataJson(const std::string & path) const {
+	if (frames.empty()) {
+		return false;
+	}
+
+	ofJson root;
+	root["fps"] = fps;
+	root["frame_count"] = static_cast<int>(frames.size());
+	root["source_frame_count"] = sourceFrameCount;
+	root["mode"] = ofxStableDiffusionVideoModeName(mode);
+	root["duration_seconds"] = durationSeconds();
+
+	ofJson frameArray = ofJson::array();
+	for (const auto& frame : frames) {
+		ofJson frameJson;
+		frameJson["index"] = frame.index;
+		frameJson["source_index"] = frame.sourceIndex;
+		frameJson["seed"] = frame.seed;
+		frameJson["width"] = frame.width();
+		frameJson["height"] = frame.height();
+		frameJson["channels"] = frame.channels();
+		if (!frame.generation.prompt.empty()) {
+			frameJson["prompt"] = frame.generation.prompt;
+		}
+		if (!frame.generation.negativePrompt.empty()) {
+			frameJson["negative_prompt"] = frame.generation.negativePrompt;
+		}
+		if (frame.generation.cfgScale >= 0.0f) {
+			frameJson["cfg_scale"] = frame.generation.cfgScale;
+		}
+		if (frame.generation.strength >= 0.0f) {
+			frameJson["strength"] = frame.generation.strength;
+		}
+		frameArray.push_back(std::move(frameJson));
+	}
+
+	root["frames"] = std::move(frameArray);
+	return ofSavePrettyJson(path, root);
+}
+
+bool ofxStableDiffusionVideoClip::saveFrameSequenceWithMetadata(
+	const std::string & directory,
+	const std::string & prefix,
+	const std::string & metadataFilename) const {
+	if (!saveFrameSequence(directory, prefix)) {
+		return false;
+	}
+	return saveMetadataJson(ofFilePath::join(directory, metadataFilename));
 }
 
 const char * ofxStableDiffusionTaskLabel(ofxStableDiffusionTask task) {

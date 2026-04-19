@@ -56,6 +56,24 @@ bool expectNear(float actual, float expected, float epsilon, const std::string &
 	return false;
 }
 
+bool expectEqual(const std::string & actual, const std::string & expected, const std::string & label) {
+	if (actual == expected) {
+		return true;
+	}
+
+	std::cerr << "FAIL: " << label << " expected \"" << expected << "\" but got \"" << actual << "\"" << std::endl;
+	return false;
+}
+
+bool expectEqual(int64_t actual, int64_t expected, const std::string & label) {
+	if (actual == expected) {
+		return true;
+	}
+
+	std::cerr << "FAIL: " << label << " expected " << expected << " but got " << actual << std::endl;
+	return false;
+}
+
 } // namespace
 
 int main() {
@@ -129,6 +147,77 @@ int main() {
 	ok &= expect(std::string(ofxStableDiffusionVideoModeName(ofxStableDiffusionVideoMode::Loop)) == "Loop", "loop label");
 	ok &= expect(std::string(ofxStableDiffusionVideoModeName(ofxStableDiffusionVideoMode::PingPong)) == "PingPong", "ping-pong label");
 	ok &= expect(std::string(ofxStableDiffusionVideoModeName(ofxStableDiffusionVideoMode::Boomerang)) == "Boomerang", "boomerang label");
+
+	// Test prompt interpolation helpers
+	const ofxStableDiffusionVideoRequest promptRequest = ofxStableDiffusionCreatePromptInterpolationRequest(
+		{
+			{0, "sunrise city"},
+			{9, "midnight city"}
+		},
+		10,
+		576,
+		1024,
+		ofxStableDiffusionInterpolationMode::Linear);
+	ok &= expect(promptRequest.hasAnimation(), "prompt interpolation request enables animation");
+	ok &= expectEqual(ofxStableDiffusionGetFramePrompt(promptRequest, 0), "sunrise city", "prompt interpolation start");
+	ok &= expectEqual(ofxStableDiffusionGetFramePrompt(promptRequest, 9), "midnight city", "prompt interpolation end");
+	const std::string blendedPrompt = ofxStableDiffusionGetFramePrompt(promptRequest, 4);
+	ok &= expect(blendedPrompt.find("sunrise city") != std::string::npos, "blended prompt includes first keyframe");
+	ok &= expect(blendedPrompt.find("midnight city") != std::string::npos, "blended prompt includes second keyframe");
+	ok &= expect(blendedPrompt.find("AND") != std::string::npos, "blended prompt uses weighted AND syntax");
+
+	// Test parameter animation helpers
+	ofxStableDiffusionVideoRequest parameterRequest = ofxStableDiffusionCreateParameterAnimationRequest(
+		{
+			[] {
+				ofxStableDiffusionKeyframe keyframe(0);
+				keyframe.cfgScale = 3.0f;
+				keyframe.strength = 0.2f;
+				keyframe.prompt = "frame zero";
+				keyframe.negativePrompt = "none";
+				return keyframe;
+			}(),
+			[] {
+				ofxStableDiffusionKeyframe keyframe(10);
+				keyframe.cfgScale = 9.0f;
+				keyframe.strength = 0.8f;
+				keyframe.prompt = "frame ten";
+				keyframe.negativePrompt = "busy";
+				keyframe.seed = 555;
+				return keyframe;
+			}()
+		},
+		11,
+		576,
+		1024,
+		ofxStableDiffusionInterpolationMode::Linear);
+	parameterRequest.prompt = "fallback prompt";
+	parameterRequest.negativePrompt = "fallback negative";
+	parameterRequest.seed = 123;
+	ok &= expect(parameterRequest.hasAnimation(), "parameter animation request enables animation");
+	ok &= expectNear(ofxStableDiffusionGetFrameCfgScale(parameterRequest, 5), 6.0f, 0.0001f, "cfg interpolation midpoint");
+	ok &= expectNear(ofxStableDiffusionGetFrameStrength(parameterRequest, 5), 0.5f, 0.0001f, "strength interpolation midpoint");
+	ok &= expectEqual(ofxStableDiffusionGetFramePrompt(parameterRequest, 5), "frame zero", "keyframed prompt holds previous value");
+	ok &= expectEqual(ofxStableDiffusionGetFrameNegativePrompt(parameterRequest, 10), "busy", "keyframed negative prompt exact match");
+	ok &= expectEqual(ofxStableDiffusionGetFrameSeed(parameterRequest, 10), static_cast<int64_t>(555), "keyframed seed exact match");
+
+	// Test seed sequence helpers and precedence
+	ofxStableDiffusionVideoRequest seedSequenceRequest =
+		ofxStableDiffusionCreateSeedSequenceRequest(100, 4, 3);
+	ok &= expect(seedSequenceRequest.hasAnimation(), "seed sequence request enables animation");
+	ok &= expectEqual(ofxStableDiffusionGetFrameSeed(seedSequenceRequest, 0), static_cast<int64_t>(100), "seed sequence first frame");
+	ok &= expectEqual(ofxStableDiffusionGetFrameSeed(seedSequenceRequest, 3), static_cast<int64_t>(109), "seed sequence last frame");
+
+	seedSequenceRequest.animationSettings.enableParameterAnimation = true;
+	seedSequenceRequest.animationSettings.parameterKeyframes = {
+		[] {
+			ofxStableDiffusionKeyframe keyframe(2);
+			keyframe.seed = 999;
+			return keyframe;
+		}()
+	};
+	ok &= expectEqual(ofxStableDiffusionGetFrameSeed(seedSequenceRequest, 2), static_cast<int64_t>(999), "keyframed seed overrides sequence");
+	ok &= expectEqual(ofxStableDiffusionGetFrameSeed(seedSequenceRequest, 3), static_cast<int64_t>(999), "keyframed seed persists after keyframe");
 
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
