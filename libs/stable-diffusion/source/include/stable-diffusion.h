@@ -35,6 +35,13 @@ enum rng_type_t {
     RNG_TYPE_COUNT
 };
 
+enum sd_backend_t {
+    SD_BACKEND_CUDA,
+    SD_BACKEND_VULKAN,
+    SD_BACKEND_CPU,
+    SD_BACKEND_COUNT
+};
+
 enum sample_method_t {
     EULER_SAMPLE_METHOD,
     EULER_A_SAMPLE_METHOD,
@@ -182,6 +189,7 @@ typedef struct {
     bool free_params_immediately;
     int n_threads;
     enum sd_type_t wtype;
+    enum sd_backend_t backend;
     enum rng_type_t rng_type;
     enum rng_type_t sampler_rng_type;
     enum prediction_t prediction;
@@ -353,6 +361,7 @@ SD_API bool sd_ctx_supports_video_generation(const sd_ctx_t* sd_ctx);
 
 SD_API const char* sd_type_name(enum sd_type_t type);
 SD_API enum sd_type_t str_to_sd_type(const char* str);
+SD_API const char* sd_backend_name(enum sd_backend_t backend);
 SD_API const char* sd_rng_type_name(enum rng_type_t rng_type);
 SD_API enum rng_type_t str_to_rng_type(const char* str);
 SD_API const char* sd_sample_method_name(enum sample_method_t sample_method);

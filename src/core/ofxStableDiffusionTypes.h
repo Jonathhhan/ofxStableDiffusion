@@ -46,6 +46,7 @@ struct ofxStableDiffusionContextSettings {
 	bool freeParamsImmediately = false;
 	int nThreads = -1;
 	sd_type_t weightType = SD_TYPE_F16;
+	sd_backend_t backend = SD_BACKEND_CUDA;
 	rng_type_t rngType = STD_DEFAULT_RNG;
 	scheduler_t schedule = SCHEDULER_COUNT;
 	// Model behaviour

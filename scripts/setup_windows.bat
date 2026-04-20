@@ -14,7 +14,6 @@ REM   --cpu, --cpu-only     Build CPU backend only
 REM   --auto                Auto-detect GPU backends (default)
 REM   --gpu, --cuda         Enable CUDA backend
 REM   --vulkan              Enable Vulkan backend
-REM   --source-release-tag TAG       Override the upstream release tag used for source builds (default: latest release)
 REM   --ggml-release-tag TAG         Override the upstream ggml release tag used for source builds (default: latest release)
 REM   --skip-native         Skip native stable-diffusion build
 REM   --jobs N              Parallel build jobs (default: %NUMBER_OF_PROCESSORS%)
@@ -29,7 +28,6 @@ set "CPU_FLAG="
 set "CUDA_FLAG="
 set "VULKAN_FLAG="
 set "AUTO_FLAG=-Auto"
-set "SOURCE_RELEASE_TAG_FLAG="
 set "GGML_RELEASE_TAG_FLAG="
 set "SKIP_NATIVE_FLAG="
 set "CLEAN_FLAG="
@@ -84,16 +82,6 @@ if /i "%~1"=="--vulkan" (
     shift
     goto parse_args
 )
-if /i "%~1"=="--source-release-tag" (
-    if "%~2"=="" (
-        echo Error: --source-release-tag requires a value.
-        exit /b 1
-    )
-    set "SOURCE_RELEASE_TAG_FLAG=-SourceReleaseTag ""%~2"""
-    shift
-    shift
-    goto parse_args
-)
 if /i "%~1"=="--ggml-release-tag" (
     if "%~2"=="" (
         echo Error: --ggml-release-tag requires a value.
@@ -140,7 +128,6 @@ echo   --cpu, --cpu-only     Build CPU backend only
 echo   --auto                Auto-detect GPU backends ^(default^)
 echo   --gpu, --cuda         Enable CUDA backend
 echo   --vulkan              Enable Vulkan backend
-echo   --source-release-tag TAG       Override the upstream release tag used for source builds ^(default: latest release^)
 echo   --ggml-release-tag TAG         Override the upstream ggml release tag used for source builds ^(default: latest release^)
 echo   --skip-native         Skip native stable-diffusion build
 echo   --jobs N              Parallel build jobs ^(default: %NUMBER_OF_PROCESSORS%^)
@@ -150,7 +137,7 @@ exit /b 0
 
 :done_args
 
-set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %AUTO_FLAG% %SOURCE_RELEASE_TAG_FLAG% %GGML_RELEASE_TAG_FLAG% %SKIP_NATIVE_FLAG% %CLEAN_FLAG%"
+set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %AUTO_FLAG% %GGML_RELEASE_TAG_FLAG% %SKIP_NATIVE_FLAG% %CLEAN_FLAG%"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" %PS_ARGS%
 set "EXIT_CODE=%ERRORLEVEL%"
 endlocal & exit /b %EXIT_CODE%

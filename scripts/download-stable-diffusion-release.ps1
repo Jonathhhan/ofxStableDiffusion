@@ -1,5 +1,4 @@
 param(
-    [string]$ReleaseTag = "",
     [string]$GgmlReleaseTag = "",
     [string]$SourceDir = "",
     [switch]$DryRun
@@ -196,13 +195,13 @@ if ([string]::IsNullOrWhiteSpace($SourceDir)) {
     $SourceDir = Join-Path $addonRoot 'libs\stable-diffusion\source'
 }
 
-$releaseMetadata = Get-ReleaseMetadata -Tag $ReleaseTag
+$releaseMetadata = Get-ReleaseMetadata -Tag ""
 $resolvedTag = $releaseMetadata.tag_name
 $downloadRoot = Join-Path $env:TEMP 'ofxsd-source-release'
 $cloneRoot = Join-Path $downloadRoot ('clone-' + $resolvedTag)
 $git = Require-GitPath
 
-Write-Step "Refreshing stable-diffusion source from the latest release snapshot"
+Write-Step "Refreshing stable-diffusion source from upstream snapshot"
 Write-Host ("    Release tag: {0}" -f $resolvedTag)
 Write-Host ("    Source dir: {0}" -f $SourceDir)
 

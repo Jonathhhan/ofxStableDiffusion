@@ -6,7 +6,6 @@ param(
     [switch]$Vulkan,
     [switch]$Metal,
     [switch]$Auto,
-    [string]$SourceReleaseTag = "",
     [string]$GgmlReleaseTag = "",
     [switch]$Clean,
     [switch]$SkipNative,
@@ -51,9 +50,6 @@ if (-not $SkipNative) {
     }
     if ($Auto) {
         $nativeArgs.Auto = $true
-    }
-    if (-not [string]::IsNullOrWhiteSpace($SourceReleaseTag)) {
-        $nativeArgs.SourceReleaseTag = $SourceReleaseTag
     }
     if (-not [string]::IsNullOrWhiteSpace($GgmlReleaseTag)) {
         $nativeArgs.GgmlReleaseTag = $GgmlReleaseTag

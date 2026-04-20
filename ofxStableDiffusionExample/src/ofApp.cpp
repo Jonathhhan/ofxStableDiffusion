@@ -286,6 +286,58 @@ void ofApp::drawHoloscanBridgeSection() {
 }
 
 //--------------------------------------------------------------
+ofxStableDiffusionContextSettings ofApp::buildContextSettings() const {
+	ofxStableDiffusionContextSettings settings;
+	settings.modelPath = modelPath;
+	settings.diffusionModelPath = diffusionModelPath;
+	settings.clipLPath = clipLPath;
+	settings.clipGPath = clipGPath;
+	settings.t5xxlPath = t5xxlPath;
+	settings.vaePath = vaePath;
+	settings.taesdPath = taesdPath;
+	settings.controlNetPath = controlNetPath;
+	settings.loraModelDir = loraModelDir;
+	settings.embedDir = embedDir;
+	settings.stackedIdEmbedDir = stackedIdEmbedDir;
+	settings.vaeDecodeOnly = vaeDecodeOnly;
+	settings.vaeTiling = vaeTiling;
+	settings.freeParamsImmediately = freeParamsImmediately;
+	settings.nThreads = nThreads;
+	settings.weightType = wType;
+	settings.backend = backendPreference;
+	settings.rngType = rngType;
+	settings.schedule = schedule;
+	settings.keepClipOnCpu = keepClipOnCpu;
+	settings.keepControlNetCpu = keepControlNetCpu;
+	settings.keepVaeOnCpu = keepVaeOnCpu;
+	settings.offloadParamsToCpu = offloadParamsToCpu;
+	return settings;
+}
+
+//--------------------------------------------------------------
+void ofApp::refreshModelContext() {
+	modelName = ofFilePath::getFileName(modelPath.empty() ? diffusionModelPath : modelPath);
+	stableDiffusion.newSdCtx(buildContextSettings());
+	applyRecommendedImageParameters();
+	applyRecommendedVideoParameters();
+	clampCurrentParametersToProfiles();
+}
+
+//--------------------------------------------------------------
+bool ofApp::selectPath(
+	const std::string& dialogTitle,
+	std::string& targetPath,
+	bool folderSelection) {
+	ofFileDialogResult result = ofSystemLoadDialog(dialogTitle, folderSelection, "");
+	if (!result.bSuccess) {
+		return false;
+	}
+
+	targetPath = result.getPath();
+	return true;
+}
+
+//--------------------------------------------------------------
 void ofApp::setup() {
 	ofSetWindowTitle("ofxStableDiffusionExample");
 	ofSetEscapeQuitsApp(false);
@@ -294,6 +346,10 @@ void ofApp::setup() {
 	printf("%s", stableDiffusion.getSystemInfo());
 	modelPath = "data/models/sd_turbo.safetensors";
 	modelName = "sd_turbo.safetensors";
+	diffusionModelPath = "";
+	clipLPath = "";
+	clipGPath = "";
+	t5xxlPath = "";
 	controlNetPath = ""; // "data/models/controlnet/control_v11p_sd15_openpose_2.safetensors";
 	embedDir = "";
 	taesdPath = "";
@@ -310,6 +366,7 @@ void ofApp::setup() {
 	keepClipOnCpu = false;
 	keepControlNetCpu = false;
 	keepVaeOnCpu = false;
+	offloadParamsToCpu = false;
 	styleStrength = 20;
 	normalizeInput = true;
 	width = 512;
@@ -333,6 +390,8 @@ void ofApp::setup() {
 	selectionModeEnum = ofxStableDiffusionImageSelectionMode::KeepOrder;
 	sampleMethod = "DPMPP2Mv2_SAMPLE_METHOD";
 	sampleMethodEnum = DPMPP2Mv2_SAMPLE_METHOD;
+	backendMode = "CUDA";
+	backendPreference = SD_BACKEND_CUDA;
 	videoMode = "Standard";
 	interpolationMode = "Smooth";
 	promptIsEdited = true;
@@ -373,28 +432,7 @@ void ofApp::setup() {
 		progressTime = time;
 	});
 	configureExampleRanker();
-	ofxStableDiffusionContextSettings settings;
-	settings.modelPath = modelPath;
-	settings.vaePath = vaePath;
-	settings.taesdPath = taesdPath;
-	settings.controlNetPath = controlNetPath;
-	settings.loraModelDir = loraModelDir;
-	settings.embedDir = embedDir;
-	settings.stackedIdEmbedDir = stackedIdEmbedDir;
-	settings.vaeDecodeOnly = vaeDecodeOnly;
-	settings.vaeTiling = vaeTiling;
-	settings.freeParamsImmediately = freeParamsImmediately;
-	settings.nThreads = nThreads;
-	settings.weightType = wType;
-	settings.rngType = rngType;
-	settings.schedule = schedule;
-	settings.keepClipOnCpu = keepClipOnCpu;
-	settings.keepControlNetCpu = keepControlNetCpu;
-	settings.keepVaeOnCpu = keepVaeOnCpu;
-	stableDiffusion.newSdCtx(settings);
-	applyRecommendedImageParameters();
-	applyRecommendedVideoParameters();
-	clampCurrentParametersToProfiles();
+	refreshModelContext();
 	setupHoloscanBridge();
 
 	// Initial embedding enumeration (best-effort).
@@ -628,37 +666,98 @@ void ofApp::draw() {
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Button("Load Model")) {
-			ofFileDialogResult result = ofSystemLoadDialog("Load Model", false, "");
-			if (result.bSuccess) {
-				modelPath = result.getPath();
-				modelName = result.getName();
-				ofxStableDiffusionContextSettings settings;
-				settings.modelPath = modelPath;
-				settings.vaePath = vaePath;
-				settings.taesdPath = taesdPath;
-				settings.controlNetPath = controlNetPath;
-				settings.loraModelDir = loraModelDir;
-				settings.embedDir = embedDir;
-				settings.stackedIdEmbedDir = stackedIdEmbedDir;
-				settings.vaeDecodeOnly = vaeDecodeOnly;
-				settings.vaeTiling = vaeTiling;
-				settings.freeParamsImmediately = freeParamsImmediately;
-				settings.nThreads = nThreads;
-				settings.weightType = wType;
-				settings.rngType = rngType;
-				settings.schedule = schedule;
-				settings.keepClipOnCpu = keepClipOnCpu;
-				settings.keepControlNetCpu = keepControlNetCpu;
-				settings.keepVaeOnCpu = keepVaeOnCpu;
-				stableDiffusion.newSdCtx(settings);
-				applyRecommendedImageParameters();
-				applyRecommendedVideoParameters();
-				clampCurrentParametersToProfiles();
+		if (ImGui::Button("Load Main Model")) {
+			if (selectPath("Load Main Model", modelPath)) {
+				modelName = ofFilePath::getFileName(modelPath);
 			}
 		}
 		ImGui::SameLine(0, 5);
-		ImGui::Text(&modelName[0]);
+		ImGui::Text("%s", modelPath.empty() ? "No main model selected" : modelPath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load Diffusion Model")) {
+			selectPath("Load Diffusion Model", diffusionModelPath);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", diffusionModelPath.empty() ? "No diffusion model selected" : diffusionModelPath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load CLIP-L")) {
+			selectPath("Load CLIP-L", clipLPath);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", clipLPath.empty() ? "No CLIP-L selected" : clipLPath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load CLIP-G")) {
+			selectPath("Load CLIP-G", clipGPath);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", clipGPath.empty() ? "No CLIP-G selected" : clipGPath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load UMT5 / T5XXL")) {
+			selectPath("Load UMT5 / T5XXL", t5xxlPath);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", t5xxlPath.empty() ? "No UMT5 / T5XXL selected" : t5xxlPath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load VAE")) {
+			selectPath("Load VAE", vaePath);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", vaePath.empty() ? "No VAE selected" : vaePath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load TAESD")) {
+			if (selectPath("Load TAESD", taesdPath)) {
+				isTAESD = !taesdPath.empty();
+			}
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", taesdPath.empty() ? "No TAESD selected" : taesdPath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load ControlNet")) {
+			selectPath("Load ControlNet", controlNetPath);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", controlNetPath.empty() ? "No ControlNet selected" : controlNetPath.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load Embeddings Dir")) {
+			selectPath("Load Embeddings Directory", embedDir, true);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", embedDir.empty() ? "No embeddings directory selected" : embedDir.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load LoRA Dir")) {
+			selectPath("Load LoRA Directory", loraModelDir, true);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", loraModelDir.empty() ? "No LoRA directory selected" : loraModelDir.c_str());
+		ImGui::Dummy(ImVec2(0, 8));
+		if (ImGui::Button("Load PhotoMaker")) {
+			selectPath("Load PhotoMaker Model", stackedIdEmbedDir);
+		}
+		ImGui::SameLine(0, 5);
+		ImGui::Text("%s", stackedIdEmbedDir.empty() ? "No PhotoMaker model selected" : stackedIdEmbedDir.c_str());
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::BeginCombo("Backend", backendMode, ImGuiComboFlags_NoArrowButton)) {
+			for (int n = 0; n < IM_ARRAYSIZE(backendArray); n++) {
+				const bool is_selected = (backendMode == backendArray[n]);
+				if (ImGui::Selectable(backendArray[n], is_selected)) {
+					backendMode = backendArray[n];
+					backendPreference =
+						n == 0 ? SD_BACKEND_CUDA :
+						n == 1 ? SD_BACKEND_VULKAN :
+						SD_BACKEND_CPU;
+				}
+				if (is_selected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::TextWrapped("CUDA prefers CUDA first and falls back to Vulkan, then CPU if needed.");
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::Button("Load Context")) {
+			refreshModelContext();
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (stableDiffusion.getLastError().empty()) {
 			ImGui::Text("Status: %s", isBusy ? "Running" : "Idle");
@@ -775,6 +874,12 @@ void ofApp::draw() {
 
 			}
 		}
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Checkbox("Offload Params To CPU", &offloadParamsToCpu);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Checkbox("CLIP On CPU", &keepClipOnCpu);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Checkbox("VAE On CPU", &keepVaeOnCpu);
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("VAE Tiling", &vaeTiling)) {
 				if (!isBusy) {

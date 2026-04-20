@@ -8,7 +8,6 @@ param(
     [string]$Generator = "",
     [int]$Jobs = 0,
     [switch]$Clean,
-    [string]$SourceReleaseTag = "",
     [string]$GgmlReleaseTag = "",
     [Alias('Cpu')][switch]$CpuOnly,
     [Alias('Gpu')][switch]$Cuda,
@@ -409,13 +408,13 @@ if (-not $cmake) {
     throw "cmake.exe was not found in PATH."
 }
 
-$releaseMetadata = Get-ReleaseMetadata -Tag $SourceReleaseTag
+$releaseMetadata = Get-ReleaseMetadata -Tag ""
 $resolvedReleaseTag = $releaseMetadata.tag_name
 $downloadRoot = Join-Path $env:TEMP 'ofxsd-source-release'
 $cloneRoot = Join-Path $downloadRoot ('clone-' + $resolvedReleaseTag)
 $git = Require-GitPath
 
-Write-Step "Refreshing stable-diffusion source from release snapshot"
+Write-Step "Refreshing stable-diffusion source from upstream snapshot"
 Write-Host ("    Release tag: {0}" -f $resolvedReleaseTag)
 Write-Host ("    Destination: {0}" -f $SourceDir)
 
@@ -471,7 +470,7 @@ stable-diffusion.cpp source was not found at:
   $SourceDir
 
 Recommended workflow:
-  1. Re-run scripts/build-stable-diffusion.ps1 so it can refresh the latest release snapshot
+  1. Re-run scripts/build-stable-diffusion.ps1 so it can refresh the latest upstream source snapshot
   2. Re-run scripts/build-stable-diffusion.ps1
 
 This addon intentionally keeps stable-diffusion.cpp standalone rather than sharing

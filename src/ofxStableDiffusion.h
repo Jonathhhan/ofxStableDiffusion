@@ -242,6 +242,7 @@ public:
 	int nThreads = -1;
 	int esrganMultiplier = 4;
 	sd_type_t wType = SD_TYPE_COUNT;
+	sd_backend_t backend = SD_BACKEND_CUDA;
 	scheduler_t schedule = SCHEDULER_COUNT;
 	rng_type_t rngType = STD_DEFAULT_RNG;
 	prediction_t prediction = EPS_PRED;

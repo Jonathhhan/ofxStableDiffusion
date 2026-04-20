@@ -38,6 +38,12 @@ class ofApp : public ofBaseApp {
 			std::string& targetName);
 		void setupHoloscanBridge();
 		void drawHoloscanBridgeSection();
+		ofxStableDiffusionContextSettings buildContextSettings() const;
+		void refreshModelContext();
+		bool selectPath(
+			const std::string& dialogTitle,
+			std::string& targetPath,
+			bool folderSelection = false);
 		std::vector<std::pair<std::string, std::string>> listEmbeddingFiles() const;
 		std::vector<std::pair<std::string, std::string>> listLoraFiles() const;
 		void loadAllLoras(float strength = 1.0f);
@@ -77,12 +83,18 @@ class ofApp : public ofBaseApp {
 		const char* selectionMode;
 		const char* sampleMethodArray[8] = {"EULER_A_SAMPLE_METHOD", "EULER_SAMPLE_METHOD", "HEUN_SAMPLE_METHOD", "DPM2_SAMPLE_METHOD", "DPMPP2S_A_SAMPLE_METHOD", "DPMPP2M_SAMPLE_METHOD", "DPMPP2Mv2_SAMPLE_METHOD", "LCM_SAMPLE_METHOD"};
 		const char* sampleMethod;
+		const char* backendArray[3] = {"CUDA", "Vulkan", "CPU"};
+		const char* backendMode;
 		const char* videoModeArray[4] = {"Standard", "Loop", "PingPong", "Boomerang"};
 		const char* videoMode;
 		const char* interpolationModeArray[5] = {"Linear", "Smooth", "EaseIn", "EaseOut", "EaseInOut"};
 		const char* interpolationMode;
 		std::string modelPath;
 		std::string modelName;
+		std::string diffusionModelPath;
+		std::string clipLPath;
+		std::string clipGPath;
+		std::string t5xxlPath;
 		std::string taesdPath;
 		std::string controlNetPath;
 		std::string embedDir;
@@ -102,6 +114,7 @@ class ofApp : public ofBaseApp {
 		bool isFullScreen;
 		bool isTAESD;
 		bool isESRGAN;
+		bool offloadParamsToCpu;
 		bool keepClipOnCpu;
 		bool keepControlNetCpu;
 		bool keepVaeOnCpu;
@@ -110,6 +123,7 @@ class ofApp : public ofBaseApp {
 		int nThreads;
 		int esrganMultiplier;
 		sd_type_t wType;
+		sd_backend_t backendPreference = SD_BACKEND_CUDA;
 		scheduler_t schedule;
 		rng_type_t rngType;
 		std::string controlImagePath;

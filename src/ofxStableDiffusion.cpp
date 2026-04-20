@@ -4,9 +4,12 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <mutex>
 
 namespace {
+
+namespace fs = std::filesystem;
 
 void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	(void)data;
@@ -176,6 +179,117 @@ ValidationResult validateUpscalerSettings(const ofxStableDiffusionUpscalerSettin
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "Upscale multiplier must be between 1 and 8"};
 	}
 	return {};
+}
+
+bool isResolvableModelFile(const fs::path& path) {
+	if (!fs::is_regular_file(path)) {
+		return false;
+	}
+
+	std::string ext = ofToLower(path.extension().string());
+	return ext == ".gguf" ||
+		ext == ".safetensors" ||
+		ext == ".ckpt" ||
+		ext == ".bin" ||
+		ext == ".pth";
+}
+
+void appendUniqueSearchRoot(std::vector<fs::path>& roots, const fs::path& root) {
+	if (root.empty()) {
+		return;
+	}
+
+	const fs::path normalized = root.lexically_normal();
+	if (std::find(roots.begin(), roots.end(), normalized) == roots.end()) {
+		roots.push_back(normalized);
+	}
+}
+
+void appendSearchRootsForModelPath(std::vector<fs::path>& roots, const std::string& modelPath) {
+	if (modelPath.empty()) {
+		return;
+	}
+
+	const fs::path path(modelPath);
+	const fs::path dir = path.has_parent_path() ? path.parent_path() : fs::path();
+	if (dir.empty()) {
+		return;
+	}
+
+	appendUniqueSearchRoot(roots, dir);
+	if (dir.has_parent_path()) {
+		appendUniqueSearchRoot(roots, dir.parent_path());
+	}
+}
+
+std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContextSettings& settings) {
+	std::vector<fs::path> roots;
+	appendSearchRootsForModelPath(roots, settings.diffusionModelPath);
+	appendSearchRootsForModelPath(roots, settings.modelPath);
+	if (roots.empty()) {
+		return "";
+	}
+
+	const std::vector<std::string> subfolders = {"umt5", "t5xxl", "text_encoders"};
+	const std::vector<std::string> preferredNameParts = {"umt5", "t5xxl", "encoder"};
+
+	for (const auto& root : roots) {
+		for (const auto& subfolder : subfolders) {
+			const fs::path candidateDir = root / subfolder;
+			if (!fs::exists(candidateDir) || !fs::is_directory(candidateDir)) {
+				continue;
+			}
+
+			std::vector<fs::path> preferredFiles;
+			std::vector<fs::path> fallbackFiles;
+			for (const auto& entry : fs::directory_iterator(candidateDir)) {
+				const fs::path candidatePath = entry.path();
+				if (!isResolvableModelFile(candidatePath)) {
+					continue;
+				}
+
+				const std::string filename = ofToLower(candidatePath.filename().string());
+				const bool preferred = std::any_of(
+					preferredNameParts.begin(),
+					preferredNameParts.end(),
+					[&filename](const std::string& part) {
+						return filename.find(part) != std::string::npos;
+					});
+
+				if (preferred) {
+					preferredFiles.push_back(candidatePath);
+				} else {
+					fallbackFiles.push_back(candidatePath);
+				}
+			}
+
+			auto byFilename = [](const fs::path& a, const fs::path& b) {
+				return ofToLower(a.filename().string()) < ofToLower(b.filename().string());
+			};
+			std::sort(preferredFiles.begin(), preferredFiles.end(), byFilename);
+			std::sort(fallbackFiles.begin(), fallbackFiles.end(), byFilename);
+
+			if (!preferredFiles.empty()) {
+				return preferredFiles.front().string();
+			}
+			if (!fallbackFiles.empty()) {
+				return fallbackFiles.front().string();
+			}
+		}
+	}
+
+	return "";
+}
+
+ofxStableDiffusionContextSettings resolveContextModelPaths(
+	const ofxStableDiffusionContextSettings& requestedSettings) {
+	ofxStableDiffusionContextSettings resolvedSettings = requestedSettings;
+
+	if (resolvedSettings.t5xxlPath.empty()) {
+		resolvedSettings.t5xxlPath = resolveTextEncoderPathFromSubfolders(resolvedSettings);
+	}
+
+	return resolvedSettings;
 }
 
 } // namespace
@@ -825,6 +939,7 @@ ofxStableDiffusionContextSettings ofxStableDiffusion::captureContextSettingsNoLo
 	settings.freeParamsImmediately = freeParamsImmediately;
 	settings.nThreads = nThreads;
 	settings.weightType = wType;
+	settings.backend = backend;
 	settings.rngType = rngType;
 	settings.schedule = schedule;
 	settings.prediction = prediction;
@@ -843,34 +958,36 @@ ofxStableDiffusionUpscalerSettings ofxStableDiffusion::captureUpscalerSettingsNo
 }
 
 void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSettings& settings) {
+	const ofxStableDiffusionContextSettings resolvedSettings = resolveContextModelPaths(settings);
 	std::lock_guard<std::mutex> lock(stateMutex);
-	modelPath = settings.modelPath;
-	diffusionModelPath = settings.diffusionModelPath;
-	clipLPath = settings.clipLPath;
-	clipGPath = settings.clipGPath;
-	t5xxlPath = settings.t5xxlPath;
+	modelPath = resolvedSettings.modelPath;
+	diffusionModelPath = resolvedSettings.diffusionModelPath;
+	clipLPath = resolvedSettings.clipLPath;
+	clipGPath = resolvedSettings.clipGPath;
+	t5xxlPath = resolvedSettings.t5xxlPath;
 	modelName = ofFilePath::getFileName(modelPath.empty() ? diffusionModelPath : modelPath);
-	vaePath = settings.vaePath;
-	taesdPath = settings.taesdPath;
-	controlNetPathCStr = settings.controlNetPath;
-	loraModelDir = settings.loraModelDir;
-	embedDirCStr = settings.embedDir;
-	stackedIdEmbedDirCStr = settings.stackedIdEmbedDir;
-	vaeDecodeOnly = settings.vaeDecodeOnly;
-	vaeTiling = settings.vaeTiling;
-	freeParamsImmediately = settings.freeParamsImmediately;
-	nThreads = settings.nThreads;
-	wType = settings.weightType;
-	rngType = settings.rngType;
-	schedule = settings.schedule;
-	prediction = settings.prediction;
-	loraApplyMode = settings.loraApplyMode;
-	keepClipOnCpu = settings.keepClipOnCpu;
-	keepControlNetCpu = settings.keepControlNetCpu;
-	keepVaeOnCpu = settings.keepVaeOnCpu;
-	offloadParamsToCpu = settings.offloadParamsToCpu;
-	flashAttn = settings.flashAttn;
-	enableMmap = settings.enableMmap;
+	vaePath = resolvedSettings.vaePath;
+	taesdPath = resolvedSettings.taesdPath;
+	controlNetPathCStr = resolvedSettings.controlNetPath;
+	loraModelDir = resolvedSettings.loraModelDir;
+	embedDirCStr = resolvedSettings.embedDir;
+	stackedIdEmbedDirCStr = resolvedSettings.stackedIdEmbedDir;
+	vaeDecodeOnly = resolvedSettings.vaeDecodeOnly;
+	vaeTiling = resolvedSettings.vaeTiling;
+	freeParamsImmediately = resolvedSettings.freeParamsImmediately;
+	nThreads = resolvedSettings.nThreads;
+	wType = resolvedSettings.weightType;
+	backend = resolvedSettings.backend;
+	rngType = resolvedSettings.rngType;
+	schedule = resolvedSettings.schedule;
+	prediction = resolvedSettings.prediction;
+	loraApplyMode = resolvedSettings.loraApplyMode;
+	keepClipOnCpu = resolvedSettings.keepClipOnCpu;
+	keepControlNetCpu = resolvedSettings.keepControlNetCpu;
+	keepVaeOnCpu = resolvedSettings.keepVaeOnCpu;
+	offloadParamsToCpu = resolvedSettings.offloadParamsToCpu;
+	flashAttn = resolvedSettings.flashAttn;
+	enableMmap = resolvedSettings.enableMmap;
 }
 
 void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest& request) {
