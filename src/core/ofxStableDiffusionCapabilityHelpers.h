@@ -22,6 +22,8 @@ inline const char * ofxStableDiffusionModelFamilyLabel(ofxStableDiffusionModelFa
 	case ofxStableDiffusionModelFamily::WANTI2V: return "WANTI2V";
 	case ofxStableDiffusionModelFamily::WANFLF2V: return "WANFLF2V";
 	case ofxStableDiffusionModelFamily::WANVACE: return "WANVACE";
+	case ofxStableDiffusionModelFamily::SVD: return "SVD";
+	case ofxStableDiffusionModelFamily::AnimateDiff: return "AnimateDiff";
 	case ofxStableDiffusionModelFamily::Unknown:
 	default:
 		return "Unknown";
@@ -90,6 +92,15 @@ inline ofxStableDiffusionModelFamily inferModelFamily(const ofxStableDiffusionCo
 		return containsAny(primary, hints) || containsAny(all, hints);
 	};
 
+	// Check for video-specific models first
+	if (hasHint({"svd", "stable-video-diffusion", "stablevideo"})) {
+		return ofxStableDiffusionModelFamily::SVD;
+	}
+
+	if (hasHint({"animatediff", "animate-diff", "animate_diff", "motion-module", "motion_module"})) {
+		return ofxStableDiffusionModelFamily::AnimateDiff;
+	}
+
 	if (hasHint({"wan"}) || hasHint({"i2v", "ti2v", "flf2v", "vace"})) {
 		if (hasHint({"vace"})) {
 			return ofxStableDiffusionModelFamily::WANVACE;
@@ -151,6 +162,8 @@ inline bool familySupportsImageGeneration(ofxStableDiffusionModelFamily family) 
 	case ofxStableDiffusionModelFamily::WANFLF2V:
 	case ofxStableDiffusionModelFamily::WANVACE:
 	case ofxStableDiffusionModelFamily::WAN:
+	case ofxStableDiffusionModelFamily::SVD:
+	case ofxStableDiffusionModelFamily::AnimateDiff:
 		return false;
 	case ofxStableDiffusionModelFamily::Unknown:
 	default:
@@ -164,6 +177,8 @@ inline bool familySupportsVideo(ofxStableDiffusionModelFamily family) {
 	case ofxStableDiffusionModelFamily::WANTI2V:
 	case ofxStableDiffusionModelFamily::WANFLF2V:
 	case ofxStableDiffusionModelFamily::WANVACE:
+	case ofxStableDiffusionModelFamily::SVD:
+	case ofxStableDiffusionModelFamily::AnimateDiff:
 		return true;
 	default:
 		return false;

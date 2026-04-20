@@ -94,7 +94,9 @@ enum class ofxStableDiffusionModelFamily {
 	WANI2V,
 	WANTI2V,
 	WANFLF2V,
-	WANVACE
+	WANVACE,
+	SVD,           // Stable Video Diffusion
+	AnimateDiff    // AnimateDiff motion models
 };
 
 struct ofxStableDiffusionCapabilities {

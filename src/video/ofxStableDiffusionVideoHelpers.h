@@ -200,7 +200,12 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 	}
 
 	if (request.animationSettings.useSeedSequence && request.seed >= 0) {
-		return request.seed + (static_cast<int64_t>(frameNumber) * request.animationSettings.seedIncrement);
+		return ofxStableDiffusionCalculateSeedWithVariation(
+			request.seed,
+			frameNumber,
+			request.animationSettings.seedVariationMode,
+			request.animationSettings.seedIncrement,
+			request.animationSettings.seedNoiseScale);
 	}
 
 	return request.seed;

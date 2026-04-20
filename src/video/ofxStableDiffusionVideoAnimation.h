@@ -12,7 +12,16 @@ enum class ofxStableDiffusionInterpolationMode {
 	Smooth,
 	EaseIn,
 	EaseOut,
-	EaseInOut
+	EaseInOut,
+	// Advanced easing functions
+	Cubic,
+	Back,
+	Elastic,
+	Bounce,
+	Expo,
+	// Spline-based interpolation
+	CatmullRom,
+	BSpline
 };
 
 struct ofxStableDiffusionPromptKeyframe {
@@ -37,6 +46,12 @@ struct ofxStableDiffusionKeyframe {
 	explicit ofxStableDiffusionKeyframe(int frame) : frameNumber(frame) {}
 };
 
+enum class ofxStableDiffusionSeedVariationMode {
+	Sequential,      // Linear increment (original behavior)
+	Noise,          // Perlin-like pseudo-random variation
+	Random          // True random per frame
+};
+
 struct ofxStableDiffusionVideoAnimationSettings {
 	bool enablePromptInterpolation = false;
 	std::vector<ofxStableDiffusionPromptKeyframe> promptKeyframes;
@@ -48,6 +63,11 @@ struct ofxStableDiffusionVideoAnimationSettings {
 
 	bool useSeedSequence = false;
 	int64_t seedIncrement = 1;
+	ofxStableDiffusionSeedVariationMode seedVariationMode = ofxStableDiffusionSeedVariationMode::Sequential;
+	float seedNoiseScale = 1000.0f;  // Scale for noise-based variation
+
+	// Temporal coherence strength (0.0 = independent frames, 1.0 = maximum coherence)
+	float temporalCoherence = 0.5f;
 };
 
 inline float ofxStableDiffusionClampUnit(float value) {
@@ -71,6 +91,39 @@ inline float ofxStableDiffusionApplyInterpolation(float t, ofxStableDiffusionInt
 			return 4.0f * clamped * clamped * clamped;
 		}
 		return 0.5f * std::pow((2.0f * clamped) - 2.0f, 3.0f) + 1.0f;
+	case ofxStableDiffusionInterpolationMode::Cubic:
+		return clamped * clamped * (3.0f - 2.0f * clamped);
+	case ofxStableDiffusionInterpolationMode::Back: {
+		constexpr float s = 1.70158f;
+		return clamped * clamped * ((s + 1.0f) * clamped - s);
+	}
+	case ofxStableDiffusionInterpolationMode::Elastic: {
+		if (clamped == 0.0f || clamped == 1.0f) return clamped;
+		constexpr float p = 0.3f;
+		const float s = p / 4.0f;
+		return std::pow(2.0f, -10.0f * clamped) * std::sin((clamped - s) * (2.0f * pi) / p) + 1.0f;
+	}
+	case ofxStableDiffusionInterpolationMode::Bounce: {
+		float t2 = 1.0f - clamped;
+		if (t2 < 1.0f / 2.75f) {
+			return 1.0f - (7.5625f * t2 * t2);
+		} else if (t2 < 2.0f / 2.75f) {
+			t2 -= 1.5f / 2.75f;
+			return 1.0f - (7.5625f * t2 * t2 + 0.75f);
+		} else if (t2 < 2.5f / 2.75f) {
+			t2 -= 2.25f / 2.75f;
+			return 1.0f - (7.5625f * t2 * t2 + 0.9375f);
+		} else {
+			t2 -= 2.625f / 2.75f;
+			return 1.0f - (7.5625f * t2 * t2 + 0.984375f);
+		}
+	}
+	case ofxStableDiffusionInterpolationMode::Expo:
+		return clamped == 0.0f ? 0.0f : std::pow(2.0f, 10.0f * (clamped - 1.0f));
+	case ofxStableDiffusionInterpolationMode::CatmullRom:
+	case ofxStableDiffusionInterpolationMode::BSpline:
+		// These require multiple keyframes, handled in spline interpolation functions
+		return clamped;
 	default:
 		return clamped;
 	}
@@ -261,4 +314,59 @@ inline int64_t ofxStableDiffusionGetKeyframedSeed(
 		return bestNext->seed;
 	}
 	return -1;
+}
+
+// Simple pseudo-random noise function for seed variation
+inline float ofxStableDiffusionSimpleNoise(float x) {
+	// Simple hash-based noise
+	const int32_t ix = static_cast<int32_t>(std::floor(x));
+	const float fx = x - static_cast<float>(ix);
+
+	// Hash function
+	auto hash = [](int32_t n) -> float {
+		n = (n << 13) ^ n;
+		n = n * (n * n * 15731 + 789221) + 1376312589;
+		return static_cast<float>(n & 0x7fffffff) / 2147483648.0f;
+	};
+
+	const float v1 = hash(ix);
+	const float v2 = hash(ix + 1);
+
+	// Smoothstep interpolation
+	const float t = fx * fx * (3.0f - 2.0f * fx);
+	return v1 + (v2 - v1) * t;
+}
+
+// Calculate seed with variation mode support
+inline int64_t ofxStableDiffusionCalculateSeedWithVariation(
+	int64_t baseSeed,
+	int frameNumber,
+	ofxStableDiffusionSeedVariationMode mode,
+	int64_t seedIncrement,
+	float noiseScale) {
+
+	if (baseSeed < 0) {
+		return -1;
+	}
+
+	switch (mode) {
+	case ofxStableDiffusionSeedVariationMode::Sequential:
+		return baseSeed + (static_cast<int64_t>(frameNumber) * seedIncrement);
+
+	case ofxStableDiffusionSeedVariationMode::Noise: {
+		const float noiseValue = ofxStableDiffusionSimpleNoise(static_cast<float>(frameNumber) * 0.1f);
+		const int64_t offset = static_cast<int64_t>(noiseValue * noiseScale);
+		return baseSeed + offset;
+	}
+
+	case ofxStableDiffusionSeedVariationMode::Random: {
+		// Use frame number as seed for reproducible "random" values
+		std::hash<int> hasher;
+		const size_t frameHash = hasher(frameNumber);
+		return baseSeed + static_cast<int64_t>(frameHash % 10000);
+	}
+
+	default:
+		return baseSeed + (static_cast<int64_t>(frameNumber) * seedIncrement);
+	}
 }

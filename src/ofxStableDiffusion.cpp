@@ -145,8 +145,8 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 	const ValidationResult dimResult = validateDimensions(request.width, request.height);
 	if (!dimResult.ok()) return dimResult;
 
-	if (request.frameCount <= 0 || request.frameCount > 100) {
-		return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100"};
+	if (request.frameCount <= 0 || request.frameCount > 300) {
+		return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 300"};
 	}
 
 	if (request.fps <= 0 || request.fps > 120) {
