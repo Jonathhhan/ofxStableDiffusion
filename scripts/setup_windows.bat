@@ -15,7 +15,8 @@ REM   --cpu, --cpu-only     Build CPU backend only
 REM   --auto                Auto-detect GPU backends (default)
 REM   --gpu, --cuda         Enable CUDA backend
 REM   --vulkan              Enable Vulkan backend
-REM   --use-release         Stage a pinned upstream Windows release instead of building from source
+REM   --source-release-tag TAG       Override the upstream release tag used for source builds (default: latest release)
+REM   --use-release         Stage the latest upstream Windows release instead of building from source
 REM   --release-tag TAG     Override the upstream GitHub release tag used with --use-release
 REM   --release-variant V   Choose auto, cpu, noavx, avx, avx2, avx512, or cuda12 for --use-release
 REM   --skip-native         Skip native stable-diffusion build
@@ -32,6 +33,7 @@ set "CPU_FLAG="
 set "CUDA_FLAG="
 set "VULKAN_FLAG="
 set "AUTO_FLAG=-Auto"
+set "SOURCE_RELEASE_TAG_FLAG="
 set "USE_RELEASE_FLAG="
 set "RELEASE_TAG_FLAG="
 set "RELEASE_VARIANT_FLAG="
@@ -86,6 +88,16 @@ if /i "%~1"=="--vulkan" (
     set "CUDA_FLAG="
     set "VULKAN_FLAG=-Vulkan"
     set "AUTO_FLAG="
+    shift
+    goto parse_args
+)
+if /i "%~1"=="--source-release-tag" (
+    if "%~2"=="" (
+        echo Error: --source-release-tag requires a value.
+        exit /b 1
+    )
+    set "SOURCE_RELEASE_TAG_FLAG=-SourceReleaseTag ""%~2"""
+    shift
     shift
     goto parse_args
 )
@@ -155,7 +167,8 @@ echo   --cpu, --cpu-only     Build CPU backend only
 echo   --auto                Auto-detect GPU backends ^(default^)
 echo   --gpu, --cuda         Enable CUDA backend
 echo   --vulkan              Enable Vulkan backend
-echo   --use-release         Stage a pinned upstream Windows release instead of building from source
+echo   --source-release-tag TAG       Override the upstream release tag used for source builds ^(default: latest release^)
+echo   --use-release         Stage the latest upstream Windows release instead of building from source
 echo   --release-tag TAG     Override the upstream GitHub release tag used with --use-release
 echo   --release-variant V   Choose auto, cpu, noavx, avx, avx2, avx512, or cuda12 for --use-release
 echo   --skip-native         Skip native stable-diffusion build
@@ -167,7 +180,7 @@ exit /b 0
 
 :done_args
 
-set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %AUTO_FLAG% %USE_RELEASE_FLAG% %RELEASE_TAG_FLAG% %RELEASE_VARIANT_FLAG% %SKIP_NATIVE_FLAG% %SKIP_EXAMPLE_FLAG% %CLEAN_FLAG%"
+set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %AUTO_FLAG% %SOURCE_RELEASE_TAG_FLAG% %USE_RELEASE_FLAG% %RELEASE_TAG_FLAG% %RELEASE_VARIANT_FLAG% %SKIP_NATIVE_FLAG% %SKIP_EXAMPLE_FLAG% %CLEAN_FLAG%"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" %PS_ARGS%
 set "EXIT_CODE=%ERRORLEVEL%"
 endlocal & exit /b %EXIT_CODE%

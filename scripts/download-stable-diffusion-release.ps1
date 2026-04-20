@@ -13,6 +13,22 @@ function Write-Step {
     Write-Host "==> $Message"
 }
 
+function Invoke-GitHubJsonRequest {
+    param([string]$Uri)
+
+    $headers = @{
+        'Accept' = 'application/vnd.github+json'
+        'User-Agent' = 'ofxStableDiffusion-release-downloader'
+        'X-GitHub-Api-Version' = '2022-11-28'
+    }
+
+    try {
+        return Invoke-RestMethod -Uri $Uri -Headers $headers
+    } catch {
+        throw "GitHub release query failed for $Uri. $($_.Exception.Message)"
+    }
+}
+
 function Get-CommandPathOrNull {
     param([string]$Name)
     try {
@@ -167,44 +183,81 @@ function Resolve-ReleaseVariant {
     }
 }
 
+function Get-ReleaseMetadata {
+    param(
+        [string]$Tag
+    )
+
+    $repoApiBase = 'https://api.github.com/repos/leejet/stable-diffusion.cpp/releases'
+    if ([string]::IsNullOrWhiteSpace($Tag)) {
+        return Invoke-GitHubJsonRequest -Uri ($repoApiBase + '/latest')
+    }
+
+    $escapedTag = [System.Uri]::EscapeDataString($Tag)
+    return Invoke-GitHubJsonRequest -Uri ($repoApiBase + '/tags/' + $escapedTag)
+}
+
+function Find-ReleaseAssetName {
+    param(
+        [object]$ReleaseMetadata,
+        [string]$Pattern
+    )
+
+    $asset = $ReleaseMetadata.assets |
+        Where-Object { $_.name -like $Pattern } |
+        Select-Object -First 1
+    if (-not $asset) {
+        throw "The upstream release '$($ReleaseMetadata.tag_name)' did not contain an asset matching '$Pattern'."
+    }
+
+    return $asset.name
+}
+
 function Get-ReleaseAssetSet {
     param(
-        [string]$Tag,
+        [object]$ReleaseMetadata,
         [string]$Variant
     )
 
-    $assetPrefix = 'sd-master-1b4e9be-bin-win'
     switch ($Variant) {
         'noavx' {
             return @{
                 Variant = $Variant
-                Archives = @("$assetPrefix-noavx-x64.zip")
+                Archives = @(
+                    (Find-ReleaseAssetName -ReleaseMetadata $ReleaseMetadata -Pattern 'sd-*-bin-win-noavx-x64.zip')
+                )
             }
         }
         'avx' {
             return @{
                 Variant = $Variant
-                Archives = @("$assetPrefix-avx-x64.zip")
+                Archives = @(
+                    (Find-ReleaseAssetName -ReleaseMetadata $ReleaseMetadata -Pattern 'sd-*-bin-win-avx-x64.zip')
+                )
             }
         }
         'avx2' {
             return @{
                 Variant = $Variant
-                Archives = @("$assetPrefix-avx2-x64.zip")
+                Archives = @(
+                    (Find-ReleaseAssetName -ReleaseMetadata $ReleaseMetadata -Pattern 'sd-*-bin-win-avx2-x64.zip')
+                )
             }
         }
         'avx512' {
             return @{
                 Variant = $Variant
-                Archives = @("$assetPrefix-avx512-x64.zip")
+                Archives = @(
+                    (Find-ReleaseAssetName -ReleaseMetadata $ReleaseMetadata -Pattern 'sd-*-bin-win-avx512-x64.zip')
+                )
             }
         }
         'cuda12' {
             return @{
                 Variant = $Variant
                 Archives = @(
-                    "$assetPrefix-cuda12-x64.zip",
-                    'cudart-sd-bin-win-cu12-x64.zip'
+                    (Find-ReleaseAssetName -ReleaseMetadata $ReleaseMetadata -Pattern 'sd-*-bin-win-cuda12-x64.zip'),
+                    (Find-ReleaseAssetName -ReleaseMetadata $ReleaseMetadata -Pattern 'cudart-sd-bin-win-cu12-x64.zip')
                 )
             }
         }
@@ -224,12 +277,10 @@ if ([string]::IsNullOrWhiteSpace($ExampleBinDir)) {
     $ExampleBinDir = Join-Path $addonRoot 'ofxStableDiffusionExample\bin'
 }
 
-if ([string]::IsNullOrWhiteSpace($ReleaseTag)) {
-    $ReleaseTag = 'master-572-1b4e9be'
-}
-
 $resolvedVariant = Resolve-ReleaseVariant -RequestedVariant $ReleaseVariant
-$assetSet = Get-ReleaseAssetSet -Tag $ReleaseTag -Variant $resolvedVariant
+$releaseMetadata = Get-ReleaseMetadata -Tag $ReleaseTag
+$ReleaseTag = $releaseMetadata.tag_name
+$assetSet = Get-ReleaseAssetSet -ReleaseMetadata $releaseMetadata -Variant $resolvedVariant
 
 $downloadRoot = Join-Path $env:TEMP 'ofxsd-release'
 $extractRoot = Join-Path $downloadRoot ("extract-" + $ReleaseTag + '-' + $assetSet.Variant)

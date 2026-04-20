@@ -46,6 +46,16 @@ if /i "%~1"=="--clean" (
     shift
     goto parse_args
 )
+if /i "%~1"=="--source-release-tag" (
+    if "%~2"=="" (
+        echo Error: --source-release-tag requires a value.
+        exit /b 1
+    )
+    set "PS_ARGS=!PS_ARGS! -SourceReleaseTag ""%~2"""
+    shift
+    shift
+    goto parse_args
+)
 if /i "%~1"=="--dry-run" (
     set "PS_ARGS=!PS_ARGS! -DryRun"
     shift
@@ -140,6 +150,7 @@ echo   --gpu, --cuda          Enable CUDA backend
 echo   --vulkan               Enable Vulkan backend
 echo   --metal                Enable Metal backend
 echo   --clean                Remove previous build directory before building
+echo   --source-release-tag TAG       Override the upstream release tag used for the source snapshot ^(default: latest release^)
 echo   --dry-run              Print commands without running them
 echo   --config NAME          Build configuration ^(default: Release^)
 echo   --jobs N               Parallel build jobs

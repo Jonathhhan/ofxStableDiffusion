@@ -9,6 +9,7 @@ param(
     [switch]$UseRelease,
     [string]$ReleaseTag = "",
     [string]$ReleaseVariant = "auto",
+    [string]$SourceReleaseTag = "",
     [switch]$Clean,
     [switch]$SkipNative,
     [switch]$SkipExampleBuild,
@@ -110,6 +111,9 @@ if (-not $SkipNative) {
         }
         if ($Auto) {
             $nativeArgs.Auto = $true
+        }
+        if (-not [string]::IsNullOrWhiteSpace($SourceReleaseTag)) {
+            $nativeArgs.SourceReleaseTag = $SourceReleaseTag
         }
         if ($Clean) {
             $nativeArgs.Clean = $true

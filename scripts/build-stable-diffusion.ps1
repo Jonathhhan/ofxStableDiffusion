@@ -8,6 +8,7 @@ param(
     [string]$Generator = "",
     [int]$Jobs = 0,
     [switch]$Clean,
+    [string]$SourceReleaseTag = "",
     [Alias('Cpu')][switch]$CpuOnly,
     [Alias('Gpu')][switch]$Cuda,
     [switch]$Vulkan,
@@ -187,6 +188,7 @@ function Get-VendoredValue {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $addonRoot = (Resolve-Path (Join-Path $scriptRoot '..')).Path
+$sourceRefresher = Join-Path $scriptRoot 'refresh-stable-diffusion-source.ps1'
 
 if ([string]::IsNullOrWhiteSpace($SourceDir)) {
     $SourceDir = Join-Path $addonRoot 'libs\stable-diffusion\source'
@@ -236,13 +238,24 @@ if (-not $cmake) {
     throw "cmake.exe was not found in PATH."
 }
 
+$refreshArgs = @{
+    SourceDir = $SourceDir
+}
+if (-not [string]::IsNullOrWhiteSpace($SourceReleaseTag)) {
+    $refreshArgs.ReleaseTag = $SourceReleaseTag
+}
+if ($DryRun) {
+    $refreshArgs.DryRun = $true
+}
+& $sourceRefresher @refreshArgs
+
 if (-not (Test-Path -LiteralPath $SourceDir)) {
     throw @"
 stable-diffusion.cpp source was not found at:
   $SourceDir
 
 Recommended workflow:
-  1. Vendor a known-compatible stable-diffusion.cpp snapshot into libs/stable-diffusion/source
+  1. Re-run scripts/build-stable-diffusion.ps1 so it can refresh the latest release snapshot
   2. Re-run scripts/build-stable-diffusion.ps1
 
 This addon intentionally keeps stable-diffusion.cpp standalone rather than sharing
@@ -273,9 +286,12 @@ if (-not $DryRun) {
 
 $vendorPinPath = Join-Path $SourceDir 'OFX_VENDOR_PIN.txt'
 $vendoredCommit = Get-VendoredValue -Path $vendorPinPath -Prefix 'Upstream commit:'
+$vendoredReleaseTag = Get-VendoredValue -Path $vendorPinPath -Prefix 'Upstream release tag:'
 $vendoredVersion = $null
 if ($vendoredCommit) {
     $vendoredVersion = "vendored-$($vendoredCommit.Substring(0, [Math]::Min(7, $vendoredCommit.Length)))"
+} elseif ($vendoredReleaseTag) {
+    $vendoredVersion = "release-$vendoredReleaseTag"
 }
 
 $configureArgs = @(
