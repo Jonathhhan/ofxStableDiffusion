@@ -3,9 +3,8 @@ setlocal enabledelayedexpansion
 REM ---------------------------------------------------------------------------
 REM setup_windows.bat - One-command setup for ofxStableDiffusion on Windows.
 REM
-REM This script mirrors the backend flag style used by ofxGgml. It builds the
-REM vendored stable-diffusion.cpp runtime and, by default, also builds the
-REM example project.
+REM This script mirrors the backend flag style used by ofxGgml and builds the
+REM vendored stable-diffusion.cpp runtime.
 REM
 REM Usage:
 REM   scripts\setup_windows.bat [OPTIONS]
@@ -16,11 +15,8 @@ REM   --auto                Auto-detect GPU backends (default)
 REM   --gpu, --cuda         Enable CUDA backend
 REM   --vulkan              Enable Vulkan backend
 REM   --source-release-tag TAG       Override the upstream release tag used for source builds (default: latest release)
-REM   --use-release         Stage the latest upstream Windows release instead of building from source
-REM   --release-tag TAG     Override the upstream GitHub release tag used with --use-release
-REM   --release-variant V   Choose auto, cpu, noavx, avx, avx2, avx512, or cuda12 for --use-release
+REM   --ggml-release-tag TAG         Override the upstream ggml release tag used for source builds (default: latest release)
 REM   --skip-native         Skip native stable-diffusion build
-REM   --skip-example-build  Skip example build
 REM   --jobs N              Parallel build jobs (default: %NUMBER_OF_PROCESSORS%)
 REM   --clean               Remove previous native build directory before building
 REM   --help                Show this help message
@@ -34,11 +30,8 @@ set "CUDA_FLAG="
 set "VULKAN_FLAG="
 set "AUTO_FLAG=-Auto"
 set "SOURCE_RELEASE_TAG_FLAG="
-set "USE_RELEASE_FLAG="
-set "RELEASE_TAG_FLAG="
-set "RELEASE_VARIANT_FLAG="
+set "GGML_RELEASE_TAG_FLAG="
 set "SKIP_NATIVE_FLAG="
-set "SKIP_EXAMPLE_FLAG="
 set "CLEAN_FLAG="
 
 :parse_args
@@ -101,38 +94,18 @@ if /i "%~1"=="--source-release-tag" (
     shift
     goto parse_args
 )
-if /i "%~1"=="--use-release" (
-    set "USE_RELEASE_FLAG=-UseRelease"
-    shift
-    goto parse_args
-)
-if /i "%~1"=="--release-tag" (
+if /i "%~1"=="--ggml-release-tag" (
     if "%~2"=="" (
-        echo Error: --release-tag requires a value.
+        echo Error: --ggml-release-tag requires a value.
         exit /b 1
     )
-    set "RELEASE_TAG_FLAG=-ReleaseTag ""%~2"""
-    shift
-    shift
-    goto parse_args
-)
-if /i "%~1"=="--release-variant" (
-    if "%~2"=="" (
-        echo Error: --release-variant requires a value.
-        exit /b 1
-    )
-    set "RELEASE_VARIANT_FLAG=-ReleaseVariant %~2"
+    set "GGML_RELEASE_TAG_FLAG=-GgmlReleaseTag ""%~2"""
     shift
     shift
     goto parse_args
 )
 if /i "%~1"=="--skip-native" (
     set "SKIP_NATIVE_FLAG=-SkipNative"
-    shift
-    goto parse_args
-)
-if /i "%~1"=="--skip-example-build" (
-    set "SKIP_EXAMPLE_FLAG=-SkipExampleBuild"
     shift
     goto parse_args
 )
@@ -168,11 +141,8 @@ echo   --auto                Auto-detect GPU backends ^(default^)
 echo   --gpu, --cuda         Enable CUDA backend
 echo   --vulkan              Enable Vulkan backend
 echo   --source-release-tag TAG       Override the upstream release tag used for source builds ^(default: latest release^)
-echo   --use-release         Stage the latest upstream Windows release instead of building from source
-echo   --release-tag TAG     Override the upstream GitHub release tag used with --use-release
-echo   --release-variant V   Choose auto, cpu, noavx, avx, avx2, avx512, or cuda12 for --use-release
+echo   --ggml-release-tag TAG         Override the upstream ggml release tag used for source builds ^(default: latest release^)
 echo   --skip-native         Skip native stable-diffusion build
-echo   --skip-example-build  Skip example build
 echo   --jobs N              Parallel build jobs ^(default: %NUMBER_OF_PROCESSORS%^)
 echo   --clean               Remove previous native build directory before building
 echo   --help                Show this help message
@@ -180,7 +150,7 @@ exit /b 0
 
 :done_args
 
-set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %AUTO_FLAG% %SOURCE_RELEASE_TAG_FLAG% %USE_RELEASE_FLAG% %RELEASE_TAG_FLAG% %RELEASE_VARIANT_FLAG% %SKIP_NATIVE_FLAG% %SKIP_EXAMPLE_FLAG% %CLEAN_FLAG%"
+set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %AUTO_FLAG% %SOURCE_RELEASE_TAG_FLAG% %GGML_RELEASE_TAG_FLAG% %SKIP_NATIVE_FLAG% %CLEAN_FLAG%"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" %PS_ARGS%
 set "EXIT_CODE=%ERRORLEVEL%"
 endlocal & exit /b %EXIT_CODE%

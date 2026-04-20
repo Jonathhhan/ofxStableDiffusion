@@ -9,6 +9,7 @@ param(
     [int]$Jobs = 0,
     [switch]$Clean,
     [string]$SourceReleaseTag = "",
+    [string]$GgmlReleaseTag = "",
     [Alias('Cpu')][switch]$CpuOnly,
     [Alias('Gpu')][switch]$Cuda,
     [switch]$Vulkan,
@@ -186,9 +187,179 @@ function Get-VendoredValue {
     return $line.Substring($Prefix.Length).Trim()
 }
 
+function Invoke-GitHubJsonRequest {
+    param([string]$Uri)
+
+    $headers = @{
+        'Accept' = 'application/vnd.github+json'
+        'User-Agent' = 'ofxStableDiffusion-build'
+        'X-GitHub-Api-Version' = '2022-11-28'
+    }
+
+    try {
+        return Invoke-RestMethod -Uri $Uri -Headers $headers
+    } catch {
+        throw "GitHub API request failed for $Uri. $($_.Exception.Message)"
+    }
+}
+
+function Require-GitPath {
+    $git = Get-CommandPathOrNull 'git.exe'
+    if (-not $git) {
+        $git = Get-CommandPathOrNull 'git'
+    }
+    if (-not $git) {
+        throw "git was not found in PATH. A recursive clone is required so the latest release-tag source snapshot includes ggml/libwebp/libwebm submodules."
+    }
+    return $git
+}
+
+function Get-ReleaseMetadata {
+    param([string]$Tag)
+
+    $repoApiBase = 'https://api.github.com/repos/leejet/stable-diffusion.cpp/releases'
+    if ([string]::IsNullOrWhiteSpace($Tag)) {
+        return Invoke-GitHubJsonRequest -Uri ($repoApiBase + '/latest')
+    }
+
+    $escapedTag = [System.Uri]::EscapeDataString($Tag)
+    return Invoke-GitHubJsonRequest -Uri ($repoApiBase + '/tags/' + $escapedTag)
+}
+
+function Get-GgmlReleaseMetadata {
+    param([string]$Tag)
+
+    $repoApiBase = 'https://api.github.com/repos/ggml-org/ggml/releases'
+    if ([string]::IsNullOrWhiteSpace($Tag)) {
+        return Invoke-GitHubJsonRequest -Uri ($repoApiBase + '/latest')
+    }
+
+    $escapedTag = [System.Uri]::EscapeDataString($Tag)
+    return Invoke-GitHubJsonRequest -Uri ($repoApiBase + '/tags/' + $escapedTag)
+}
+
+function Remove-DirectoryContents {
+    param([string]$LiteralPath)
+
+    if (-not (Test-Path -LiteralPath $LiteralPath)) {
+        return
+    }
+
+    Get-ChildItem -LiteralPath $LiteralPath -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Remove-Item -LiteralPath $_.FullName -Recurse -Force
+        }
+}
+
+function Write-VendorPinFile {
+    param(
+        [string]$Path,
+        [object]$ReleaseMetadata,
+        [string]$Repository = "",
+        [string]$ResolvedCommit = "",
+        [string]$Notes = ""
+    )
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('Vendored by ofxStableDiffusion')
+    if (-not [string]::IsNullOrWhiteSpace($Repository)) {
+        $lines.Add('Upstream repository: ' + $Repository)
+    }
+    $lines.Add('Upstream release tag: ' + $ReleaseMetadata.tag_name)
+    if (-not [string]::IsNullOrWhiteSpace($ResolvedCommit)) {
+        $lines.Add('Upstream commit: ' + $ResolvedCommit)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseMetadata.target_commitish)) {
+        $lines.Add('Upstream target commitish: ' + $ReleaseMetadata.target_commitish)
+    }
+    $lines.Add('Release URL: ' + $ReleaseMetadata.html_url)
+    $lines.Add('Zipball URL: ' + $ReleaseMetadata.zipball_url)
+    $lines.Add('Fetched at: ' + [DateTimeOffset]::UtcNow.ToString('o'))
+    if (-not [string]::IsNullOrWhiteSpace($Notes)) {
+        $lines.Add('Notes: ' + $Notes)
+    }
+
+    [System.IO.File]::WriteAllLines($Path, $lines)
+}
+
+function Get-GitHeadCommit {
+    param(
+        [string]$GitPath,
+        [string]$RepositoryRoot
+    )
+
+    $commit = (& $GitPath -C $RepositoryRoot rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
+        throw "Failed to resolve HEAD commit for '$RepositoryRoot'."
+    }
+
+    return $commit
+}
+
+function Refresh-GgmlVendorTree {
+    param(
+        [string]$GitPath,
+        [string]$Tag,
+        [string]$TargetDir,
+        [switch]$DryRun
+    )
+
+    $releaseMetadata = Get-GgmlReleaseMetadata -Tag $Tag
+    $resolvedReleaseTag = $releaseMetadata.tag_name
+    $downloadRoot = Join-Path $env:TEMP 'ofxsd-ggml-release'
+    $cloneRoot = Join-Path $downloadRoot ('clone-' + $resolvedReleaseTag)
+
+    Write-Step "Refreshing ggml source from upstream release snapshot"
+    Write-Host ("    Release tag: {0}" -f $resolvedReleaseTag)
+    Write-Host ("    Destination: {0}" -f $TargetDir)
+
+    if ($DryRun) {
+        Write-Host ("Clone https://github.com/ggml-org/ggml.git tag {0}" -f $resolvedReleaseTag)
+        Write-Host ("Clone to {0}" -f $cloneRoot)
+        Write-Host ("Replace contents of {0}" -f $TargetDir)
+        return
+    }
+
+    New-Item -ItemType Directory -Force -Path $downloadRoot | Out-Null
+    if (Test-Path -LiteralPath $cloneRoot) {
+        Remove-Item -LiteralPath $cloneRoot -Recurse -Force
+    }
+
+    Invoke-External -FilePath $GitPath -Arguments @(
+        'clone',
+        '--depth', '1',
+        '--branch', $resolvedReleaseTag,
+        'https://github.com/ggml-org/ggml.git',
+        $cloneRoot
+    )
+
+    $cmakeLists = Join-Path $cloneRoot 'CMakeLists.txt'
+    if (-not (Test-Path -LiteralPath $cmakeLists)) {
+        throw "The ggml clone for '$resolvedReleaseTag' did not contain a top-level CMakeLists.txt."
+    }
+
+    New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
+    Remove-DirectoryContents -LiteralPath $TargetDir
+
+    Get-ChildItem -LiteralPath $cloneRoot -Force |
+        ForEach-Object {
+            if ($_.Name -eq '.git') {
+                return
+            }
+            Copy-Item -LiteralPath $_.FullName -Destination $TargetDir -Recurse -Force
+        }
+
+    $resolvedCommit = Get-GitHeadCommit -GitPath $GitPath -RepositoryRoot $cloneRoot
+    Write-VendorPinFile `
+        -Path (Join-Path $TargetDir 'OFX_VENDOR_PIN.txt') `
+        -ReleaseMetadata $releaseMetadata `
+        -Repository 'https://github.com/ggml-org/ggml' `
+        -ResolvedCommit $resolvedCommit `
+        -Notes 'Source-only vendor refresh staged under stable-diffusion.cpp.'
+}
+
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $addonRoot = (Resolve-Path (Join-Path $scriptRoot '..')).Path
-$sourceRefresher = Join-Path $scriptRoot 'refresh-stable-diffusion-source.ps1'
 
 if ([string]::IsNullOrWhiteSpace($SourceDir)) {
     $SourceDir = Join-Path $addonRoot 'libs\stable-diffusion\source'
@@ -238,16 +409,61 @@ if (-not $cmake) {
     throw "cmake.exe was not found in PATH."
 }
 
-$refreshArgs = @{
-    SourceDir = $SourceDir
-}
-if (-not [string]::IsNullOrWhiteSpace($SourceReleaseTag)) {
-    $refreshArgs.ReleaseTag = $SourceReleaseTag
-}
+$releaseMetadata = Get-ReleaseMetadata -Tag $SourceReleaseTag
+$resolvedReleaseTag = $releaseMetadata.tag_name
+$downloadRoot = Join-Path $env:TEMP 'ofxsd-source-release'
+$cloneRoot = Join-Path $downloadRoot ('clone-' + $resolvedReleaseTag)
+$git = Require-GitPath
+
+Write-Step "Refreshing stable-diffusion source from release snapshot"
+Write-Host ("    Release tag: {0}" -f $resolvedReleaseTag)
+Write-Host ("    Destination: {0}" -f $SourceDir)
+
 if ($DryRun) {
-    $refreshArgs.DryRun = $true
+    Write-Host ("Clone https://github.com/leejet/stable-diffusion.cpp.git tag {0} with submodules" -f $resolvedReleaseTag)
+    Write-Host ("Clone to {0}" -f $cloneRoot)
+    Write-Host ("Replace contents of {0}" -f $SourceDir)
+} else {
+    New-Item -ItemType Directory -Force -Path $downloadRoot | Out-Null
+    if (Test-Path -LiteralPath $cloneRoot) {
+        Remove-Item -LiteralPath $cloneRoot -Recurse -Force
+    }
+
+    Invoke-External -FilePath $git -Arguments @(
+        'clone',
+        '--depth', '1',
+        '--branch', $resolvedReleaseTag,
+        '--recurse-submodules',
+        '--shallow-submodules',
+        'https://github.com/leejet/stable-diffusion.cpp.git',
+        $cloneRoot
+    )
+
+    $cmakeLists = Join-Path $cloneRoot 'CMakeLists.txt'
+    if (-not (Test-Path -LiteralPath $cmakeLists)) {
+        throw "The recursive clone for '$resolvedReleaseTag' did not contain a top-level CMakeLists.txt."
+    }
+
+    New-Item -ItemType Directory -Force -Path $SourceDir | Out-Null
+    Remove-DirectoryContents -LiteralPath $SourceDir
+
+    Get-ChildItem -LiteralPath $cloneRoot -Force |
+        ForEach-Object {
+            if ($_.Name -eq '.git') {
+                return
+            }
+            Copy-Item -LiteralPath $_.FullName -Destination $SourceDir -Recurse -Force
+        }
+
+    $resolvedCommit = Get-GitHeadCommit -GitPath $git -RepositoryRoot $cloneRoot
+    Write-VendorPinFile `
+        -Path (Join-Path $SourceDir 'OFX_VENDOR_PIN.txt') `
+        -ReleaseMetadata $releaseMetadata `
+        -Repository 'https://github.com/leejet/stable-diffusion.cpp' `
+        -ResolvedCommit $resolvedCommit
 }
-& $sourceRefresher @refreshArgs
+
+Refresh-GgmlVendorTree -GitPath $git -Tag $GgmlReleaseTag -TargetDir (Join-Path $SourceDir 'ggml') -DryRun:$DryRun
 
 if (-not (Test-Path -LiteralPath $SourceDir)) {
     throw @"
@@ -263,8 +479,8 @@ the ggml build from ofxGgml, to avoid ABI/version coupling across addons.
 "@
 }
 
-$cmakeLists = Join-Path $SourceDir 'CMakeLists.txt'
-if (-not (Test-Path -LiteralPath $cmakeLists)) {
+$sourceCmakeLists = Join-Path $SourceDir 'CMakeLists.txt'
+if (-not (Test-Path -LiteralPath $sourceCmakeLists)) {
     throw "No CMakeLists.txt was found in $SourceDir. Vendor the full stable-diffusion.cpp source tree first."
 }
 
@@ -286,10 +502,13 @@ if (-not $DryRun) {
 
 $vendorPinPath = Join-Path $SourceDir 'OFX_VENDOR_PIN.txt'
 $vendoredCommit = Get-VendoredValue -Path $vendorPinPath -Prefix 'Upstream commit:'
+$vendoredTargetCommit = Get-VendoredValue -Path $vendorPinPath -Prefix 'Upstream target commitish:'
 $vendoredReleaseTag = Get-VendoredValue -Path $vendorPinPath -Prefix 'Upstream release tag:'
 $vendoredVersion = $null
 if ($vendoredCommit) {
     $vendoredVersion = "vendored-$($vendoredCommit.Substring(0, [Math]::Min(7, $vendoredCommit.Length)))"
+} elseif ($vendoredTargetCommit) {
+    $vendoredVersion = "vendored-$($vendoredTargetCommit.Substring(0, [Math]::Min(7, $vendoredTargetCommit.Length)))"
 } elseif ($vendoredReleaseTag) {
     $vendoredVersion = "release-$vendoredReleaseTag"
 }
@@ -302,9 +521,10 @@ $configureArgs = @(
     '-DSD_BUILD_EXAMPLES=OFF'
 )
 
-if ($vendoredCommit) {
+if ($vendoredCommit -or $vendoredTargetCommit) {
+    $cmakeVendoredCommit = if ($vendoredCommit) { $vendoredCommit } else { $vendoredTargetCommit }
     $configureArgs += @(
-        "-DSDCPP_BUILD_COMMIT=$vendoredCommit",
+        "-DSDCPP_BUILD_COMMIT=$cmakeVendoredCommit",
         "-DSDCPP_BUILD_VERSION=$vendoredVersion"
     )
 }
@@ -317,6 +537,8 @@ $configureArgs += @(
     ('-DSD_CUDA=' + ($(if ($enableCuda) { 'ON' } else { 'OFF' }))),
     ('-DSD_VULKAN=' + ($(if ($enableVulkan) { 'ON' } else { 'OFF' }))),
     ('-DSD_METAL=' + ($(if ($enableMetal) { 'ON' } else { 'OFF' })))
+    '-DSD_WEBP=ON',
+    '-DSD_WEBM=ON'
 )
 
 Write-Step "Configuring stable-diffusion native library"
@@ -347,9 +569,16 @@ if ($DryRun) {
     Invoke-External -FilePath $cmake -Arguments $buildArgs
 }
 
+if ($DryRun) {
+    return
+}
+
 $headerPath = Find-FirstFile -Root $SourceDir -Names @('stable-diffusion.h')
 $dllPath = Find-FirstFile -Root $BuildDir -Names @('stable-diffusion.dll')
 $libPath = Find-FirstFile -Root $BuildDir -Names @('stable-diffusion.lib')
+$webpLibPath = Find-FirstFile -Root $BuildDir -Names @('webp.lib')
+$webpmuxLibPath = Find-FirstFile -Root $BuildDir -Names @('libwebpmux.lib', 'webpmux.lib')
+$webmLibPath = Find-FirstFile -Root $BuildDir -Names @('webm.lib', 'libwebm.lib')
 
 if (-not $headerPath) {
     throw "Build completed, but stable-diffusion.h was not found under $SourceDir."
@@ -361,9 +590,24 @@ if (-not $libPath) {
     throw "Build completed, but stable-diffusion.lib was not found under $BuildDir."
 }
 
+$optionalSupportLibs = @(
+    @{ Name = 'webp.lib'; Path = $webpLibPath },
+    @{ Name = 'libwebpmux.lib'; Path = $webpmuxLibPath },
+    @{ Name = 'webm.lib'; Path = $webmLibPath }
+)
+$missingSupportLibs = @($optionalSupportLibs | Where-Object { -not $_.Path })
+if ($missingSupportLibs.Count -gt 0) {
+    $missingNames = ($missingSupportLibs | ForEach-Object { $_.Name }) -join ', '
+    Write-Warning "Optional WebP/WebM support libraries were not found under $BuildDir ($missingNames). Upstream builds may fold these into the main target or avoid staging standalone import libraries, so packaging will continue with the core stable-diffusion artifacts."
+}
+
 Write-Step "Staging stable-diffusion artifacts into the addon"
+Copy-IfPresent -Path $headerPath -Destination $InstallIncludeDir
 Copy-IfPresent -Path $dllPath -Destination $InstallLibDir
 Copy-IfPresent -Path $libPath -Destination $InstallLibDir
+Copy-IfPresent -Path $webpLibPath -Destination $InstallLibDir
+Copy-IfPresent -Path $webpmuxLibPath -Destination $InstallLibDir
+Copy-IfPresent -Path $webmLibPath -Destination $InstallLibDir
 if ($ExampleBinDir) {
     Copy-IfPresent -Path $dllPath -Destination $ExampleBinDir -AllowLockedDestination
 }
@@ -377,3 +621,7 @@ Write-Host "  libs:    $InstallLibDir"
 if ($ExampleBinDir) {
     Write-Host "  runtime: $ExampleBinDir"
 }
+
+
+
+

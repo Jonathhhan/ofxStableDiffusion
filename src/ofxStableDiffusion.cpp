@@ -343,6 +343,10 @@ bool ofxStableDiffusion::saveVideoFramesWithMetadata(
 	return getVideoClip().saveFrameSequenceWithMetadata(directory, prefix, metadataFilename);
 }
 
+bool ofxStableDiffusion::saveVideoWebm(const std::string& path, int quality) const {
+	return getVideoClip().saveWebm(path, quality);
+}
+
 void ofxStableDiffusion::setVideoGenerationMode(ofxStableDiffusionVideoMode mode) {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	videoMode = mode;
@@ -1260,3 +1264,4 @@ std::vector<sd_image_t> ofxStableDiffusion::buildOutputImageViews(const ofxStabl
 
 	return views;
 }
+

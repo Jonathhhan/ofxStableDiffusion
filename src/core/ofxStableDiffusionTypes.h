@@ -5,7 +5,7 @@
 #include "ofxStableDiffusionImageHelpers.h"
 #include "ofxStableDiffusionRankingHelpers.h"
 #include "../video/ofxStableDiffusionVideoAnimation.h"
-#include "../../libs/stable-diffusion/include/stable-diffusion.h"
+#include "stable-diffusion.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -244,6 +244,7 @@ struct ofxStableDiffusionVideoClip {
 		const std::string & directory,
 		const std::string & prefix = "frame",
 		const std::string & metadataFilename = "metadata.json") const;
+	bool saveWebm(const std::string & path, int quality = 90) const;
 };
 
 struct ofxStableDiffusionResult {
@@ -282,3 +283,5 @@ std::vector<ofxStableDiffusionImageFrame> ofxStableDiffusionBuildVideoFrames(
 
 /// Hash a string to a deterministic seed value for reproducibility.
 int64_t ofxStableDiffusionHashStringToSeed(const std::string& text);
+
+

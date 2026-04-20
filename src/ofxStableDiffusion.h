@@ -8,7 +8,7 @@
 #include "video/ofxStableDiffusionLongVideoWorkflow.h"
 #include "video/ofxStableDiffusionVideoWorkflowHelpers.h"
 #include "ofxStableDiffusionThread.h"
-#include "../libs/stable-diffusion/include/stable-diffusion.h"
+#include "stable-diffusion.h"
 
 #include <functional>
 #include <mutex>
@@ -54,6 +54,7 @@ public:
 		const std::string& directory,
 		const std::string& prefix = "frame",
 		const std::string& metadataFilename = "metadata.json") const;
+	bool saveVideoWebm(const std::string& path, int quality = 90) const;
 	void setVideoGenerationMode(ofxStableDiffusionVideoMode mode);
 	ofxStableDiffusionVideoMode getVideoGenerationMode() const;
 	void setImageGenerationMode(ofxStableDiffusionImageMode mode);
@@ -320,3 +321,5 @@ private:
 	stableDiffusionThread::OwnedImage loadedInputImage;
 	mutable std::mutex stateMutex;
 };
+
+

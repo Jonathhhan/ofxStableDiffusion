@@ -2,7 +2,7 @@
 
 #include "ofMain.h"
 #include "core/ofxStableDiffusionTypes.h"
-#include "../libs/stable-diffusion/include/stable-diffusion.h"
+#include "stable-diffusion.h"
 
 #include <functional>
 #include <string>
@@ -101,3 +101,4 @@ private:
 	bool isUpscalerCtxLoaded = false;
 	std::vector<sd_lora_t> loraBuffer;
 };
+

@@ -1,7 +1,4 @@
 cmake_minimum_required(VERSION 3.12)
-if(POLICY CMP194)
-    cmake_policy(SET CMP194 NEW)
-endif()
 project("stable-diffusion")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -14,6 +11,10 @@ endif()
 if (MSVC)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     add_compile_definitions(_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:C>:/MP>
+        $<$<COMPILE_LANGUAGE:CXX>:/MP>
+    )
 endif()
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -155,10 +156,12 @@ endif()
 
 set(SD_LIB stable-diffusion)
 
-file(GLOB SD_LIB_SOURCES
+file(GLOB SD_LIB_SOURCES CONFIGURE_DEPENDS
     "src/*.h"
     "src/*.cpp"
     "src/*.hpp"
+    "src/model_io/*.h"
+    "src/model_io/*.cpp"
     "src/tokenizers/*.h"
     "src/tokenizers/*.cpp"
     "src/tokenizers/vocab/*.h"
@@ -166,15 +169,13 @@ file(GLOB SD_LIB_SOURCES
 )
 
 find_program(GIT_EXE NAMES git git.exe NO_CMAKE_FIND_ROOT_PATH)
-if(GIT_EXE AND NOT SDCPP_BUILD_VERSION)
+if(GIT_EXE)
     execute_process(COMMAND ${GIT_EXE} describe --tags --abbrev=7 --dirty=+
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE SDCPP_BUILD_VERSION
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-endif()
-if(GIT_EXE AND NOT SDCPP_BUILD_COMMIT)
     execute_process(COMMAND ${GIT_EXE} rev-parse --short HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE SDCPP_BUILD_COMMIT
@@ -201,6 +202,7 @@ set_property(
 
 if(SD_BUILD_SHARED_LIBS)
     message("-- Build shared library")
+    message(${SD_LIB_SOURCES})
     if(NOT SD_BUILD_SHARED_GGML_LIB)
         set(BUILD_SHARED_LIBS OFF)
     endif()

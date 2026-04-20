@@ -285,15 +285,12 @@ Backend flags now follow the same style as `ofxGgml`:
 - `--metal` / `-Metal`
   Enable Metal explicitly where supported
 
-For Windows, `scripts/setup_windows.bat` and `scripts/setup_addon.ps1` also
-support an optional prebuilt-runtime path:
+For Windows, `scripts/setup_windows.bat` and `scripts/setup_addon.ps1` now
+always refresh the vendored source from the latest upstream release-tag source
+snapshot, then build the native runtime locally.
 
-- `--use-release`
-  Stage a pinned upstream Windows release instead of compiling from source
-- `--release-tag TAG`
-  Override the upstream GitHub release tag used with `--use-release`
-- `--release-variant auto|cpu|noavx|avx|avx2|avx512|cuda12`
-  Choose the prebuilt runtime flavor
+- `--source-release-tag TAG`
+  Override the upstream release tag used for the vendored source snapshot
 
 `--auto` remains the default setup behavior. The prebuilt-release path is
 explicit opt-in and is currently intended for Windows CPU/CUDA staging. Windows

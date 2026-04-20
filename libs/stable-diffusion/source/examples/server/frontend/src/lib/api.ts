@@ -35,6 +35,16 @@ export function submitImageJob(baseUrl: string, body: unknown): Promise<Job> {
     });
 }
 
+export function submitVideoJob(baseUrl: string, body: unknown): Promise<Job> {
+    return fetchJson<Job>(withBase(baseUrl, "/sdcpp/v1/vid_gen"), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+    });
+}
+
 export function getJob(baseUrl: string, id: string): Promise<Job> {
     return fetchJson<Job>(withBase(baseUrl, `/sdcpp/v1/jobs/${id}`));
 }

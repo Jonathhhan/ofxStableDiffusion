@@ -1,4 +1,4 @@
-import type { GenerationForm } from "./types";
+import type { GenerationForm, GenerationMode, SampleParams } from "./types";
 
 function parseNumber(value: unknown, fallback: number): number {
     if (value === "" || value == null) {
@@ -33,26 +33,26 @@ interface SampleParamsRequest {
     sample_method?: string;
 }
 
-function buildSampleParams(form: GenerationForm): SampleParamsRequest {
-    const eta = nullable(form.sample_params.eta);
-    const flowShift = nullable(form.sample_params.flow_shift);
-    const imgCfg = nullable(form.sample_params.guidance.img_cfg);
+function buildSampleParams(sample: SampleParams, defaultSteps: number): SampleParamsRequest {
+    const eta = nullable(sample.eta);
+    const flowShift = nullable(sample.flow_shift);
+    const imgCfg = nullable(sample.guidance.img_cfg);
 
     const sampleParams: SampleParamsRequest = {
-        sample_steps: parseNumber(form.sample_params.sample_steps, 20),
-        shifted_timestep: parseNumber(form.sample_params.shifted_timestep, 0),
+        sample_steps: parseNumber(sample.sample_steps, defaultSteps),
+        shifted_timestep: parseNumber(sample.shifted_timestep, 0),
         custom_sigmas: [],
         guidance: {
-            txt_cfg: parseNumber(form.sample_params.guidance.txt_cfg, 7),
-            distilled_guidance: parseNumber(form.sample_params.guidance.distilled_guidance, 3.5),
+            txt_cfg: parseNumber(sample.guidance.txt_cfg, 7),
+            distilled_guidance: parseNumber(sample.guidance.distilled_guidance, 3.5),
             slg: {
-                layers: String(form.sample_params.guidance.slg_layers || "")
+                layers: String(sample.guidance.slg_layers || "")
                     .split(",")
                     .map((item) => Number(item.trim()))
                     .filter((value) => Number.isInteger(value)),
-                layer_start: parseNumber(form.sample_params.guidance.layer_start, 0.01),
-                layer_end: parseNumber(form.sample_params.guidance.layer_end, 0.2),
-                scale: parseNumber(form.sample_params.guidance.scale, 0),
+                layer_start: parseNumber(sample.guidance.layer_start, 0.01),
+                layer_end: parseNumber(sample.guidance.layer_end, 0.2),
+                scale: parseNumber(sample.guidance.scale, 0),
             },
         },
     };
@@ -68,12 +68,12 @@ function buildSampleParams(form: GenerationForm): SampleParamsRequest {
     }
 
     const scheduler =
-        form.sample_params.scheduler && form.sample_params.scheduler !== "default"
-            ? form.sample_params.scheduler
+        sample.scheduler && sample.scheduler !== "default"
+            ? sample.scheduler
             : undefined;
     const sampleMethod =
-        form.sample_params.sample_method && form.sample_params.sample_method !== "default"
-            ? form.sample_params.sample_method
+        sample.sample_method && sample.sample_method !== "default"
+            ? sample.sample_method
             : undefined;
 
     if (scheduler) {
@@ -116,15 +116,7 @@ export function buildRequestBody(form: GenerationForm) {
         height: parseNumber(form.height, 512),
         strength: parseNumber(form.strength, 0.75),
         seed: parseNumber(form.seed, -1),
-        batch_count: parseNumber(form.batch_count, 1),
-        auto_resize_ref_image: true,
-        increase_ref_index: false,
-        control_strength: parseNumber(form.control_strength, 0.9),
-        init_image: form.init_image ? form.init_image.dataUrl : null,
-        ref_images: form.ref_images.map((item) => item.dataUrl),
-        mask_image: form.mask_image ? form.mask_image.dataUrl : null,
-        control_image: form.control_image ? form.control_image.dataUrl : null,
-        sample_params: buildSampleParams(form),
+        sample_params: buildSampleParams(form.sample_params, 20),
         lora: buildLoraRequest(form),
         vae_tiling_params: buildTilingRequest(form),
         cache_mode: form.cache.mode || "disabled",
@@ -140,4 +132,36 @@ export function buildRequestBody(form: GenerationForm) {
     }
 
     return request;
+}
+
+export function buildImageRequestBody(form: GenerationForm) {
+    return {
+        ...buildRequestBody(form),
+        batch_count: parseNumber(form.batch_count, 1),
+        auto_resize_ref_image: true,
+        increase_ref_index: false,
+        control_strength: parseNumber(form.control_strength, 0.9),
+        init_image: form.init_image ? form.init_image.dataUrl : null,
+        ref_images: form.ref_images.map((item) => item.dataUrl),
+        mask_image: form.mask_image ? form.mask_image.dataUrl : null,
+        control_image: form.control_image ? form.control_image.dataUrl : null,
+    };
+}
+
+export function buildVideoRequestBody(form: GenerationForm) {
+    return {
+        ...buildRequestBody(form),
+        video_frames: parseNumber(form.video_frames, 33),
+        fps: parseNumber(form.fps, 16),
+        moe_boundary: parseNumber(form.moe_boundary, 0.875),
+        vace_strength: parseNumber(form.vace_strength, 1.0),
+        init_image: form.init_image ? form.init_image.dataUrl : null,
+        end_image: form.end_image ? form.end_image.dataUrl : null,
+        control_frames: form.control_frames.map((item) => item.dataUrl),
+        high_noise_sample_params: buildSampleParams(form.high_noise_sample_params, -1),
+    };
+}
+
+export function buildRequestBodyForMode(mode: GenerationMode, form: GenerationForm) {
+    return mode === "video" ? buildVideoRequestBody(form) : buildImageRequestBody(form);
 }

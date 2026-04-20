@@ -20,3 +20,18 @@ export const IMAGE_INPUTS: readonly ImageInputConfig[] = [
         layout: "full",
     },
 ];
+
+export const VIDEO_IMAGE_INPUTS: readonly ImageInputConfig[] = [
+    {
+        target: "init_image",
+        label: "Start Frame",
+        description: "Optional first frame or seed image for the sequence.",
+        layout: "grid",
+    },
+    {
+        target: "end_image",
+        label: "End Frame",
+        description: "Optional end frame for interpolation or FLF2V-style runs.",
+        layout: "grid",
+    },
+];

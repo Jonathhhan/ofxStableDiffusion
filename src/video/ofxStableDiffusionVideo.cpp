@@ -1,6 +1,7 @@
 #include "../core/ofxStableDiffusionTypes.h"
 #include "../core/ofxStableDiffusionImageHelpers.h"
 #include "ofxStableDiffusionVideoHelpers.h"
+#include "ofxStableDiffusionNativeVideoExport.h"
 
 #include <functional>
 
@@ -123,6 +124,10 @@ bool ofxStableDiffusionVideoClip::saveFrameSequenceWithMetadata(
 	return saveMetadataJson(ofFilePath::join(directory, metadataFilename));
 }
 
+bool ofxStableDiffusionVideoClip::saveWebm(const std::string & path, int quality) const {
+	return ofxStableDiffusionNativeVideoExport::saveWebm(path, *this, quality);
+}
+
 const char * ofxStableDiffusionTaskLabel(ofxStableDiffusionTask task) {
 	switch (task) {
 	case ofxStableDiffusionTask::LoadModel: return "LoadModel";
@@ -236,3 +241,4 @@ int64_t ofxStableDiffusionHashStringToSeed(const std::string& text) {
 	// Convert to int64_t, ensuring we stay in valid seed range
 	return static_cast<int64_t>(hash & 0x7FFFFFFFFFFFFFFF);
 }
+

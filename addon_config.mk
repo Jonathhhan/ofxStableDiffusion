@@ -16,18 +16,18 @@
 
 meta:
 	ADDON_NAME = ofxStableDiffusion
-	ADDON_VERSION = 1.0.0
 	ADDON_DESCRIPTION = Stable Diffusion: https://github.com/leejet/stable-diffusion.cpp
 	ADDON_AUTHOR = Jonathan Frank
 	ADDON_TAGS = "Stable Diffusion" "Artificial Intelligence" "Image Generation"
 	ADDON_URL = https://github.com/Jonathhhan/ofxStableDiffusion
-	ADDON_DEPENDENCIES =
-	ADDON_MIN_OF_VERSION = 0.11.0
 
 common:
 	ADDON_INCLUDES += libs/stable-diffusion/include
+	# stable-diffusion.cpp is bundled as a separately built native library.
 	ADDON_SOURCES_EXCLUDE += libs/stable-diffusion/source/%
 	ADDON_SOURCES_EXCLUDE += libs/stable-diffusion/build/%
+	ADDON_INCLUDES_EXCLUDE += libs/stable-diffusion/source/%
+	ADDON_INCLUDES_EXCLUDE += libs/stable-diffusion/build/%
 
 linux64:
 	ADDON_LIBS += libs/stable-diffusion/lib/Linux64/libstable-diffusion.so

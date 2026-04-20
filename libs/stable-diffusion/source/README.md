@@ -1,7 +1,3 @@
-> Vendored into `ofxStableDiffusion` on 2026-04-17.
-> Upstream pin: `a564fdf642780d1df123f1c413b19961375b8346`.
-> Addon-specific pin metadata lives in `OFX_VENDOR_PIN.txt`.
-
 <p align="center">
   <img src="./assets/logo.png" width="360x">
 </p>
@@ -81,9 +77,10 @@ API and command-line option may change frequently.***
   - OpenCL
   - SYCL
 - Supported weight formats
-  - Pytorch checkpoint (`.ckpt` or `.pth`)
+  - Pytorch checkpoint (`.ckpt` or `.pth` or `.pt`)
   - Safetensors (`.safetensors`)
   - GGUF (`.gguf`)
+- Convert mode supports converting model weights to `.gguf` or `.safetensors`
 - Supported platforms
     - Linux
     - Mac OS

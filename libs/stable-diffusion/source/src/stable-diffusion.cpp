@@ -943,6 +943,8 @@ public:
                     pred_type = FLOW_PRED;
                     if (sd_version_is_wan(version)) {
                         default_flow_shift = 5.f;
+                    } else if (sd_version_is_ernie_image(version)) {
+                        default_flow_shift = 4.f;
                     } else {
                         default_flow_shift = 3.f;
                     }
@@ -2388,6 +2390,14 @@ struct sd_ctx_t {
     StableDiffusionGGML* sd = nullptr;
 };
 
+static bool sd_version_supports_video_generation(SDVersion version) {
+    return version == VERSION_SVD || sd_version_is_wan(version);
+}
+
+static bool sd_version_supports_image_generation(SDVersion version) {
+    return !sd_version_supports_video_generation(version);
+}
+
 sd_ctx_t* new_sd_ctx(const sd_ctx_params_t* sd_ctx_params) {
     sd_ctx_t* sd_ctx = (sd_ctx_t*)malloc(sizeof(sd_ctx_t));
     if (sd_ctx == nullptr) {
@@ -2417,6 +2427,20 @@ void free_sd_ctx(sd_ctx_t* sd_ctx) {
     free(sd_ctx);
 }
 
+SD_API bool sd_ctx_supports_image_generation(const sd_ctx_t* sd_ctx) {
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
+        return false;
+    }
+    return sd_version_supports_image_generation(sd_ctx->sd->version);
+}
+
+SD_API bool sd_ctx_supports_video_generation(const sd_ctx_t* sd_ctx) {
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
+        return false;
+    }
+    return sd_version_supports_video_generation(sd_ctx->sd->version);
+}
+
 enum sample_method_t sd_get_default_sample_method(const sd_ctx_t* sd_ctx) {
     if (sd_ctx != nullptr && sd_ctx->sd != nullptr) {
         if (sd_version_is_dit(sd_ctx->sd->version)) {
@@ -2433,8 +2457,10 @@ enum scheduler_t sd_get_default_scheduler(const sd_ctx_t* sd_ctx, enum sample_me
             return EXPONENTIAL_SCHEDULER;
         }
     }
-    if (sample_method == LCM_SAMPLE_METHOD) {
+    if (sample_method == LCM_SAMPLE_METHOD || sample_method == TCD_SAMPLE_METHOD) {
         return LCM_SCHEDULER;
+    } else if (sample_method == DDIM_TRAILING_SAMPLE_METHOD) {
+        return SIMPLE_SCHEDULER;
     }
     return DISCRETE_SCHEDULER;
 }

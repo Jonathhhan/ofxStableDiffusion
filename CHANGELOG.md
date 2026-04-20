@@ -88,7 +88,7 @@
 - Expanded video presentation modes: `Standard`, `Loop`, `PingPong`, and `Boomerang`
 - Native rebuild scripts for Windows, batch-shell, and POSIX-shell workflows
 - Windows setup entrypoints via `scripts/setup_addon.ps1` and `scripts/setup_windows.bat`
-- Optional Windows prebuilt-runtime staging via `scripts/download-stable-diffusion-release.ps1`
+- Release-tag source snapshot refresh via `scripts/download-stable-diffusion-release.ps1`
 - Architecture and native build documentation under `docs/`
 - A lightweight CMake-based unit test suite for video helper behavior
 - A vendored current-master `stable-diffusion.cpp` source snapshot, pinned to `a564fdf642780d1df123f1c413b19961375b8346`
