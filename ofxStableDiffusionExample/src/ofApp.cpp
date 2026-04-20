@@ -344,8 +344,8 @@ void ofApp::setup() {
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	ofDisableArbTex();
 	printf("%s", stableDiffusion.getSystemInfo());
-	modelPath = "data/models/sd_turbo.safetensors";
-	modelName = "sd_turbo.safetensors";
+	modelPath = "";
+	modelName = "";
 	diffusionModelPath = "";
 	clipLPath = "";
 	clipGPath = "";
@@ -432,7 +432,6 @@ void ofApp::setup() {
 		progressTime = time;
 	});
 	configureExampleRanker();
-	refreshModelContext();
 	setupHoloscanBridge();
 
 	// Initial embedding enumeration (best-effort).
@@ -669,13 +668,26 @@ void ofApp::draw() {
 		if (ImGui::Button("Load Main Model")) {
 			if (selectPath("Load Main Model", modelPath)) {
 				modelName = ofFilePath::getFileName(modelPath);
+				diffusionModelPath.clear();
 			}
+		}
+		ImGui::SameLine(0, 5);
+		if (ImGui::Button("Unload Main Model")) {
+			modelPath.clear();
+			modelName.clear();
 		}
 		ImGui::SameLine(0, 5);
 		ImGui::Text("%s", modelPath.empty() ? "No main model selected" : modelPath.c_str());
 		ImGui::Dummy(ImVec2(0, 8));
 		if (ImGui::Button("Load Diffusion Model")) {
-			selectPath("Load Diffusion Model", diffusionModelPath);
+			if (selectPath("Load Diffusion Model", diffusionModelPath)) {
+				modelPath.clear();
+				modelName.clear();
+			}
+		}
+		ImGui::SameLine(0, 5);
+		if (ImGui::Button("Unload Diffusion Model")) {
+			diffusionModelPath.clear();
 		}
 		ImGui::SameLine(0, 5);
 		ImGui::Text("%s", diffusionModelPath.empty() ? "No diffusion model selected" : diffusionModelPath.c_str());
@@ -757,6 +769,10 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Load Context")) {
 			refreshModelContext();
+		}
+		ImGui::SameLine(0, 5);
+		if (ImGui::Button("Unload Context")) {
+			stableDiffusion.freeSdCtx();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (stableDiffusion.getLastError().empty()) {
