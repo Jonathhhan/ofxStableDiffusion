@@ -579,6 +579,21 @@ void ofxStableDiffusion::setMaxCachedModels(int count) {
 	modelManager.setMaxCachedModels(count);
 }
 
+void ofxStableDiffusion::addControlNet(const ofxStableDiffusionControlNet& controlNet) {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	controlNets.push_back(controlNet);
+}
+
+void ofxStableDiffusion::clearControlNets() {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	controlNets.clear();
+}
+
+std::vector<ofxStableDiffusionControlNet> ofxStableDiffusion::getControlNets() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return controlNets;
+}
+
 void ofxStableDiffusion::reloadEmbeddings(const std::string& embedDir) {
 	ofxStableDiffusionContextSettings settings = getContextSettings();
 	if (!embedDir.empty()) {

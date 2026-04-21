@@ -77,6 +77,15 @@ public:
 	/// Query available LoRA files in the loraModelDir; returns name and absolute path pairs.
 	std::vector<std::pair<std::string, std::string>> listLoras() const;
 
+	/// Add a ControlNet to the active stack for subsequent generations.
+	void addControlNet(const ofxStableDiffusionControlNet& controlNet);
+
+	/// Clear all active ControlNets.
+	void clearControlNets();
+
+	/// Get the current ControlNet stack.
+	std::vector<ofxStableDiffusionControlNet> getControlNets() const;
+
 	/// Scan a directory for available model files
 	std::vector<ofxStableDiffusionModelInfo> scanModels(const std::string& directory);
 
@@ -274,6 +283,7 @@ public:
 	std::string controlImagePath;
 	float controlStrength = 0.9f;
 	std::vector<ofxStableDiffusionLora> loras;
+	std::vector<ofxStableDiffusionControlNet> controlNets;
 
 	sd_image_t inputImage = {0, 0, 0, nullptr};
 	sd_image_t maskImage = {0, 0, 0, nullptr};

@@ -149,3 +149,15 @@ target_include_directories(test_model_manager_integration PRIVATE
 )
 
 add_test(NAME model_manager_integration COMMAND test_model_manager_integration)
+
+add_executable(test_multi_controlnet
+    test_multi_controlnet.cpp
+)
+
+target_include_directories(test_multi_controlnet PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME multi_controlnet COMMAND test_multi_controlnet)
