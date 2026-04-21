@@ -241,6 +241,55 @@ The addon now detects video-specific model families:
 
 Model capabilities are automatically detected and exposed through `getCapabilities()`.
 
+### Workflow & Usability Features
+
+The addon provides comprehensive workflow tools for efficient video generation:
+
+**Quick Preview Modes:**
+- `QuickPreview_8` - Every 8th frame at 256x384 (ultra-fast iteration)
+- `QuickPreview_4` - Every 4th frame at 384x576 (fast preview)
+- `QuickPreview_2` - Every 2nd frame at 512x768 (quick validation)
+
+**Storyboard Generation:**
+- `Storyboard_6` - Generate 6 evenly-spaced keyframes
+- `Storyboard_12` - Generate 12 keyframes for detailed planning
+
+**High Quality Modes:**
+- `HighQuality_24fps` - 24 FPS cinematic quality
+- `HighQuality_30fps` - 30 FPS smooth motion
+
+**Dry-Run Estimation:**
+```cpp
+auto estimate = ofxStableDiffusionEstimateVideoRender(request);
+ofLogNotice() << "Estimated time: " << estimate.estimatedMinutes << " minutes";
+ofLogNotice() << "Memory usage: " << estimate.estimatedMemoryMB << " MB";
+ofLogNotice() << "Recommendation: " << estimate.recommendation;
+```
+
+**Preset Composition:**
+Combine multiple presets to create custom workflows:
+```cpp
+std::vector<ofxStableDiffusionVideoWorkflowPreset> presets = {
+    ofxStableDiffusionVideoWorkflowPreset::LowVram,
+    ofxStableDiffusionVideoWorkflowPreset::QuickPreview_4
+};
+auto composed = ofxStableDiffusionComposePresets(baseRequest, presets);
+```
+
+**Video Templates:**
+Reusable animation patterns for common scenarios:
+```cpp
+// Fade between two prompts
+auto fadeTemplate = ofxStableDiffusionCreateFadeTemplate(
+    "sunrise over mountains",
+    "sunset over ocean",
+    24);
+auto request = ofxStableDiffusionApplyTemplate(baseRequest, fadeTemplate);
+
+// Pulsing strength variation
+auto pulseTemplate = ofxStableDiffusionCreatePulseTemplate(24, 0.4f, 0.8f);
+```
+
 ## Image Modes
 
 The typed image request layer now exposes addon-level image modes:

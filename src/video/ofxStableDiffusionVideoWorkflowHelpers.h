@@ -11,7 +11,17 @@ enum class ofxStableDiffusionVideoWorkflowPreset {
 	LowVram,
 	Balanced,
 	Quality,
-	BatchStoryboard
+	BatchStoryboard,
+	// Quick preview modes
+	QuickPreview_8,   // Every 8th frame at 256x
+	QuickPreview_4,   // Every 4th frame at 384x
+	QuickPreview_2,   // Every 2nd frame at 512x
+	// Storyboard modes
+	Storyboard_6,     // 6 evenly-spaced keyframes
+	Storyboard_12,    // 12 evenly-spaced keyframes
+	// High quality modes
+	HighQuality_24fps,
+	HighQuality_30fps
 };
 
 struct ofxStableDiffusionVideoPromptValidation {
@@ -81,6 +91,13 @@ inline const char * ofxStableDiffusionVideoWorkflowPresetLabel(
 	case ofxStableDiffusionVideoWorkflowPreset::Balanced: return "Balanced";
 	case ofxStableDiffusionVideoWorkflowPreset::Quality: return "Quality";
 	case ofxStableDiffusionVideoWorkflowPreset::BatchStoryboard: return "BatchStoryboard";
+	case ofxStableDiffusionVideoWorkflowPreset::QuickPreview_8: return "QuickPreview_8";
+	case ofxStableDiffusionVideoWorkflowPreset::QuickPreview_4: return "QuickPreview_4";
+	case ofxStableDiffusionVideoWorkflowPreset::QuickPreview_2: return "QuickPreview_2";
+	case ofxStableDiffusionVideoWorkflowPreset::Storyboard_6: return "Storyboard_6";
+	case ofxStableDiffusionVideoWorkflowPreset::Storyboard_12: return "Storyboard_12";
+	case ofxStableDiffusionVideoWorkflowPreset::HighQuality_24fps: return "HighQuality_24fps";
+	case ofxStableDiffusionVideoWorkflowPreset::HighQuality_30fps: return "HighQuality_30fps";
 	default:
 		return "Balanced";
 	}
@@ -130,6 +147,64 @@ inline void ofxStableDiffusionApplyVideoWorkflowPreset(
 		request->sampleSteps = 16;
 		request->cfgScale = 6.0f;
 		request->strength = 0.6f;
+		break;
+	// Quick preview modes - reduce quality for fast iteration
+	case ofxStableDiffusionVideoWorkflowPreset::QuickPreview_8:
+		request->frameCount = std::max(8, request->frameCount / 8);
+		request->fps = 4;
+		request->sampleSteps = 8;
+		request->cfgScale = 4.0f;
+		request->strength = 0.5f;
+		request->width = 256;
+		request->height = 384;
+		break;
+	case ofxStableDiffusionVideoWorkflowPreset::QuickPreview_4:
+		request->frameCount = std::max(4, request->frameCount / 4);
+		request->fps = 6;
+		request->sampleSteps = 10;
+		request->cfgScale = 4.5f;
+		request->strength = 0.5f;
+		request->width = 384;
+		request->height = 576;
+		break;
+	case ofxStableDiffusionVideoWorkflowPreset::QuickPreview_2:
+		request->frameCount = std::max(4, request->frameCount / 2);
+		request->fps = 8;
+		request->sampleSteps = 12;
+		request->cfgScale = 5.0f;
+		request->strength = 0.55f;
+		request->width = 512;
+		request->height = 768;
+		break;
+	// Storyboard modes - generate keyframes only
+	case ofxStableDiffusionVideoWorkflowPreset::Storyboard_6:
+		request->frameCount = 6;
+		request->fps = 1;  // Static keyframes
+		request->sampleSteps = 20;
+		request->cfgScale = 6.5f;
+		request->strength = 0.6f;
+		break;
+	case ofxStableDiffusionVideoWorkflowPreset::Storyboard_12:
+		request->frameCount = 12;
+		request->fps = 2;  // Static keyframes
+		request->sampleSteps = 20;
+		request->cfgScale = 6.5f;
+		request->strength = 0.6f;
+		break;
+	// High quality modes
+	case ofxStableDiffusionVideoWorkflowPreset::HighQuality_24fps:
+		request->frameCount = std::min(48, request->frameCount);
+		request->fps = 24;
+		request->sampleSteps = 35;
+		request->cfgScale = 7.5f;
+		request->strength = 0.75f;
+		break;
+	case ofxStableDiffusionVideoWorkflowPreset::HighQuality_30fps:
+		request->frameCount = std::min(60, request->frameCount);
+		request->fps = 30;
+		request->sampleSteps = 40;
+		request->cfgScale = 8.0f;
+		request->strength = 0.8f;
 		break;
 	}
 }
@@ -272,4 +347,171 @@ inline bool ofxStableDiffusionSaveVideoRenderManifest(
 			preset,
 			outputDirectory,
 			metadataPath));
+}
+
+// Dry-run estimation structure
+struct ofxStableDiffusionVideoDryRunEstimate {
+	int totalFrames = 0;
+	int totalSteps = 0;
+	float estimatedMinutes = 0.0f;
+	float estimatedMemoryMB = 0.0f;
+	std::string recommendation;
+	bool feasible = true;
+	std::vector<std::string> warnings;
+};
+
+// Estimate render time and resources for dry-run validation
+inline ofxStableDiffusionVideoDryRunEstimate ofxStableDiffusionEstimateVideoRender(
+	const ofxStableDiffusionVideoRequest & request,
+	float avgSecondsPerStep = 0.5f) {
+
+	ofxStableDiffusionVideoDryRunEstimate estimate;
+	estimate.totalFrames = request.frameCount;
+	estimate.totalSteps = request.frameCount * request.sampleSteps;
+
+	// Estimate render time (conservative)
+	estimate.estimatedMinutes = (estimate.totalSteps * avgSecondsPerStep) / 60.0f;
+
+	// Estimate memory usage (rough approximation)
+	const float pixelCount = request.width * request.height;
+	const float baseMemoryMB = (pixelCount * 3 * 4) / (1024.0f * 1024.0f); // RGBA float
+	estimate.estimatedMemoryMB = baseMemoryMB * 1.5f * request.frameCount; // With overhead
+
+	// Generate recommendation
+	if (estimate.estimatedMinutes < 2.0f) {
+		estimate.recommendation = "Fast render - should complete quickly";
+	} else if (estimate.estimatedMinutes < 10.0f) {
+		estimate.recommendation = "Moderate render time - good for iteration";
+	} else if (estimate.estimatedMinutes < 30.0f) {
+		estimate.recommendation = "Long render - consider using a preview preset first";
+	} else {
+		estimate.recommendation = "Very long render - strongly recommend preview mode";
+		estimate.warnings.push_back("Estimated time exceeds 30 minutes");
+	}
+
+	// Check feasibility
+	if (estimate.estimatedMemoryMB > 8000.0f) {
+		estimate.feasible = false;
+		estimate.warnings.push_back("High memory usage may cause OOM errors");
+	}
+
+	if (request.frameCount > 200 && request.sampleSteps > 30) {
+		estimate.warnings.push_back("High frame count with high steps - consider reducing");
+	}
+
+	return estimate;
+}
+
+// Preset composition - combine multiple presets
+inline ofxStableDiffusionVideoRequest ofxStableDiffusionComposePresets(
+	const ofxStableDiffusionVideoRequest & baseRequest,
+	const std::vector<ofxStableDiffusionVideoWorkflowPreset> & presets) {
+
+	ofxStableDiffusionVideoRequest composed = baseRequest;
+
+	// Apply each preset in sequence, allowing later presets to override
+	for (const auto & preset : presets) {
+		ofxStableDiffusionApplyVideoWorkflowPreset(&composed, preset);
+	}
+
+	return composed;
+}
+
+// Video template system - reusable animation patterns
+struct ofxStableDiffusionVideoTemplate {
+	std::string name;
+	std::string description;
+	ofxStableDiffusionVideoRequest baseRequest;
+	std::vector<ofxStableDiffusionPromptKeyframe> promptKeyframes;
+	std::vector<ofxStableDiffusionKeyframe> parameterKeyframes;
+};
+
+// Create a simple fade template
+inline ofxStableDiffusionVideoTemplate ofxStableDiffusionCreateFadeTemplate(
+	const std::string & startPrompt,
+	const std::string & endPrompt,
+	int frameCount = 24) {
+
+	ofxStableDiffusionVideoTemplate tmpl;
+	tmpl.name = "Fade";
+	tmpl.description = "Smooth fade between two prompts";
+
+	tmpl.baseRequest.frameCount = frameCount;
+	tmpl.baseRequest.fps = 12;
+	tmpl.baseRequest.sampleSteps = 20;
+
+	tmpl.promptKeyframes.push_back({0, startPrompt, 1.0f});
+	tmpl.promptKeyframes.push_back({frameCount - 1, endPrompt, 1.0f});
+
+	tmpl.baseRequest.animationSettings.enablePromptInterpolation = true;
+	tmpl.baseRequest.animationSettings.promptKeyframes = tmpl.promptKeyframes;
+	tmpl.baseRequest.animationSettings.promptInterpolationMode =
+		ofxStableDiffusionInterpolationMode::Smooth;
+
+	return tmpl;
+}
+
+// Create a pulse template (varying strength)
+inline ofxStableDiffusionVideoTemplate ofxStableDiffusionCreatePulseTemplate(
+	int frameCount = 24,
+	float minStrength = 0.4f,
+	float maxStrength = 0.8f) {
+
+	ofxStableDiffusionVideoTemplate tmpl;
+	tmpl.name = "Pulse";
+	tmpl.description = "Pulsing strength variation";
+
+	tmpl.baseRequest.frameCount = frameCount;
+	tmpl.baseRequest.fps = 12;
+	tmpl.baseRequest.sampleSteps = 20;
+
+	// Create pulse pattern
+	ofxStableDiffusionKeyframe keyframe0(0);
+	keyframe0.strength = minStrength;
+	tmpl.parameterKeyframes.push_back(keyframe0);
+
+	ofxStableDiffusionKeyframe keyframeMid(frameCount / 2);
+	keyframeMid.strength = maxStrength;
+	tmpl.parameterKeyframes.push_back(keyframeMid);
+
+	ofxStableDiffusionKeyframe keyframeLast(frameCount - 1);
+	keyframeLast.strength = minStrength;
+	tmpl.parameterKeyframes.push_back(keyframeLast);
+
+	tmpl.baseRequest.animationSettings.enableParameterAnimation = true;
+	tmpl.baseRequest.animationSettings.parameterKeyframes = tmpl.parameterKeyframes;
+	tmpl.baseRequest.animationSettings.parameterInterpolationMode =
+		ofxStableDiffusionInterpolationMode::Smooth;
+
+	return tmpl;
+}
+
+// Apply a template to a request
+inline ofxStableDiffusionVideoRequest ofxStableDiffusionApplyTemplate(
+	const ofxStableDiffusionVideoRequest & request,
+	const ofxStableDiffusionVideoTemplate & tmpl) {
+
+	ofxStableDiffusionVideoRequest result = request;
+
+	// Merge template settings
+	result.frameCount = tmpl.baseRequest.frameCount;
+	result.fps = tmpl.baseRequest.fps;
+	result.sampleSteps = tmpl.baseRequest.sampleSteps;
+
+	// Merge animation settings
+	if (!tmpl.promptKeyframes.empty()) {
+		result.animationSettings.enablePromptInterpolation = true;
+		result.animationSettings.promptKeyframes = tmpl.promptKeyframes;
+		result.animationSettings.promptInterpolationMode =
+			tmpl.baseRequest.animationSettings.promptInterpolationMode;
+	}
+
+	if (!tmpl.parameterKeyframes.empty()) {
+		result.animationSettings.enableParameterAnimation = true;
+		result.animationSettings.parameterKeyframes = tmpl.parameterKeyframes;
+		result.animationSettings.parameterInterpolationMode =
+			tmpl.baseRequest.animationSettings.parameterInterpolationMode;
+	}
+
+	return result;
 }
