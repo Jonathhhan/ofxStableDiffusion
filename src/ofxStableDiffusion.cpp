@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <exception>
 #include <filesystem>
 #include <mutex>
 
@@ -230,7 +231,8 @@ ValidationResult validateUpscalerSettings(const ofxStableDiffusionUpscalerSettin
 bool mergeControlNets(
 	const std::vector<ofxStableDiffusionControlNet>& controlNets,
 	stableDiffusionThread::OwnedImage& output,
-	float& resolvedStrength) {
+	float& resolvedStrength,
+	std::string& errorMessage) {
 	if (controlNets.empty()) {
 		return false;
 	}
@@ -244,7 +246,17 @@ bool mergeControlNets(
 	std::vector<double> accum(byteCount, 0.0);
 	double totalStrength = 0.0;
 
-	for (const auto& controlNet : controlNets) {
+	for (std::size_t idx = 0; idx < controlNets.size(); ++idx) {
+		const auto& controlNet = controlNets[idx];
+		if (controlNet.conditionImage.data == nullptr) {
+			errorMessage = "ControlNet image is missing (index " + std::to_string(idx) + ")";
+			return false;
+		}
+		if (controlNet.strength < 0.0f || controlNet.strength > 2.0f) {
+			errorMessage = "ControlNet strength must be between 0.0 and 2.0 (index " + std::to_string(idx) + ")";
+			return false;
+		}
+
 		const double weight = static_cast<double>(controlNet.strength);
 		totalStrength += weight;
 		const uint8_t* data = controlNet.conditionImage.data;
@@ -254,6 +266,7 @@ bool mergeControlNets(
 	}
 
 	if (totalStrength <= 0.0) {
+		errorMessage = "Combined ControlNet strength must be greater than zero";
 		return false;
 	}
 
@@ -421,12 +434,31 @@ void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request)
 	if (!beginBackgroundTask(task)) {
 		return;
 	}
-	applyImageRequest(request);
+	if (!applyImageRequest(request)) {
+		return;
+	}
 	thread.startThread();
 }
 
 void ofxStableDiffusion::generateVideo(const ofxStableDiffusionVideoRequest& request) {
 	if (!validateVideoRequestAndSetError(request)) {
+		return;
+	}
+	const ofxStableDiffusionCapabilities capabilities = getCapabilities();
+	if (!capabilities.contextConfigured) {
+		setLastError(ofxStableDiffusionErrorCode::ModelNotFound, "Video generation requires a loaded model");
+		return;
+	}
+	if (!capabilities.imageToVideo) {
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Current model does not support image-to-video generation");
+		return;
+	}
+	if (request.endImage.data != nullptr && !capabilities.videoEndFrame) {
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "This model does not support providing an end frame");
+		return;
+	}
+	if (request.hasAnimation() && !capabilities.videoAnimation) {
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Animated video generation is not supported by the current model");
 		return;
 	}
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToVideo)) {
@@ -1287,9 +1319,10 @@ void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSet
 	enableMmap = resolvedSettings.enableMmap;
 }
 
-void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest& request) {
+bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest& request) {
 	stableDiffusionThread::ImageTaskData taskData;
 	bool mergeFailed = false;
+	std::string mergeError;
 	float mergedStrength = request.controlStrength;
 	{
 		std::lock_guard<std::mutex> lock(stateMutex);
@@ -1312,7 +1345,7 @@ void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 
 		bool hasControl = false;
 		if (!request.controlNets.empty()) {
-			if (!mergeControlNets(request.controlNets, taskData.controlImage, mergedStrength)) {
+			if (!mergeControlNets(request.controlNets, taskData.controlImage, mergedStrength, mergeError)) {
 				mergeFailed = true;
 			} else {
 				taskData.request.controlCond = &taskData.controlImage.image;
@@ -1355,10 +1388,14 @@ void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 	}
 
 	if (mergeFailed) {
-		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Failed to merge ControlNet inputs");
-		return;
+		const std::string message = mergeError.empty() ?
+			"Failed to merge ControlNet inputs" :
+			mergeError;
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, message);
+		return false;
 	}
 	thread.prepareImageTask(taskData);
+	return true;
 }
 
 void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
@@ -1640,7 +1677,14 @@ void ofxStableDiffusion::applyImageRanking(
 		return;
 	}
 
-	const std::vector<ofxStableDiffusionImageScore> scores = rankCallback(request, frames);
+	std::vector<ofxStableDiffusionImageScore> scores;
+	try {
+		scores = rankCallback(request, frames);
+	} catch (const std::exception& e) {
+		ofLogWarning("ofxStableDiffusion") << "Image rank callback threw: " << e.what();
+	} catch (...) {
+		ofLogWarning("ofxStableDiffusion") << "Image rank callback threw an unknown exception";
+	}
 	if (scores.size() != frames.size()) {
 		frames.front().isSelected = true;
 		return;

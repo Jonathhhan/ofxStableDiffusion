@@ -70,6 +70,7 @@ int main() {
 		ok &= expect(capabilities.textToImage, "sdxl supports text-to-image");
 		ok &= expect(capabilities.imageToImage, "sdxl supports image-to-image");
 		ok &= expect(!capabilities.imageToVideo, "sdxl does not expose video generation");
+		ok &= expect(!capabilities.videoAnimation, "sdxl does not expose video animation");
 		ok &= expect(capabilities.controlNetConfigured, "sdxl controlnet path is tracked");
 		ok &= expect(capabilities.controlNet, "sdxl resolves controlnet support");
 		ok &= expect(capabilities.photoMakerConfigured, "sdxl photomaker path is tracked");
@@ -110,6 +111,7 @@ int main() {
 			ofxStableDiffusionModelFamily::WANTI2V,
 			"wan ti2v family");
 		ok &= expect(capabilities.imageToVideo, "wan ti2v supports video generation");
+		ok &= expect(!capabilities.videoAnimation, "wan ti2v does not expose animation wrapper");
 		ok &= expect(!capabilities.videoEndFrame, "wan ti2v does not advertise end-frame morphing");
 	}
 
@@ -149,6 +151,7 @@ int main() {
 		ok &= expect(capabilities.splitModelPaths, "split flux settings are detected");
 		ok &= expect(capabilities.textToImage, "split flux supports image generation");
 		ok &= expect(!capabilities.imageToVideo, "split flux does not advertise video generation");
+		ok &= expect(!capabilities.videoAnimation, "split flux does not advertise animation");
 		ok &= expect(capabilities.upscaling, "configured upscaler is reflected in capabilities");
 	}
 

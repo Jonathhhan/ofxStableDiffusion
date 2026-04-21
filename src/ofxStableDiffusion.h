@@ -331,7 +331,7 @@ private:
 
 	bool beginBackgroundTask(ofxStableDiffusionTask task);
 	void applyContextSettings(const ofxStableDiffusionContextSettings& settings);
-	void applyImageRequest(const ofxStableDiffusionImageRequest& request);
+	bool applyImageRequest(const ofxStableDiffusionImageRequest& request);
 	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
 	bool validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task);
 	bool validateVideoRequestAndSetError(const ofxStableDiffusionVideoRequest& request);
