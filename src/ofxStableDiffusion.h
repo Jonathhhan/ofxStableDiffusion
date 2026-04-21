@@ -68,8 +68,8 @@ public:
 	void setImageRankCallback(ofxSdImageRankCallback cb);
 	int getSelectedImageIndex() const;
 
-	/// Load an input image from ofPixels. The pixels must remain valid for the
-	/// lifetime of any subsequent img2img / img2vid call.
+	/// Load an input image from ofPixels. A deep copy is made immediately;
+	/// the caller's pixels do not need to remain valid after this call returns.
 	void loadImage(const ofPixels& pixels);
 
 	/// Replace the active LoRA/LoCon stack for subsequent generations.
@@ -230,7 +230,8 @@ public:
 		sd_type_t outputType);
 
 	/// Run Canny edge detection on an image buffer in-place.
-	/// Returns a pointer to the processed data (allocated by the library).
+	/// The buffer is modified in-place; the returned pointer is the same as @p img.
+	/// @param channels Number of channels in the image buffer (typically 1 for grayscale).
 	uint8_t* preprocessCanny(uint8_t* img,
 		int width,
 		int height,
@@ -238,7 +239,8 @@ public:
 		float lowThreshold,
 		float weak,
 		float strong,
-		bool inverse);
+		bool inverse,
+		int channels = 1);
 
 	/// Returns true if generation is currently in progress.
 	bool isGenerating() const;
@@ -383,6 +385,7 @@ private:
 	stableDiffusionThread::OwnedImage loadedInputImage;
 	ofxStableDiffusionModelManager modelManager;
 	ofxStableDiffusionPerformanceProfiler performanceProfiler;
+	ofxStableDiffusionUpscalerSettings cachedUpscalerSettings;
 	mutable std::mutex stateMutex;
 };
 

@@ -26,7 +26,6 @@ bool ofxStableDiffusionRealtimeSession::start(const ofxStableDiffusionRealtimeSe
 
 	// Perform warmup if enabled
 	if (settings.enableWarmup) {
-		ofLogNotice("ofxStableDiffusionRealtimeSession") << "Starting warmup...";
 		warmup();
 	}
 
@@ -61,14 +60,12 @@ bool ofxStableDiffusionRealtimeSession::submit(const ofxStableDiffusionRealtimeR
 
 	std::lock_guard<std::mutex> lock(requestMutex);
 
-	// Check queue depth and potentially drop frame
-	// In a real implementation, this would check against the actual queue
-	// For now, we just accept the request
-
 	pendingRequest = request;
 
-	// Placeholder: in real implementation, this would submit to generation queue
-	// and the result would come back asynchronously
+	// Real-time generation is not yet connected to an ofxStableDiffusion instance.
+	// The request is stored but no image will be generated.
+	ofLogWarning("ofxStableDiffusionRealtimeSession")
+		<< "submit: real-time generation pipeline is not yet implemented; request queued but not processed";
 
 	return true;
 }
@@ -120,21 +117,12 @@ bool ofxStableDiffusionRealtimeSession::warmup() {
 		return false;
 	}
 
-	ofLogNotice("ofxStableDiffusionRealtimeSession") << "Performing warmup generation...";
+	// Real-time generation is not yet connected to an ofxStableDiffusion instance.
+	// Warmup does nothing until the pipeline is implemented.
+	ofLogWarning("ofxStableDiffusionRealtimeSession")
+		<< "warmup: real-time generation pipeline is not yet implemented; warmup skipped";
 
-	// Create a simple warmup request
-	ofxStableDiffusionRealtimeRequest warmupRequest;
-	warmupRequest.prompt = "warmup";
-	warmupRequest.width = 512;
-	warmupRequest.height = 512;
-	warmupRequest.sampleSteps = settings.minSampleSteps;
-
-	// In real implementation, this would actually generate an image to warm up the model
-	// For now, just simulate the warmup
-
-	ofLogNotice("ofxStableDiffusionRealtimeSession") << "Warmup complete";
-
-	return true;
+	return false;
 }
 
 void ofxStableDiffusionRealtimeSession::processQueue() {

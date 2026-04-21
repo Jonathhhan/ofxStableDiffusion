@@ -217,6 +217,7 @@ private:
 	std::shared_ptr<ofxStableDiffusionQueueRequest> currentRequest;
 
 	int nextRequestId = 1;
+	int queuedCount = 0;
 	bool enabled = true;
 	int maxQueueSize = 0;  // 0 = unlimited
 
