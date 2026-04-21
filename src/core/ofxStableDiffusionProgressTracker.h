@@ -1,7 +1,9 @@
 #pragma once
 
-#include <string>
+#include <cstddef>
 #include <cstdint>
+#include <deque>
+#include <string>
 #include <vector>
 
 /// Generation phase enum
@@ -119,8 +121,10 @@ private:
 	ofxStableDiffusionProgressInfo currentInfo;
 
 	// Historical data for ETA calculation
+	// std::deque is used instead of std::vector so pop_front() is O(1) when
+	// the history window is full, rather than O(n) with erase(begin()).
 	std::deque<float> stepTimes;
-	static constexpr int maxHistorySize = 20;
+	static constexpr std::size_t maxHistorySize = 20;
 
 	// Timing
 	uint64_t startTimeMicros = 0;

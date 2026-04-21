@@ -33,7 +33,7 @@ void ofxStableDiffusionProgressTracker::update(int currentStep, int currentBatch
 		stepTimes.push_back(stepTime);
 
 		// Keep only recent history
-		if (static_cast<int>(stepTimes.size()) > maxHistorySize) {
+		if (stepTimes.size() > maxHistorySize) {
 			stepTimes.pop_front();
 		}
 	}
