@@ -2,6 +2,14 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+
+const char* emptyToNull(const std::string& value) {
+	return value.empty() ? nullptr : value.c_str();
+}
+
+} // namespace
+
 //--------------------------------------------------------------
 ofxStableDiffusionModelManager::ofxStableDiffusionModelManager() {
 }
@@ -372,19 +380,22 @@ sd_ctx_t* ofxStableDiffusionModelManager::loadModelContext(const ofxStableDiffus
 
 	reportProgress(modelInfo.modelPath, 0.3f, "Loading model into memory");
 
-	// Load model using stable-diffusion.cpp API
 	sd_ctx_params_t ctxParams{};
 	sd_ctx_params_init(&ctxParams);
-	ctxParams.model_path     = modelInfo.modelPath.c_str();
-	ctxParams.vae_path       = modelInfo.vaePath.empty() ? nullptr : modelInfo.vaePath.c_str();
-	ctxParams.taesd_path     = modelInfo.taesdPath.empty() ? nullptr : modelInfo.taesdPath.c_str();
-	ctxParams.control_net_path = modelInfo.controlNetPath.empty() ? nullptr : modelInfo.controlNetPath.c_str();
-	ctxParams.vae_decode_only        = false;
+
+	ctxParams.model_path = emptyToNull(modelInfo.modelPath);
+	ctxParams.vae_path = emptyToNull(modelInfo.vaePath);
+	ctxParams.taesd_path = emptyToNull(modelInfo.taesdPath);
+	ctxParams.control_net_path = emptyToNull(modelInfo.controlNetPath);
+	ctxParams.photo_maker_path = nullptr;
+	ctxParams.vae_decode_only = false;
 	ctxParams.free_params_immediately = false;
-	ctxParams.n_threads      = -1;  // auto
-	ctxParams.wtype          = modelInfo.weightType;
-	ctxParams.rng_type       = STD_DEFAULT_RNG;
+	ctxParams.n_threads = -1;  // auto
+	ctxParams.wtype = modelInfo.weightType;
+	ctxParams.rng_type = STD_DEFAULT_RNG;
 	ctxParams.sampler_rng_type = STD_DEFAULT_RNG;
+
+	// Load model using stable-diffusion.cpp API
 	sd_ctx_t* ctx = new_sd_ctx(&ctxParams);
 
 	if (!ctx) {
