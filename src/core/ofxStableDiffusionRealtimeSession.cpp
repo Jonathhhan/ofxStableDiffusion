@@ -1,4 +1,6 @@
 #include "ofxStableDiffusionRealtimeSession.h"
+#include "../ofxStableDiffusion.h"
+#include <algorithm>
 #include <numeric>
 
 ofxStableDiffusionRealtimeSession::ofxStableDiffusionRealtimeSession() {
@@ -15,18 +17,24 @@ bool ofxStableDiffusionRealtimeSession::start(const ofxStableDiffusionRealtimeSe
 	}
 
 	settings = settings_;
+	// Ensure maxSampleSteps is never below minSampleSteps
+	settings.maxSampleSteps = std::max(settings.maxSampleSteps, settings.minSampleSteps);
 	active = true;
+	generationInFlight = false;
+	hasPendingRequest = false;
+	warmingUp = false;
+	currentSampleSteps = settings.minSampleSteps;
 	stats = ofxStableDiffusionRealtimeStats();
 	stats.sessionStartTime = ofGetElapsedTimeMillis();
 	stats.isActive = true;
+	latencyHistory.clear();
 
-	// Initialize pending request with defaults
+	// Initialize pending request defaults
 	pendingRequest.cfgScale = settings.cfgScale;
 	pendingRequest.sampleSteps = settings.minSampleSteps;
 
-	// Perform warmup if enabled
-	if (settings.enableWarmup) {
-		ofLogNotice("ofxStableDiffusionRealtimeSession") << "Starting warmup...";
+	// Warmup if a generator is attached and warmup is requested
+	if (settings.enableWarmup && generator) {
 		warmup();
 	}
 
@@ -36,6 +44,16 @@ bool ofxStableDiffusionRealtimeSession::start(const ofxStableDiffusionRealtimeSe
 	return true;
 }
 
+bool ofxStableDiffusionRealtimeSession::start(const ofxStableDiffusionRealtimeSettings& settings_,
+	ofxStableDiffusion& sd) {
+	setGenerator(&sd);
+	return start(settings_);
+}
+
+void ofxStableDiffusionRealtimeSession::setGenerator(ofxStableDiffusion* sd) {
+	generator = sd;
+}
+
 void ofxStableDiffusionRealtimeSession::stop() {
 	if (!active) {
 		return;
@@ -43,6 +61,10 @@ void ofxStableDiffusionRealtimeSession::stop() {
 
 	active = false;
 	stats.isActive = false;
+	generationInFlight = false;
+	hasPendingRequest = false;
+	warmingUp = false;
+	currentSampleSteps = settings.minSampleSteps;
 
 	ofLogNotice("ofxStableDiffusionRealtimeSession")
 		<< "Session stopped. Total generations: " << stats.totalGenerations
@@ -59,18 +81,81 @@ bool ofxStableDiffusionRealtimeSession::submit(const ofxStableDiffusionRealtimeR
 		return false;
 	}
 
-	std::lock_guard<std::mutex> lock(requestMutex);
+	if (!generator) {
+		ofLogWarning("ofxStableDiffusionRealtimeSession")
+			<< "submit: no generator attached; call setGenerator() or start(settings, sd) first";
+		return false;
+	}
 
-	// Check queue depth and potentially drop frame
-	// In a real implementation, this would check against the actual queue
-	// For now, we just accept the request
+	// Drop if busy and no buffering is allowed.
+	// LowLatency mode always drops rather than queuing, regardless of maxQueueDepth.
+	const bool mustDropIfBusy =
+		(settings.maxQueueDepth == 0 ||
+		settings.mode == ofxStableDiffusionRealtimeMode::LowLatency);
+	if (generationInFlight && mustDropIfBusy) {
+		stats.droppedFrames++;
+		return false;
+	}
 
-	pendingRequest = request;
+	{
+		std::lock_guard<std::mutex> lock(requestMutex);
+		pendingRequest = request;
+		hasPendingRequest = true;
+	}
 
-	// Placeholder: in real implementation, this would submit to generation queue
-	// and the result would come back asynchronously
+	// Fire immediately if the generator is idle
+	if (!generationInFlight) {
+		processQueue();
+	}
 
 	return true;
+}
+
+void ofxStableDiffusionRealtimeSession::update() {
+	if (!active || !generator) {
+		return;
+	}
+
+	if (!generationInFlight) {
+		// Nothing running — fire a pending request if one is waiting
+		processQueue();
+		return;
+	}
+
+	// A generation is in flight; check whether it has finished
+	if (generator->isGenerating()) {
+		return;
+	}
+
+	// Generation just completed
+	generationInFlight = false;
+	const float latencyMs =
+		static_cast<float>(ofGetElapsedTimeMicros() - generationStartMicros) / 1000.0f;
+
+	if (warmingUp) {
+		warmingUp = false;
+		ofLogNotice("ofxStableDiffusionRealtimeSession")
+			<< "Warmup complete (latency: " << latencyMs << "ms)";
+	} else {
+		const ofxStableDiffusionResult result = generator->getLastResult();
+		{
+			std::lock_guard<std::mutex> lock(requestMutex);
+			lastResult = result;
+		}
+		updateStats(latencyMs);
+		if (resultCallback && result.success) {
+			try {
+				resultCallback(result);
+			} catch (const std::exception& e) {
+				ofLogWarning("ofxStableDiffusionRealtimeSession") << "Result callback threw: " << e.what();
+			} catch (...) {
+				ofLogWarning("ofxStableDiffusionRealtimeSession") << "Result callback threw an unknown exception";
+			}
+		}
+	}
+
+	// Immediately fire any queued request so latency stays minimal
+	processQueue();
 }
 
 void ofxStableDiffusionRealtimeSession::updatePrompt(const std::string& prompt) {
@@ -86,6 +171,29 @@ void ofxStableDiffusionRealtimeSession::updateCfgScale(float cfgScale) {
 void ofxStableDiffusionRealtimeSession::updateStrength(float strength) {
 	std::lock_guard<std::mutex> lock(requestMutex);
 	pendingRequest.strength = strength;
+}
+
+void ofxStableDiffusionRealtimeSession::updateNegativePrompt(const std::string& negativePrompt) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.negativePrompt = negativePrompt;
+}
+
+void ofxStableDiffusionRealtimeSession::updateSeed(int seed) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.seed = seed;
+}
+
+void ofxStableDiffusionRealtimeSession::updateSampleSteps(int steps) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.sampleSteps = steps;
+	// Also reset the adaptive step counter so the explicit value takes effect immediately
+	currentSampleSteps = clampToStepRange(steps);
+}
+
+void ofxStableDiffusionRealtimeSession::updateDimensions(int width, int height) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.width = width;
+	pendingRequest.height = height;
 }
 
 void ofxStableDiffusionRealtimeSession::setResultCallback(ofxSdRealtimeResultCallback callback) {
@@ -112,43 +220,100 @@ void ofxStableDiffusionRealtimeSession::resetStats() {
 }
 
 ofxStableDiffusionResult ofxStableDiffusionRealtimeSession::getLastResult() const {
+	std::lock_guard<std::mutex> lock(requestMutex);
 	return lastResult;
+}
+
+bool ofxStableDiffusionRealtimeSession::isGenerating() const {
+	return generationInFlight;
+}
+
+int ofxStableDiffusionRealtimeSession::getCurrentSampleSteps() const {
+	return currentSampleSteps;
 }
 
 bool ofxStableDiffusionRealtimeSession::warmup() {
 	if (!active) {
+		ofLogWarning("ofxStableDiffusionRealtimeSession") << "warmup: session not active";
 		return false;
 	}
 
-	ofLogNotice("ofxStableDiffusionRealtimeSession") << "Performing warmup generation...";
+	if (!generator) {
+		ofLogWarning("ofxStableDiffusionRealtimeSession")
+			<< "warmup: no generator attached; call setGenerator() or start(settings, sd) first";
+		return false;
+	}
 
-	// Create a simple warmup request
-	ofxStableDiffusionRealtimeRequest warmupRequest;
-	warmupRequest.prompt = "warmup";
-	warmupRequest.width = 512;
-	warmupRequest.height = 512;
-	warmupRequest.sampleSteps = settings.minSampleSteps;
+	if (generationInFlight || generator->isGenerating()) {
+		ofLogWarning("ofxStableDiffusionRealtimeSession")
+			<< "warmup: cannot warm up while generation is in progress";
+		return false;
+	}
 
-	// In real implementation, this would actually generate an image to warm up the model
-	// For now, just simulate the warmup
+	ofxStableDiffusionImageRequest warmupReq;
+	warmupReq.prompt = "warmup";
+	warmupReq.width = 512;
+	warmupReq.height = 512;
+	warmupReq.sampleSteps = settings.minSampleSteps;
+	warmupReq.cfgScale = settings.cfgScale;
+	warmupReq.seed = 42;
+	warmupReq.batchCount = 1;
+	warmupReq.mode = ofxStableDiffusionImageMode::TextToImage;
 
-	ofLogNotice("ofxStableDiffusionRealtimeSession") << "Warmup complete";
+	generator->generate(warmupReq);
+	generationInFlight = true;
+	warmingUp = true;
+	generationStartMicros = ofGetElapsedTimeMicros();
 
+	ofLogNotice("ofxStableDiffusionRealtimeSession") << "Warming up...";
 	return true;
 }
 
+int ofxStableDiffusionRealtimeSession::clampToStepRange(int steps) const {
+	return std::max(settings.minSampleSteps, std::min(steps, settings.maxSampleSteps));
+}
+
 void ofxStableDiffusionRealtimeSession::processQueue() {
-	// Placeholder for queue processing
-	// In real implementation, this would be called from a thread to process pending requests
+	if (!generator || generator->isGenerating() || generationInFlight) {
+		return;
+	}
+
+	ofxStableDiffusionRealtimeRequest req;
+	{
+		std::lock_guard<std::mutex> lock(requestMutex);
+		if (!hasPendingRequest) {
+			return;
+		}
+		req = pendingRequest;
+		hasPendingRequest = false;
+	}
+
+	ofxStableDiffusionImageRequest imageReq;
+	imageReq.prompt = req.prompt;
+	imageReq.negativePrompt = req.negativePrompt;
+	imageReq.cfgScale = req.cfgScale;
+	imageReq.strength = req.strength;
+	imageReq.seed = static_cast<int64_t>(req.seed);
+	imageReq.width = req.width;
+	imageReq.height = req.height;
+	imageReq.sampleMethod = req.sampleMethod;
+	// Use the session-managed adaptive step count when progressive refinement is on;
+	// otherwise honour the value the caller placed on the request.
+	imageReq.sampleSteps = settings.enableProgressiveRefinement ? currentSampleSteps : req.sampleSteps;
+	imageReq.batchCount = 1;
+	imageReq.mode = ofxStableDiffusionImageMode::TextToImage;
+
+	generator->generate(imageReq);
+	generationInFlight = true;
+	generationStartMicros = ofGetElapsedTimeMicros();
 }
 
 void ofxStableDiffusionRealtimeSession::updateStats(float latencyMs) {
 	stats.totalGenerations++;
 	latencyHistory.push_back(latencyMs);
 
-	// Keep latency history reasonable size
 	if (latencyHistory.size() > 100) {
-		latencyHistory.erase(latencyHistory.begin());
+		latencyHistory.pop_front();
 	}
 
 	// Update min/max
@@ -159,17 +324,28 @@ void ofxStableDiffusionRealtimeSession::updateStats(float latencyMs) {
 		stats.maxLatencyMs = latencyMs;
 	}
 
-	// Calculate average
-	float sum = std::accumulate(latencyHistory.begin(), latencyHistory.end(), 0.0f);
-	stats.averageLatencyMs = sum / latencyHistory.size();
+	// Calculate rolling average
+	const float sum = std::accumulate(latencyHistory.begin(), latencyHistory.end(), 0.0f);
+	stats.averageLatencyMs = sum / static_cast<float>(latencyHistory.size());
 
-	// Call latency callback if set
 	if (latencyCallback) {
 		latencyCallback(latencyMs);
 	}
 
-	// Check if we're dropping frames (latency exceeds target)
-	if (latencyMs > settings.targetLatencyMs * 1.5f) {
-		stats.droppedFrames++;
+	// Track frames that significantly exceeded the latency target (distinct from dropped frames)
+	const float target = static_cast<float>(settings.targetLatencyMs);
+	if (latencyMs > target * 1.5f) {
+		stats.slowFrames++;
+	}
+
+	// Adaptive step count: ramp quality up when fast, down when slow
+	if (settings.enableProgressiveRefinement) {
+		if (latencyMs < target * 0.8f) {
+			// Plenty of headroom — raise quality
+			currentSampleSteps = clampToStepRange(currentSampleSteps + 1);
+		} else if (latencyMs > target) {
+			// Over budget — reduce quality
+			currentSampleSteps = clampToStepRange(currentSampleSteps - 1);
+		}
 	}
 }

@@ -21,6 +21,7 @@ ofxStableDiffusionModelManager::~ofxStableDiffusionModelManager() {
 
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::setMaxCacheSize(uint64_t bytes) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	maxCacheSizeBytes = bytes;
 	// Evict models if we're over the new limit
 	while (maxCacheSizeBytes > 0 && calculateCacheSize() > maxCacheSizeBytes) {
@@ -32,11 +33,13 @@ void ofxStableDiffusionModelManager::setMaxCacheSize(uint64_t bytes) {
 
 //--------------------------------------------------------------
 uint64_t ofxStableDiffusionModelManager::getCurrentCacheSize() const {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	return calculateCacheSize();
 }
 
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::setMaxCachedModels(int count) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	maxCachedModels = count;
 	// Evict models if we're over the new limit
 	while (maxCachedModels > 0 && static_cast<int>(modelCache.size()) > maxCachedModels) {
@@ -48,11 +51,13 @@ void ofxStableDiffusionModelManager::setMaxCachedModels(int count) {
 
 //--------------------------------------------------------------
 int ofxStableDiffusionModelManager::getCachedModelCount() const {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	return static_cast<int>(modelCache.size());
 }
 
 //--------------------------------------------------------------
 std::vector<ofxStableDiffusionModelInfo> ofxStableDiffusionModelManager::scanModelsInDirectory(const std::string& directory) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	std::vector<ofxStableDiffusionModelInfo> models;
 
 	ofDirectory dir(directory);
@@ -132,17 +137,13 @@ bool ofxStableDiffusionModelManager::validateModel(const std::string& modelPath,
 		return false;
 	}
 
-	// Check file size (minimum 100MB for a valid model)
-	if (file.getSize() < 100 * 1024 * 1024) {
-		errorMessage = "Model file too small, may be corrupted: " + modelPath;
-		return false;
-	}
-
 	return true;
 }
 
 //--------------------------------------------------------------
 bool ofxStableDiffusionModelManager::preloadModel(const ofxStableDiffusionModelInfo& modelInfo, std::string& errorMessage) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
+
 	// Check if already loaded
 	if (isModelLoaded(modelInfo.modelPath)) {
 		ofLogNotice("ofxStableDiffusionModelManager") << "Model already loaded: " << modelInfo.modelName;
@@ -194,6 +195,7 @@ bool ofxStableDiffusionModelManager::preloadModel(const ofxStableDiffusionModelI
 sd_ctx_t* ofxStableDiffusionModelManager::getModelContext(const std::string& modelPath,
 	const ofxStableDiffusionModelInfo& modelInfo,
 	std::string& errorMessage) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 	// Check if already cached
 	auto it = modelCache.find(modelPath);
@@ -224,6 +226,7 @@ sd_ctx_t* ofxStableDiffusionModelManager::getModelContext(const std::string& mod
 
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::releaseModelContext(const std::string& modelPath) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	auto it = modelCache.find(modelPath);
 	if (it != modelCache.end()) {
 		if (it->second.referenceCount > 0) {
@@ -235,6 +238,7 @@ void ofxStableDiffusionModelManager::releaseModelContext(const std::string& mode
 
 //--------------------------------------------------------------
 bool ofxStableDiffusionModelManager::unloadModel(const std::string& modelPath) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	auto it = modelCache.find(modelPath);
 	if (it == modelCache.end()) {
 		return false;
@@ -259,6 +263,7 @@ bool ofxStableDiffusionModelManager::unloadModel(const std::string& modelPath) {
 
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::clearCache() {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	for (auto& pair : modelCache) {
 		if (pair.second.sdCtx) {
 			free_sd_ctx(pair.second.sdCtx);
@@ -271,6 +276,7 @@ void ofxStableDiffusionModelManager::clearCache() {
 
 //--------------------------------------------------------------
 const ofxStableDiffusionModelInfo* ofxStableDiffusionModelManager::getCachedModelInfo(const std::string& modelPath) const {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	auto it = modelCache.find(modelPath);
 	if (it != modelCache.end()) {
 		return &it->second.info;
@@ -280,6 +286,7 @@ const ofxStableDiffusionModelInfo* ofxStableDiffusionModelManager::getCachedMode
 
 //--------------------------------------------------------------
 std::vector<ofxStableDiffusionModelInfo> ofxStableDiffusionModelManager::getCachedModels() const {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	std::vector<ofxStableDiffusionModelInfo> models;
 	models.reserve(modelCache.size());
 	for (const auto& pair : modelCache) {
@@ -290,6 +297,7 @@ std::vector<ofxStableDiffusionModelInfo> ofxStableDiffusionModelManager::getCach
 
 //--------------------------------------------------------------
 bool ofxStableDiffusionModelManager::isModelLoaded(const std::string& modelPath) const {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	auto it = modelCache.find(modelPath);
 	return it != modelCache.end() && it->second.sdCtx != nullptr;
 }
@@ -306,6 +314,7 @@ void ofxStableDiffusionModelManager::setAutoEviction(bool enabled) {
 
 //--------------------------------------------------------------
 ofxStableDiffusionModelManager::CacheStats ofxStableDiffusionModelManager::getCacheStats() const {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	CacheStats stats;
 	stats.totalModels = static_cast<int>(modelCache.size());
 	stats.loadedModels = 0;

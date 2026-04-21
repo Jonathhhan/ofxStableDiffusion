@@ -4,11 +4,12 @@
 #include "ofxStableDiffusionEnums.h"
 #include "stable-diffusion.h"
 
-#include <string>
-#include <map>
-#include <vector>
-#include <memory>
 #include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
 
 /// Model metadata information
 struct ofxStableDiffusionModelInfo {
@@ -128,6 +129,9 @@ private:
 	int maxCachedModels = 0;  // 0 = unlimited
 	bool autoEvictionEnabled = true;
 	ofxModelLoadProgressCallback progressCallback;
+
+	// Protects modelCache and statistics from concurrent access
+	mutable std::recursive_mutex mutex_;
 
 	// Statistics
 	mutable int cacheHits = 0;

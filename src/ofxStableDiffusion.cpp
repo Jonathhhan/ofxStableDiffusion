@@ -477,9 +477,8 @@ void ofxStableDiffusion::setUpscalerSettings(const ofxStableDiffusionUpscalerSet
 	}
 
 	std::lock_guard<std::mutex> lock(stateMutex);
+	cachedUpscalerSettings = settings;
 	esrganPath = settings.modelPath;
-	nThreads = settings.nThreads;
-	wType = settings.weightType;
 	esrganMultiplier = settings.multiplier;
 	isESRGAN = settings.enabled;
 }
@@ -656,7 +655,11 @@ std::vector<ofxStableDiffusionLora> ofxStableDiffusion::getLoras() const {
 
 std::vector<std::pair<std::string, std::string>> ofxStableDiffusion::listLoras() const {
 	std::vector<std::pair<std::string, std::string>> results;
-	const std::string targetDir = loraModelDir;
+	std::string targetDir;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		targetDir = loraModelDir;
+	}
 	if (targetDir.empty()) {
 		return results;
 	}
@@ -770,7 +773,11 @@ void ofxStableDiffusion::reloadEmbeddings(const std::string& embedDir) {
 
 std::vector<std::pair<std::string, std::string>> ofxStableDiffusion::listEmbeddings() const {
 	std::vector<std::pair<std::string, std::string>> results;
-	const std::string targetDir = embedDirCStr;
+	std::string targetDir;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		targetDir = embedDirCStr;
+	}
 	if (targetDir.empty()) {
 		return results;
 	}
@@ -1199,11 +1206,12 @@ uint8_t* ofxStableDiffusion::preprocessCanny(uint8_t* img,
 	float lowThreshold,
 	float weak,
 	float strong,
-	bool inverse) {
+	bool inverse,
+	int channels) {
 	sd_image_t image{
 		static_cast<uint32_t>(width_),
 		static_cast<uint32_t>(height_),
-		1u,
+		static_cast<uint32_t>(channels > 0 ? channels : 1),
 		img
 	};
 	return ::preprocess_canny(image, highThreshold, lowThreshold, weak, strong, inverse) ? img : nullptr;
@@ -1283,7 +1291,7 @@ ofxStableDiffusionContextSettings ofxStableDiffusion::captureContextSettingsNoLo
 }
 
 ofxStableDiffusionUpscalerSettings ofxStableDiffusion::captureUpscalerSettingsNoLock() const {
-	return {esrganPath, nThreads, wType, esrganMultiplier, isESRGAN};
+	return {esrganPath, cachedUpscalerSettings.nThreads, cachedUpscalerSettings.weightType, esrganMultiplier, isESRGAN};
 }
 
 void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSettings& settings) {

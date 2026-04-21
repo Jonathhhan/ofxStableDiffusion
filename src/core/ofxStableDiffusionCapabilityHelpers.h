@@ -80,7 +80,7 @@ inline ofxStableDiffusionModelFamily inferModelFamily(const ofxStableDiffusionCo
 		return containsAny(primary, hints) || containsAny(all, hints);
 	};
 
-	if (hasHint({"wan"}) || hasHint({"i2v", "ti2v", "flf2v", "vace"})) {
+	if (hasHint({"wan", "wanvideo"})) {
 		if (hasHint({"vace"})) {
 			return ofxStableDiffusionModelFamily::WANVACE;
 		}
@@ -224,7 +224,8 @@ inline ofxStableDiffusionCapabilities resolveCapabilities(
 	capabilities.inpainting = imageGeneration;
 	capabilities.imageToVideo = familySupportsVideo(capabilities.modelFamily);
 	capabilities.videoEndFrame = familySupportsVideoEndFrame(capabilities.modelFamily);
-	capabilities.videoAnimation = capabilities.imageToVideo;
+	// The long-video animation wrapper requires end-frame compositing support
+	capabilities.videoAnimation = capabilities.videoEndFrame;
 	capabilities.lora = imageGeneration || capabilities.imageToVideo;
 	capabilities.embeddings = imageGeneration;
 	capabilities.controlNet =

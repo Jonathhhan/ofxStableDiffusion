@@ -31,6 +31,7 @@ int ofxStableDiffusionQueue::addImageRequest(const ofxStableDiffusionImageReques
 
 	requestQueue.push(queueRequest);
 	allRequests[queueRequest->requestId] = queueRequest;
+	queuedCount++;
 
 	ofLogNotice("ofxStableDiffusionQueue") << "Added image request #" << queueRequest->requestId
 		<< " (priority: " << static_cast<int>(priority) << ", queue size: " << getQueueSize() << ")";
@@ -58,6 +59,7 @@ int ofxStableDiffusionQueue::addVideoRequest(const ofxStableDiffusionVideoReques
 
 	requestQueue.push(queueRequest);
 	allRequests[queueRequest->requestId] = queueRequest;
+	queuedCount++;
 
 	ofLogNotice("ofxStableDiffusionQueue") << "Added video request #" << queueRequest->requestId
 		<< " (priority: " << static_cast<int>(priority) << ", queue size: " << getQueueSize() << ")";
@@ -85,6 +87,7 @@ int ofxStableDiffusionQueue::addModelLoadRequest(const ofxStableDiffusionContext
 
 	requestQueue.push(queueRequest);
 	allRequests[queueRequest->requestId] = queueRequest;
+	queuedCount++;
 
 	ofLogNotice("ofxStableDiffusionQueue") << "Added model load request #" << queueRequest->requestId
 		<< " (priority: " << static_cast<int>(priority) << ", queue size: " << getQueueSize() << ")";
@@ -135,6 +138,7 @@ bool ofxStableDiffusionQueue::cancelRequest(int requestId) {
 
 	request->state = ofxStableDiffusionQueueState::Cancelled;
 	request->completedTimeMicros = ofGetElapsedTimeMicros();
+	queuedCount--;
 
 	ofLogNotice("ofxStableDiffusionQueue") << "Cancelled request #" << requestId;
 
@@ -155,6 +159,7 @@ int ofxStableDiffusionQueue::cancelRequestsByTag(const std::string& tag) {
 	}
 
 	if (cancelledCount > 0) {
+		queuedCount -= cancelledCount;
 		ofLogNotice("ofxStableDiffusionQueue") << "Cancelled " << cancelledCount << " requests with tag: " << tag;
 		triggerAutoSave();
 	}
@@ -175,6 +180,7 @@ void ofxStableDiffusionQueue::cancelAll() {
 	}
 
 	if (cancelledCount > 0) {
+		queuedCount -= cancelledCount;
 		ofLogNotice("ofxStableDiffusionQueue") << "Cancelled all " << cancelledCount << " queued requests";
 		triggerAutoSave();
 	}
@@ -216,6 +222,9 @@ std::shared_ptr<ofxStableDiffusionQueueRequest> ofxStableDiffusionQueue::getNext
 void ofxStableDiffusionQueue::markRequestProcessing(int requestId) {
 	auto it = allRequests.find(requestId);
 	if (it != allRequests.end()) {
+		if (it->second->state == ofxStableDiffusionQueueState::Queued) {
+			queuedCount--;
+		}
 		it->second->state = ofxStableDiffusionQueueState::Processing;
 		it->second->startedTimeMicros = ofGetElapsedTimeMicros();
 		currentRequest = it->second;
@@ -348,13 +357,7 @@ ofxStableDiffusionQueue::QueueStats ofxStableDiffusionQueue::getStats() const {
 
 //--------------------------------------------------------------
 int ofxStableDiffusionQueue::getQueueSize() const {
-	int count = 0;
-	for (const auto& pair : allRequests) {
-		if (pair.second->state == ofxStableDiffusionQueueState::Queued) {
-			count++;
-		}
-	}
-	return count;
+	return queuedCount;
 }
 
 //--------------------------------------------------------------
