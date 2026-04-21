@@ -4,7 +4,7 @@
 [`stable-diffusion.cpp`](https://github.com/leejet/stable-diffusion.cpp) for
 text-to-image, image-to-image, image-to-video, and upscaling workflows.
 
-Current addon version: `1.0.0`
+Current addon version: `1.0.3`
 
 ## Requirements
 
@@ -239,17 +239,64 @@ cross-addon workflow.
 
 ## `ofxGgml` Integration Guidance
 
-Recommended architecture:
+`ofxStableDiffusion` is designed to work seamlessly with `ofxGgml` while maintaining clear separation at the native runtime layer.
 
-- keep `ofxStableDiffusion` standalone at the native-runtime layer
-- integrate `ofxGgml` with it through the addon API
-- do not share the low-level `ggml` binary directly across addons
+### Recommended Architecture
 
-Why:
+- **Keep runtimes separate**: `ofxStableDiffusion` maintains its own `stable-diffusion.cpp` and `ggml` runtime
+- **Integrate via addon API**: Use the typed wrapper API for cross-addon communication
+- **Avoid binary sharing**: Do not share the low-level `ggml` binary directly across addons
 
-- upstream `stable-diffusion.cpp` may require a different `ggml` revision
-- backend flags and ABI expectations can diverge
-- wrapper-level integration is more stable than native binary coupling
+### Integration Points
+
+1. **Best-of-N Image Reranking with CLIP**
+   - Generate a batch of images with `ofxStableDiffusion`
+   - Score outputs using `ofxGgmlClipInference`
+   - Rerank or select the best image using the callback-based ranking system
+   - No native runtime coupling required
+
+2. **Prompt Engineering with CLIP Interrogation**
+   - Use `ofxGgml` CLIP models to analyze existing images
+   - Extract style descriptors and semantic features
+   - Feed enhanced prompts back to `ofxStableDiffusion` for generation
+
+3. **Shared Model Management**
+   - Both addons support model discovery and loading
+   - Coordinate model paths through the openFrameworks data folder
+   - Use separate model directories to avoid conflicts
+
+### Why Separate Runtimes?
+
+- **Version independence**: `stable-diffusion.cpp` may require a different `ggml` revision than other GGML-based tools
+- **Backend flexibility**: Each addon can use different backend configurations (CPU, CUDA, Vulkan, Metal)
+- **ABI stability**: Wrapper-level integration is more stable than native binary coupling across openFrameworks updates
+- **Build flexibility**: Each addon can be built and updated independently
+
+### Example: CLIP-Guided Generation
+
+```cpp
+// Generate multiple candidates with ofxStableDiffusion
+ofxStableDiffusionImageRequest request;
+request.prompt = "abstract digital art";
+request.batchCount = 4;  // Generate 4 candidates
+sd.generate(request);
+
+// Score with ofxGgml CLIP (pseudocode - requires ofxGgml)
+// ofxGgmlClipInference clip;
+// clip.loadModel("data/models/clip/ViT-B-32.gguf");
+// auto scores = clip.scoreImages(sd.getLastResults(), request.prompt);
+
+// Rerank using ofxStableDiffusion's ranking callback
+auto rankedResults = ofxStableDiffusionRankingHelpers::rankImages(
+    sd.getLastResults(),
+    [&](const ofImage& img) -> float {
+        // Return CLIP score here
+        // return clip.scoreImage(img, request.prompt);
+        return 0.0f; // placeholder
+    },
+    ofxStableDiffusionSelectionMode::BestOnly
+);
+```
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 

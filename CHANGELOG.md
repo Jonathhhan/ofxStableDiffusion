@@ -13,6 +13,26 @@
 - A small example-side `Holoscan Bridge` panel for starting/stopping the bridge MVP, reusing current prompts, submitting the loaded image, and previewing the most recent bridge result.
 - `ofxStableDiffusionVideoWorkflowHelpers.h` with reusable video-generation presets, prompt-workflow validation, and richer render-manifest export helpers for request/result based pipelines.
 
+## 1.0.3 - 2026-04-21
+
+### Changed
+
+- Updated version numbering to align with openFrameworks addon conventions
+- Enhanced `ofxGgml` integration documentation with detailed examples and use cases
+- Expanded architecture documentation with comprehensive integration points:
+  - CLIP-based image ranking workflows
+  - Model path coordination guidelines
+  - Prompt engineering patterns
+  - Progress and metadata sharing patterns
+- Clarified rationale for maintaining separate native runtimes (version independence, backend flexibility, ABI stability)
+
+### Documentation
+
+- Improved README.md `ofxGgml` Integration Guidance section with practical examples
+- Added CLIP-guided generation code example
+- Enhanced ARCHITECTURE.md with detailed integration point descriptions
+- Added explanation of why native runtime sharing is discouraged
+
 ## 1.2.0 - 2026-04-17
 
 ### Added

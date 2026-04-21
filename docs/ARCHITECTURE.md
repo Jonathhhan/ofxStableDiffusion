@@ -101,3 +101,92 @@ The recommended integration model is:
 
 This keeps the addon safer across upstream `ggml` changes, backend toggles, and
 ABI differences.
+
+### Integration Points
+
+`ofxStableDiffusion` provides several well-defined integration points for `ofxGgml`:
+
+#### 1. CLIP-Based Image Ranking
+
+Use the image ranking callback system for Best-of-N workflows:
+
+```cpp
+// After generating a batch with ofxStableDiffusion
+auto rankedResults = ofxStableDiffusionRankingHelpers::rankImages(
+    generatedImages,
+    [&clipModel](const ofImage& img) -> float {
+        return clipModel.scoreImage(img, targetPrompt);
+    },
+    ofxStableDiffusionSelectionMode::BestOnly
+);
+```
+
+This callback is defined in:
+- `src/core/ofxStableDiffusionRankingHelpers.h`
+
+#### 2. Model Path Coordination
+
+Both addons support model discovery through file-based APIs:
+
+- `ofxStableDiffusion::listModels()` - discover Stable Diffusion models
+- `ofxStableDiffusion::listLoras()` - discover LoRA files
+- `ofxGgml` equivalent model listing APIs
+
+Keep model directories separate to avoid path conflicts:
+```
+data/models/
+  sd/         # Stable Diffusion models
+  clip/       # CLIP models for ofxGgml
+  loras/      # LoRA adapters
+```
+
+#### 3. Prompt Engineering Workflow
+
+Combine CLIP interrogation with generation:
+
+1. Use `ofxGgml` CLIP to analyze reference images
+2. Extract semantic features or style descriptors
+3. Build enhanced prompts programmatically
+4. Feed to `ofxStableDiffusion::generate()`
+
+This workflow keeps the addons loosely coupled while enabling sophisticated
+prompt-driven generation pipelines.
+
+#### 4. Progress and Metadata Sharing
+
+Both addons use similar patterns for async operations:
+
+- Progress callbacks during long operations
+- Result objects with metadata (seeds, timing, parameters)
+- Error handling with codes and suggestions
+
+This makes it easier to build unified UI layers that coordinate both addons.
+
+### Why Not Share the Native Runtime?
+
+While both addons use `ggml` at the native layer, sharing the binary creates
+several risks:
+
+1. **Version conflicts**: `stable-diffusion.cpp` may pin a specific `ggml` commit
+   that differs from what `ofxGgml` or other GGML tools require
+
+2. **Backend incompatibility**: One addon may need CUDA while another uses Vulkan,
+   leading to conflicting compile-time flags
+
+3. **ABI fragility**: Native structs, enum layouts, and calling conventions can
+   change between `ggml` versions, breaking compatibility
+
+4. **Build complexity**: Coordinating a single shared build across multiple
+   addons is harder to maintain than independent per-addon builds
+
+5. **Update friction**: Upgrading one addon's native runtime would force updates
+   across all dependent addons
+
+By keeping runtimes separate, each addon can:
+- Update independently
+- Use optimal backend configurations
+- Maintain stable wrapper APIs
+- Avoid cross-addon breakage during development
+
+The small cost of duplicate native binaries is outweighed by the architectural
+flexibility and stability gains.
