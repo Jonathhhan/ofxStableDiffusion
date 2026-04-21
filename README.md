@@ -217,6 +217,16 @@ preview clip without re-asking the native runtime for more frames.
 - **Right-size resolution, fps, and steps**: Lower resolution and fps where acceptable; clamp `sampleSteps` to ~15–25 for finals (lower for previews). Per-frame time scales directly with unique frames.
 - **Trim preview I/O**: Skip metadata/JSON exports on preview passes; save sidecar files only on final renders to avoid extra disk churn.
 
+## Coding Conventions (openFrameworks-aligned)
+
+- Use tabs (as in existing headers) with K&R braces; lowerCamelCase for functions/members and PascalCase for types, keeping the `ofxStableDiffusion*` prefix for public types.
+- Include order: `ofMain.h`, then addon headers, then STL/system headers.
+- Document public API with `///` Doxygen-style comments; avoid mixing `//` for header docs.
+- Avoid exceptions; return `bool` or error codes and populate `ofxStableDiffusionError` for failures.
+- Keep small helpers inline in headers; move heavier logic to `.cpp` files to limit inline bloat.
+- Prefer RAII and STL containers over raw `new`/`delete`.
+- Keep generation calls on the main thread; callbacks should stay lightweight for the OF event loop.
+
 ## Image Modes
 
 The typed image request layer now exposes addon-level image modes:
