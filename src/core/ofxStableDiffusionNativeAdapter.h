@@ -206,6 +206,9 @@ inline sd_img_gen_params_t buildImageParams(
 	const auto& settings = taskData.contextSettings;
 
 	const sample_method_t sampleMethod = resolveSampleMethod(sdCtx, request.sampleMethod);
+	const scheduler_t requestedSchedule = (request.schedule == SCHEDULER_COUNT) ?
+		settings.schedule : request.schedule;
+	const scheduler_t scheduler = resolveScheduler(sdCtx, sampleMethod, requestedSchedule);
 
 	params.prompt = emptyToNull(effectivePrompt);
 	params.negative_prompt = emptyToNull(request.negativePrompt);
@@ -215,7 +218,7 @@ inline sd_img_gen_params_t buildImageParams(
 	params.width = request.width;
 	params.height = request.height;
 	params.sample_params.sample_method = sampleMethod;
-	params.sample_params.scheduler = resolveScheduler(sdCtx, sampleMethod, settings.schedule);
+	params.sample_params.scheduler = scheduler;
 	params.sample_params.sample_steps = request.sampleSteps;
 	params.sample_params.guidance.txt_cfg = request.cfgScale;
 	if (request.initImage.data != nullptr || !request.instruction.empty()) {
@@ -262,7 +265,9 @@ inline sd_vid_gen_params_t buildVideoParams(
 	const auto& settings = taskData.contextSettings;
 
 	const sample_method_t sampleMethod = resolveSampleMethod(sdCtx, request.sampleMethod);
-	const scheduler_t scheduler = resolveScheduler(sdCtx, sampleMethod, settings.schedule);
+	const scheduler_t requestedSchedule = (request.schedule == SCHEDULER_COUNT) ?
+		settings.schedule : request.schedule;
+	const scheduler_t scheduler = resolveScheduler(sdCtx, sampleMethod, requestedSchedule);
 
 	params.prompt = emptyToNull(request.prompt);
 	params.negative_prompt = emptyToNull(request.negativePrompt);

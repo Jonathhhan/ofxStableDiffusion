@@ -1338,6 +1338,9 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		taskData.contextSettings = captureContextSettingsNoLock();
 		taskData.upscalerSettings = captureUpscalerSettingsNoLock();
 		taskData.request = request;
+		if (request.schedule != SCHEDULER_COUNT) {
+			taskData.contextSettings.schedule = request.schedule;
+		}
 		if (request.initImage.data != nullptr) {
 			loadedInputImage.assign(request.initImage);
 			inputImage = loadedInputImage.image;
@@ -1384,6 +1387,9 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		height = request.height;
 		sampleMethodEnum = request.sampleMethod;
 		sampleSteps = request.sampleSteps;
+		if (request.schedule != SCHEDULER_COUNT) {
+			schedule = request.schedule;
+		}
 		strength = request.strength;
 		seed = request.seed;
 		batchCount = request.batchCount;
@@ -1414,6 +1420,9 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 		taskData.contextSettings = captureContextSettingsNoLock();
 		taskData.upscalerSettings = captureUpscalerSettingsNoLock();
 		taskData.request = request;
+		if (request.schedule != SCHEDULER_COUNT) {
+			taskData.contextSettings.schedule = request.schedule;
+		}
 		loadedInputImage.assign(request.initImage);
 		inputImage = loadedInputImage.image;
 		taskData.initImage.assign(inputImage);
@@ -1432,6 +1441,9 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 		cfgScale = request.cfgScale;
 		sampleMethodEnum = request.sampleMethod;
 		sampleSteps = request.sampleSteps;
+		if (request.schedule != SCHEDULER_COUNT) {
+			schedule = request.schedule;
+		}
 		strength = request.strength;
 		seed = request.seed;
 		vaceStrength = request.vaceStrength;

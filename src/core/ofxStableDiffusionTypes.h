@@ -161,6 +161,7 @@ struct ofxStableDiffusionImageRequest {
 	int width = 512;
 	int height = 512;
 	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
+	scheduler_t schedule = SCHEDULER_COUNT;
 	int sampleSteps = 20;
 	float strength = 0.5f;
 	int64_t seed = -1;
@@ -189,6 +190,7 @@ struct ofxStableDiffusionVideoRequest {
 	int fps = 6;
 	float cfgScale = 7.0f;
 	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
+	scheduler_t schedule = SCHEDULER_COUNT;
 	int sampleSteps = 20;
 	float strength = 0.5f;
 	int64_t seed = -1;
@@ -297,5 +299,3 @@ std::vector<ofxStableDiffusionImageFrame> ofxStableDiffusionBuildVideoFrames(
 
 /// Hash a string to a deterministic seed value for reproducibility.
 int64_t ofxStableDiffusionHashStringToSeed(const std::string& text);
-
-

@@ -93,10 +93,10 @@ void ofxStableDiffusionBatchProcessor::applyParameterValue(
 			request.height = static_cast<int>(value);
 			break;
 		case ofxStableDiffusionParameter::SamplerMethod:
-			request.samplerMethod = static_cast<sample_method_t>(static_cast<int>(value));
+			request.sampleMethod = static_cast<sample_method_t>(static_cast<int>(value));
 			break;
 		case ofxStableDiffusionParameter::Schedule:
-			request.schedule = static_cast<schedule_t>(static_cast<int>(value));
+			request.schedule = static_cast<scheduler_t>(static_cast<int>(value));
 			break;
 		case ofxStableDiffusionParameter::BatchCount:
 			request.batchCount = static_cast<int>(value);
@@ -122,7 +122,7 @@ float ofxStableDiffusionBatchProcessor::getParameterValue(
 		case ofxStableDiffusionParameter::Height:
 			return static_cast<float>(request.height);
 		case ofxStableDiffusionParameter::SamplerMethod:
-			return static_cast<float>(request.samplerMethod);
+			return static_cast<float>(request.sampleMethod);
 		case ofxStableDiffusionParameter::Schedule:
 			return static_cast<float>(request.schedule);
 		case ofxStableDiffusionParameter::BatchCount:

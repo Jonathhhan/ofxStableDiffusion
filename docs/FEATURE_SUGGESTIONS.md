@@ -215,7 +215,7 @@ request.prompt = "live performance visuals";
 request.width = 512;
 request.height = 512;
 request.sampleSteps = 4;  // LCM optimized
-request.samplerMethod = LCM_SAMPLE_METHOD;
+request.sampleMethod = LCM_SAMPLE_METHOD;
 sd.generateRealtime(request);  // Non-blocking, returns immediately
 
 // Update parameters on the fly
@@ -457,10 +457,10 @@ for (const auto& result : sweepResults.results) {
 
 // A/B comparison
 ofxStableDiffusionImageRequest requestA = baseRequest;
-requestA.samplerMethod = EULER_A_SAMPLE_METHOD;
+requestA.sampleMethod = EULER_A_SAMPLE_METHOD;
 
 ofxStableDiffusionImageRequest requestB = baseRequest;
-requestB.samplerMethod = DPMPP2Mv2_SAMPLE_METHOD;
+requestB.sampleMethod = DPMPP2Mv2_SAMPLE_METHOD;
 
 auto comparison = batchProcessor.compareAB(requestA, requestB);
 comparison.exportComparison("output/sampler_comparison.png");
