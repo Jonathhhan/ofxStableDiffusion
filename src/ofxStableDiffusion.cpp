@@ -579,6 +579,42 @@ void ofxStableDiffusion::setMaxCachedModels(int count) {
 	modelManager.setMaxCachedModels(count);
 }
 
+void ofxStableDiffusion::setProfilingEnabled(bool enabled) {
+	performanceProfiler.setEnabled(enabled);
+}
+
+bool ofxStableDiffusion::isProfilingEnabled() const {
+	return performanceProfiler.isEnabled();
+}
+
+ofxStableDiffusionPerformanceStats ofxStableDiffusion::getPerformanceStats() const {
+	return performanceProfiler.getStats();
+}
+
+ofxStableDiffusionProfileEntry ofxStableDiffusion::getPerformanceEntry(const std::string& name) const {
+	return performanceProfiler.getEntry(name);
+}
+
+void ofxStableDiffusion::resetProfiling() {
+	performanceProfiler.reset();
+}
+
+void ofxStableDiffusion::printPerformanceSummary() const {
+	performanceProfiler.printSummary();
+}
+
+std::vector<std::string> ofxStableDiffusion::getPerformanceBottlenecks(float thresholdPercent) const {
+	return performanceProfiler.getBottlenecks(thresholdPercent);
+}
+
+std::string ofxStableDiffusion::exportPerformanceJSON() const {
+	return performanceProfiler.toJSON();
+}
+
+std::string ofxStableDiffusion::exportPerformanceCSV() const {
+	return performanceProfiler.toCSV();
+}
+
 void ofxStableDiffusion::addControlNet(const ofxStableDiffusionControlNet& controlNet) {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	controlNets.push_back(controlNet);

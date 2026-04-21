@@ -4,6 +4,7 @@
 #include "bridges/ofxStableDiffusionHoloscanBridge.h"
 #include "core/ofxStableDiffusionModelManager.h"
 #include "core/ofxStableDiffusionParameterTuningHelpers.h"
+#include "core/ofxStableDiffusionPerformanceProfiler.h"
 #include "core/ofxStableDiffusionTypes.h"
 #include "video/ofxStableDiffusionLongVideoManifest.h"
 #include "video/ofxStableDiffusionLongVideoWorkflow.h"
@@ -104,6 +105,31 @@ public:
 	/// Set model manager cache limits
 	void setModelCacheSize(uint64_t maxBytes);
 	void setMaxCachedModels(int count);
+
+	/// Enable or disable performance profiling
+	void setProfilingEnabled(bool enabled);
+	bool isProfilingEnabled() const;
+
+	/// Get performance statistics from the profiler
+	ofxStableDiffusionPerformanceStats getPerformanceStats() const;
+
+	/// Get a specific performance profile entry
+	ofxStableDiffusionProfileEntry getPerformanceEntry(const std::string& name) const;
+
+	/// Reset all performance profiling data
+	void resetProfiling();
+
+	/// Print performance summary to console
+	void printPerformanceSummary() const;
+
+	/// Get performance bottlenecks (operations taking > threshold % of total time)
+	std::vector<std::string> getPerformanceBottlenecks(float thresholdPercent = 10.0f) const;
+
+	/// Export performance data to JSON
+	std::string exportPerformanceJSON() const;
+
+	/// Export performance data to CSV
+	std::string exportPerformanceCSV() const;
 
 	/// Reload embeddings by rebuilding the context with the current (or provided) embed directory.
 	void reloadEmbeddings(const std::string& embedDir = "");
@@ -355,6 +381,7 @@ private:
 	uint64_t taskStartMicros = 0;
 	stableDiffusionThread::OwnedImage loadedInputImage;
 	ofxStableDiffusionModelManager modelManager;
+	ofxStableDiffusionPerformanceProfiler performanceProfiler;
 	mutable std::mutex stateMutex;
 };
 

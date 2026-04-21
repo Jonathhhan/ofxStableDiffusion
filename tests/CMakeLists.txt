@@ -161,3 +161,15 @@ target_include_directories(test_multi_controlnet PRIVATE
 )
 
 add_test(NAME multi_controlnet COMMAND test_multi_controlnet)
+
+add_executable(test_performance_profiler
+    test_performance_profiler.cpp
+)
+
+target_include_directories(test_performance_profiler PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME performance_profiler COMMAND test_performance_profiler)
