@@ -3,6 +3,7 @@
 #include "core/ofxStableDiffusionMemoryHelpers.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <mutex>
@@ -110,6 +111,47 @@ ValidationResult validateVaceStrength(float vaceStrength) {
 	return {};
 }
 
+ValidationResult validateControlNets(
+	const std::vector<ofxStableDiffusionControlNet>& controlNets,
+	int width,
+	int height) {
+	if (controlNets.empty()) {
+		return {};
+	}
+
+	int expectedWidth = -1;
+	int expectedHeight = -1;
+	int expectedChannels = -1;
+	for (const auto& controlNet : controlNets) {
+		if (controlNet.conditionImage.data == nullptr) {
+			return {ofxStableDiffusionErrorCode::InvalidParameter, "ControlNet image is missing"};
+		}
+		if (controlNet.strength < 0.0f || controlNet.strength > 2.0f) {
+			return {ofxStableDiffusionErrorCode::InvalidParameter, "ControlNet strength must be between 0.0 and 2.0"};
+		}
+
+		const int controlWidth = static_cast<int>(controlNet.conditionImage.width);
+		const int controlHeight = static_cast<int>(controlNet.conditionImage.height);
+		const int controlChannels = static_cast<int>(controlNet.conditionImage.channel);
+
+		if (expectedWidth < 0) {
+			expectedWidth = controlWidth;
+			expectedHeight = controlHeight;
+			expectedChannels = controlChannels;
+		} else if (controlWidth != expectedWidth ||
+			controlHeight != expectedHeight ||
+			controlChannels != expectedChannels) {
+			return {ofxStableDiffusionErrorCode::InvalidDimensions, "All ControlNet images must share width, height, and channel count"};
+		}
+
+		if ((width > 0 && controlWidth != width) || (height > 0 && controlHeight != height)) {
+			return {ofxStableDiffusionErrorCode::InvalidDimensions, "ControlNet image dimensions must match the request dimensions"};
+		}
+	}
+
+	return {};
+}
+
 ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageRequest& request) {
 	const ValidationResult dimResult = validateDimensions(request.width, request.height);
 	if (!dimResult.ok()) return dimResult;
@@ -137,6 +179,10 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 
 	const ValidationResult styleResult = validateStyleStrength(request.styleStrength);
 	if (!styleResult.ok()) return styleResult;
+
+	const ValidationResult controlNetResult =
+		validateControlNets(request.controlNets, request.width, request.height);
+	if (!controlNetResult.ok()) return controlNetResult;
 
 	return {};
 }
@@ -179,6 +225,58 @@ ValidationResult validateUpscalerSettings(const ofxStableDiffusionUpscalerSettin
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "Upscale multiplier must be between 1 and 8"};
 	}
 	return {};
+}
+
+bool mergeControlNets(
+	const std::vector<ofxStableDiffusionControlNet>& controlNets,
+	stableDiffusionThread::OwnedImage& output,
+	float& resolvedStrength) {
+	if (controlNets.empty()) {
+		return false;
+	}
+
+	const sd_image_t& reference = controlNets.front().conditionImage;
+	const std::size_t byteCount =
+		static_cast<std::size_t>(reference.width) *
+		static_cast<std::size_t>(reference.height) *
+		static_cast<std::size_t>(reference.channel);
+
+	std::vector<double> accum(byteCount, 0.0);
+	double totalStrength = 0.0;
+
+	for (const auto& controlNet : controlNets) {
+		const double weight = static_cast<double>(controlNet.strength);
+		totalStrength += weight;
+		const uint8_t* data = controlNet.conditionImage.data;
+		for (std::size_t i = 0; i < byteCount; ++i) {
+			accum[i] += weight * static_cast<double>(data[i]);
+		}
+	}
+
+	if (totalStrength <= 0.0) {
+		return false;
+	}
+
+	output.storage.resize(byteCount);
+	for (std::size_t i = 0; i < byteCount; ++i) {
+		const double value = accum[i] / totalStrength;
+		output.storage[i] = static_cast<uint8_t>(std::clamp(
+			std::llround(value),
+			0ll,
+			255ll));
+	}
+
+	output.image = {
+		reference.width,
+		reference.height,
+		reference.channel,
+		output.storage.data()
+	};
+
+	resolvedStrength = static_cast<float>(std::min(
+		totalStrength / static_cast<double>(controlNets.size()),
+		2.0));
+	return true;
 }
 
 bool isResolvableModelFile(const fs::path& path) {
@@ -698,51 +796,6 @@ void ofxStableDiffusion::setProgressCallback(ofxSdProgressCallback cb) {
 }
 
 //--------------------------------------------------------------
-bool ofxStableDiffusion::isGenerating() const {
-	return thread.isThreadRunning();
-}
-
-//--------------------------------------------------------------
-int64_t ofxStableDiffusion::getLastUsedSeed() const {
-	return lastResult.actualSeedUsed;
-}
-
-//--------------------------------------------------------------
-const std::vector<int64_t>& ofxStableDiffusion::getSeedHistory() const {
-	return seedHistory;
-}
-
-//--------------------------------------------------------------
-void ofxStableDiffusion::clearSeedHistory() {
-	seedHistory.clear();
-}
-
-//--------------------------------------------------------------
-int64_t ofxStableDiffusion::hashStringToSeed(const std::string& text) {
-	return ofxStableDiffusionHashStringToSeed(text);
-}
-
-//--------------------------------------------------------------
-bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
-	if (thread.isThreadRunning()) {
-		ofLogWarning("ofxStableDiffusion") << "Ignoring request while another task is still running";
-		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
-		return false;
-	}
-
-	activeTask = task;
-	taskStartMicros = ofGetElapsedTimeMicros();
-	isModelLoading = (task == ofxStableDiffusionTask::LoadModel);
-	isTextToImage = (task == ofxStableDiffusionTask::TextToImage);
-	isImageToVideo = (task == ofxStableDiffusionTask::ImageToVideo);
-	diffused = false;
-	clearLastError();
-	clearOutputState();
-	thread.userData = this;
-	return true;
-}
-
-//--------------------------------------------------------------
 void ofxStableDiffusion::newSdCtx(const ofxStableDiffusionContextSettings& settings) {
 	if (settings.nThreads == 0 || settings.nThreads < -1) {
 		activeTask = ofxStableDiffusionTask::LoadModel;
@@ -1236,6 +1289,8 @@ void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSet
 
 void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest& request) {
 	stableDiffusionThread::ImageTaskData taskData;
+	bool mergeFailed = false;
+	float mergedStrength = request.controlStrength;
 	{
 		std::lock_guard<std::mutex> lock(stateMutex);
 		taskData.task = activeTask;
@@ -1254,9 +1309,23 @@ void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 			taskData.initImage.assign(inputImage);
 		}
 		taskData.maskImage.assign(request.maskImage);
-		if (request.controlCond != nullptr) {
-			taskData.controlImage.assign(*request.controlCond);
+
+		bool hasControl = false;
+		if (!request.controlNets.empty()) {
+			if (!mergeControlNets(request.controlNets, taskData.controlImage, mergedStrength)) {
+				mergeFailed = true;
+			} else {
+				taskData.request.controlCond = &taskData.controlImage.image;
+				taskData.request.controlStrength = mergedStrength;
+				hasControl = true;
+			}
 		}
+
+		if (!hasControl && request.controlCond != nullptr) {
+			taskData.controlImage.assign(*request.controlCond);
+			taskData.request.controlCond = &taskData.controlImage.image;
+		}
+
 		taskData.syncViews();
 		taskData.progressCallback = progressCallback;
 		taskData.imageRankCallback = imageRankCallback;
@@ -1277,12 +1346,17 @@ void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		strength = request.strength;
 		seed = request.seed;
 		batchCount = request.batchCount;
-		controlCond = request.controlCond;
-		controlStrength = request.controlStrength;
+		controlCond = taskData.request.controlCond;
+		controlStrength = taskData.request.controlStrength;
 		styleStrength = request.styleStrength;
 		normalizeInput = request.normalizeInput;
 		inputIdImagesPath = request.inputIdImagesPath;
 		loras = request.loras;
+	}
+
+	if (mergeFailed) {
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Failed to merge ControlNet inputs");
+		return;
 	}
 	thread.prepareImageTask(taskData);
 }
@@ -1637,4 +1711,3 @@ std::vector<sd_image_t> ofxStableDiffusion::buildOutputImageViews(const ofxStabl
 
 	return views;
 }
-
