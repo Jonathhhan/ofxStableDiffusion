@@ -1,10 +1,12 @@
 param(
     [string]$GgmlReleaseTag = "",
     [string]$SourceDir = "",
+    [string]$SourceReleaseTag = "",
     [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
+$DefaultSourceReleaseTag = "master-585-44cca3d"
 
 function Write-Step {
     param([string]$Message)
@@ -195,7 +197,8 @@ if ([string]::IsNullOrWhiteSpace($SourceDir)) {
     $SourceDir = Join-Path $addonRoot 'libs\stable-diffusion\source'
 }
 
-$releaseMetadata = Get-ReleaseMetadata -Tag ""
+$effectiveSourceReleaseTag = if ([string]::IsNullOrWhiteSpace($SourceReleaseTag)) { $DefaultSourceReleaseTag } else { $SourceReleaseTag }
+$releaseMetadata = Get-ReleaseMetadata -Tag $effectiveSourceReleaseTag
 $resolvedTag = $releaseMetadata.tag_name
 $downloadRoot = Join-Path $env:TEMP 'ofxsd-source-release'
 $cloneRoot = Join-Path $downloadRoot ('clone-' + $resolvedTag)

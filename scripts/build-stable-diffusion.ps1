@@ -5,6 +5,7 @@ param(
     [string]$InstallLibDir = "",
     [string]$ExampleBinDir = "",
     [string]$Configuration = "Release",
+    [string]$SourceReleaseTag = "",
     [string]$Generator = "",
     [int]$Jobs = 0,
     [switch]$Clean,
@@ -18,6 +19,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$DefaultSourceReleaseTag = "master-585-44cca3d"
 
 function Write-Step {
     param([string]$Message)
@@ -408,7 +410,8 @@ if (-not $cmake) {
     throw "cmake.exe was not found in PATH."
 }
 
-$releaseMetadata = Get-ReleaseMetadata -Tag ""
+$effectiveSourceReleaseTag = if ([string]::IsNullOrWhiteSpace($SourceReleaseTag)) { $DefaultSourceReleaseTag } else { $SourceReleaseTag }
+$releaseMetadata = Get-ReleaseMetadata -Tag $effectiveSourceReleaseTag
 $resolvedReleaseTag = $releaseMetadata.tag_name
 $downloadRoot = Join-Path $env:TEMP 'ofxsd-source-release'
 $cloneRoot = Join-Path $downloadRoot ('clone-' + $resolvedReleaseTag)
@@ -620,7 +623,5 @@ Write-Host "  libs:    $InstallLibDir"
 if ($ExampleBinDir) {
     Write-Host "  runtime: $ExampleBinDir"
 }
-
-
 
 

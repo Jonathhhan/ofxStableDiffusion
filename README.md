@@ -326,12 +326,13 @@ The repo now includes a vendored upstream `stable-diffusion.cpp` source snapshot
 under `libs/stable-diffusion/source`, pinned to:
 
 - upstream repo: `https://github.com/leejet/stable-diffusion.cpp`
-- upstream commit: `a564fdf642780d1df123f1c413b19961375b8346`
-- vendored on: `2026-04-17`
+- upstream release tag: `master-585-44cca3d`
+- upstream commit: `44cca3d`
+- vendored on: `2026-04-21`
 
 The optional Windows prebuilt-runtime flow is currently pinned to the upstream
-GitHub release tag `master-572-1b4e9be`, which was the latest upstream release
-published on `2026-04-16`. Override it with `--release-tag` if you want a
+GitHub release tag `master-585-44cca3d`, which was the latest upstream release
+published on `2026-04-19`. Override it with `--release-tag` if you want a
 different upstream runtime. Source: [stable-diffusion.cpp releases](https://github.com/leejet/stable-diffusion.cpp/releases)
 
 The addon now includes the upstream header directly through
