@@ -125,3 +125,15 @@ target_include_directories(test_lora_discovery PRIVATE
 )
 
 add_test(NAME lora_discovery COMMAND test_lora_discovery)
+
+add_executable(test_inpainting_validation
+    test_inpainting_validation.cpp
+)
+
+target_include_directories(test_inpainting_validation PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME inpainting_validation COMMAND test_inpainting_validation)

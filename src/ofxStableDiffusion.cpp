@@ -1266,6 +1266,18 @@ bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusio
 		return false;
 	}
 
+	// Validate mask dimensions match init image if both are provided
+	if (request.mode == ofxStableDiffusionImageMode::Inpainting &&
+		request.maskImage.data != nullptr &&
+		candidateInputImage.data != nullptr) {
+		if (request.maskImage.width != candidateInputImage.width ||
+			request.maskImage.height != candidateInputImage.height) {
+			setLastError(ofxStableDiffusionErrorCode::InvalidDimensions,
+				"Inpainting mask dimensions must match input image dimensions");
+			return false;
+		}
+	}
+
 	return true;
 }
 
