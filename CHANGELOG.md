@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `getCapabilities()` plus capability/model-family helpers for backend-aware UI gating and workflow routing.
+- Parameter tuning helpers for image/video defaults, range clamping, and model-family-specific guidance.
+- Video clip metadata export helpers on both `ofxStableDiffusionVideoClip` and the wrapper API.
+- Request-owned thread task payloads for image/video generation so background work no longer depends on mutable wrapper state during a run.
+- Optional `ofxStableDiffusionHoloscanBridge` scaffolding for live `frame -> conditioning -> diffusion -> preview` workflows, designed as an addon-side bridge instead of a hard Holoscan dependency.
+  - The native Holoscan runtime path is Linux-only for now; other platforms stay on the addon fallback lane until that runtime is validated there.
+- A small example-side `Holoscan Bridge` panel for starting/stopping the bridge MVP, reusing current prompts, submitting the loaded image, and previewing the most recent bridge result.
+- `ofxStableDiffusionVideoWorkflowHelpers.h` with reusable video-generation presets, prompt-workflow validation, and richer render-manifest export helpers for request/result based pipelines.
+
 ## 1.2.0 - 2026-04-17
 
 ### Added
@@ -75,7 +88,7 @@
 - Expanded video presentation modes: `Standard`, `Loop`, `PingPong`, and `Boomerang`
 - Native rebuild scripts for Windows, batch-shell, and POSIX-shell workflows
 - Windows setup entrypoints via `scripts/setup_addon.ps1` and `scripts/setup_windows.bat`
-- Optional Windows prebuilt-runtime staging via `scripts/download-stable-diffusion-release.ps1`
+- Release-tag source snapshot refresh via `scripts/download-stable-diffusion-release.ps1`
 - Architecture and native build documentation under `docs/`
 - A lightweight CMake-based unit test suite for video helper behavior
 - A vendored current-master `stable-diffusion.cpp` source snapshot, pinned to `a564fdf642780d1df123f1c413b19961375b8346`

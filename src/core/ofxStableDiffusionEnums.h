@@ -38,6 +38,7 @@ enum class ofxStableDiffusionErrorCode {
 	InvalidDimensions,
 	InvalidBatchCount,
 	InvalidFrameCount,
+	InvalidParameter,
 	MissingInputImage,
 	GenerationFailed,
 	ThreadBusy,

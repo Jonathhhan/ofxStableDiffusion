@@ -29,6 +29,10 @@ The addon is now structured more like a production addon:
 - Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
 - ESRGAN upscaling support
 - Progress callbacks for diffusion steps
+- `getCapabilities()` plus capability/model-family helpers for UI gating and backend-aware workflows
+- parameter-tuning helpers for image/video defaults, ranges, and clamping by model family
+- Optional `ofxStableDiffusionHoloscanBridge` scaffold for live `frame -> conditioning -> diffusion -> preview` pipelines, with a native Holoscan runtime path on Linux and a clean fallback path when Holoscan is not installed or the platform is not supported yet
+- `ofxStableDiffusionVideoWorkflowHelpers.h` for reusable video-generation presets, request validation, and richer render-manifest export on top of the existing request/result layer
 - Legacy entry points still available for wrapper-level migration
 - Standalone native runtime management instead of sharing `ggml` binaries across addons
 
@@ -39,7 +43,10 @@ The addon is now structured more like a production addon:
 - `src/core/`
   Enums and owned result types
 - `src/video/`
-  Video clip behavior and pure helper utilities
+  Video clip behavior, pure helper utilities, and reusable workflow helpers for:
+  - `FastPreview`, `LowVram`, `Balanced`, `Quality`, and `BatchStoryboard` presets
+  - preflight request validation before a longer render starts
+  - richer JSON render manifests that capture prompt, dimensions, fps, seed, LoRAs, and clip summary data
 - `libs/stable-diffusion/`
   Bundled header/libs and vendoring location for upstream native source
 - `scripts/`
@@ -72,6 +79,42 @@ request.width = 512;
 request.height = 512;
 request.sampleSteps = 20;
 sd.generate(request);
+
+// Optional: apply a stack of LoRA/LoCon adapters per request
+ofxStableDiffusionLora loraA;
+loraA.path = "data/loras/edge.safetensors";
+loraA.strength = 0.7f;
+request.loras = {loraA};
+sd.generate(request);
+
+// Update the active LoRA stack globally
+sd.setLoras({loraA});
+
+// Hot-reload textual-inversion embeddings (reloads the context)
+sd.reloadEmbeddings("data/embeddings");
+
+// List currently discoverable embeddings (name, absolute path)
+const auto embeddings = sd.listEmbeddings();
+
+// Inspect what the currently configured model/runtime can actually do
+const auto capabilities = sd.getCapabilities();
+
+// Save generated video frames plus a JSON sidecar with per-frame prompts/seeds
+sd.saveVideoFramesWithMetadata("output/storyboard", "shot");
+```
+
+The parameter-tuning helpers can also be used outside the wrapper instance when
+you want model-family-aware defaults before building a request:
+
+```cpp
+const auto imageProfile =
+    ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
+        context,
+        ofxStableDiffusionImageMode::Restyle);
+
+request.cfgScale = imageProfile.defaultCfgScale;
+request.sampleSteps = imageProfile.defaultSampleSteps;
+request.strength = imageProfile.defaultStrength;
 ```
 
 ### Error Handling
@@ -137,6 +180,19 @@ to migrate immediately.
 ## Video Behavior
 
 Video generation returns owned frames through `ofxStableDiffusionVideoClip`.
+
+Animated requests can also drive per-frame prompt interpolation, parameter
+animation, and seed sequencing through `ofxStableDiffusionVideoRequest::animationSettings`.
+Each returned frame now carries the prompt / negative prompt / CFG / strength /
+seed values that were actually used, and clips can export both PNG sequences and
+JSON metadata.
+
+Useful video-export helpers:
+
+- `ofxStableDiffusionVideoClip::saveMetadataJson(...)`
+- `ofxStableDiffusionVideoClip::saveFrameSequenceWithMetadata(...)`
+- `ofxStableDiffusion::saveVideoMetadata(...)`
+- `ofxStableDiffusion::saveVideoFramesWithMetadata(...)`
 
 Supported playback/presentation modes:
 
@@ -229,15 +285,12 @@ Backend flags now follow the same style as `ofxGgml`:
 - `--metal` / `-Metal`
   Enable Metal explicitly where supported
 
-For Windows, `scripts/setup_windows.bat` and `scripts/setup_addon.ps1` also
-support an optional prebuilt-runtime path:
+For Windows, `scripts/setup_windows.bat` and `scripts/setup_addon.ps1` now
+always refresh the vendored source from the latest upstream release-tag source
+snapshot, then build the native runtime locally.
 
-- `--use-release`
-  Stage a pinned upstream Windows release instead of compiling from source
-- `--release-tag TAG`
-  Override the upstream GitHub release tag used with `--use-release`
-- `--release-variant auto|cpu|noavx|avx|avx2|avx512|cuda12`
-  Choose the prebuilt runtime flavor
+- `--source-release-tag TAG`
+  Override the upstream release tag used for the vendored source snapshot
 
 `--auto` remains the default setup behavior. The prebuilt-release path is
 explicit opt-in and is currently intended for Windows CPU/CUDA staging. Windows
@@ -293,7 +346,11 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 - progress/error status
 - busy-state gating
 - video-mode selection
-- frame export for generated clips
+- a small `Holoscan Bridge` section for the new bridge MVP, including prompt handoff, loaded-image submission, and inline bridge preview
+  - the native Holoscan runtime path is Linux-only for now; Windows and other platforms stay on the addon fallback lane until that runtime is validated there
+- frame export plus JSON metadata for generated clips
+- optional end-frame morphing
+- prompt morph / seed-sequence animation controls
 
 ## Troubleshooting
 

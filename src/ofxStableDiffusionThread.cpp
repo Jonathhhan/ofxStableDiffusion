@@ -1,250 +1,142 @@
 #include "ofxStableDiffusionThread.h"
 #include "ofxStableDiffusion.h"
+#include "core/ofxStableDiffusionNativeAdapter.h"
+#include "core/ofxStableDiffusionMemoryHelpers.h"
+#include "video/ofxStableDiffusionVideoHelpers.h"
 
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <mutex>
 #include <vector>
 
 namespace {
 
-const char* emptyToNull(const std::string& value) {
-	return value.empty() ? nullptr : value.c_str();
+std::mutex& generationCallbackMutex() {
+	static std::mutex mutex;
+	return mutex;
 }
 
-sample_method_t resolveSampleMethod(sd_ctx_t* sdCtx, sample_method_t requested) {
-	if (requested == SAMPLE_METHOD_COUNT) {
-		return sd_get_default_sample_method(sdCtx);
-	}
-	return requested;
-}
-
-scheduler_t resolveScheduler(
-	sd_ctx_t* sdCtx,
-	sample_method_t sampleMethod,
-	scheduler_t requestedSchedule) {
-	if (requestedSchedule == SCHEDULER_COUNT) {
-		return sd_get_default_scheduler(sdCtx, sampleMethod);
-	}
-	return requestedSchedule;
-}
-
-sd_tiling_params_t makeTilingParams(bool enabled) {
-	sd_tiling_params_t tiling{};
-	tiling.enabled = enabled;
-	tiling.target_overlap = 0.5f;
-	return tiling;
-}
-
-std::string buildEffectivePrompt(const ofxStableDiffusion* sd) {
-	if (sd->instruction.empty()) {
-		return sd->prompt;
-	}
-	if (sd->prompt.empty()) {
-		return sd->instruction;
-	}
-	if (sd->instruction == sd->prompt) {
-		return sd->prompt;
-	}
-	return sd->prompt + "\nInstruction: " + sd->instruction;
-}
-
-bool looksLikeEmbeddingFile(const std::string& extension) {
-	return extension == "pt" ||
-		extension == "ckpt" ||
-		extension == "safetensors" ||
-		extension == "bin" ||
-		extension == "gguf";
-}
-
-void collectEmbeddings(
-	const std::string& embedDir,
-	std::vector<std::string>& embeddingNames,
-	std::vector<std::string>& embeddingPaths,
-	std::vector<sd_embedding_t>& embeddings) {
-	embeddingNames.clear();
-	embeddingPaths.clear();
-	embeddings.clear();
-
-	if (embedDir.empty()) {
+void threadProgressCallback(int step, int steps, float time, void* data) {
+	auto* thread = static_cast<stableDiffusionThread*>(data);
+	if (thread && thread->task == ofxStableDiffusionTask::ImageToVideo) {
+		if (thread->videoTaskData.progressCallback) {
+			if (thread->videoTaskData.animationProgressEnabled) {
+				const int stepsPerFrame =
+					std::max(1, thread->videoTaskData.animationSampleSteps > 0 ?
+						thread->videoTaskData.animationSampleSteps :
+						steps);
+				const int totalSteps = std::max(1, thread->videoTaskData.animationFrameCount) * stepsPerFrame;
+				const int compositeStep =
+					(thread->videoTaskData.animationFrameIndex * stepsPerFrame) +
+					std::max(0, std::min(step, stepsPerFrame));
+				thread->videoTaskData.progressCallback(compositeStep, totalSteps, time);
+			} else {
+				thread->videoTaskData.progressCallback(step, steps, time);
+			}
+		}
 		return;
 	}
 
-	ofDirectory directory(embedDir);
-	if (!directory.exists()) {
+	if (thread && thread->imageTaskData.progressCallback) {
+		thread->imageTaskData.progressCallback(step, steps, time);
+	}
+}
+
+bool areBlendable(const sd_image_t& left, const sd_image_t& right) {
+	return left.data != nullptr &&
+		right.data != nullptr &&
+		left.width == right.width &&
+		left.height == right.height &&
+		left.channel == right.channel &&
+		left.channel > 0;
+}
+
+void assignBlendedImage(
+	const sd_image_t& startImage,
+	const sd_image_t& endImage,
+	float t,
+	stableDiffusionThread::OwnedImage& output) {
+	output.clear();
+	if (!areBlendable(startImage, endImage)) {
 		return;
 	}
 
-	directory.listDir();
-	for (std::size_t i = 0; i < directory.size(); ++i) {
-		const ofFile& file = directory.getFile(static_cast<int>(i));
-		if (!file.isFile()) {
-			continue;
-		}
-		const std::string extension = ofToLower(file.getExtension());
-		if (!looksLikeEmbeddingFile(extension)) {
-			continue;
-		}
-		embeddingPaths.push_back(file.getAbsolutePath());
-		embeddingNames.push_back(file.getBaseName());
+	const std::size_t byteCount =
+		static_cast<std::size_t>(startImage.width) *
+		static_cast<std::size_t>(startImage.height) *
+		static_cast<std::size_t>(startImage.channel);
+	output.storage.resize(byteCount);
+	for (std::size_t i = 0; i < byteCount; ++i) {
+		const float startValue = static_cast<float>(startImage.data[i]);
+		const float endValue = static_cast<float>(endImage.data[i]);
+		output.storage[i] = static_cast<uint8_t>(std::round(startValue + ((endValue - startValue) * t)));
 	}
-
-	embeddings.reserve(embeddingPaths.size());
-	for (std::size_t i = 0; i < embeddingPaths.size(); ++i) {
-		embeddings.push_back({embeddingNames[i].c_str(), embeddingPaths[i].c_str()});
-	}
+	output.image = {startImage.width, startImage.height, startImage.channel, output.storage.data()};
 }
 
-bool looksLikeImageFile(const std::string& extension) {
-	return extension == "png" ||
-		extension == "jpg" ||
-		extension == "jpeg" ||
-		extension == "bmp" ||
-		extension == "webp";
+const sd_image_t& resolveAnimatedBaseImage(
+	const stableDiffusionThread::VideoTaskData& taskData,
+	int frameIndex,
+	stableDiffusionThread::OwnedImage& blendedImage) {
+	if (!taskData.endImage.isAllocated() || taskData.request.frameCount <= 1) {
+		return taskData.initImage.image;
+	}
+
+	const float t = static_cast<float>(frameIndex) /
+		static_cast<float>(std::max(1, taskData.request.frameCount - 1));
+	if (areBlendable(taskData.initImage.image, taskData.endImage.image)) {
+		assignBlendedImage(taskData.initImage.image, taskData.endImage.image, t, blendedImage);
+		if (blendedImage.isAllocated()) {
+			return blendedImage.image;
+		}
+	}
+
+	return frameIndex >= (taskData.request.frameCount - 1) ?
+		taskData.endImage.image :
+		taskData.initImage.image;
 }
 
-void collectPhotoMakerImages(
-	const std::string& imageDir,
-	std::vector<ofPixels>& loadedPixels,
-	std::vector<sd_image_t>& imageViews) {
-	loadedPixels.clear();
-	imageViews.clear();
-
-	if (imageDir.empty()) {
-		return;
+std::vector<int64_t> buildAnimatedVideoSeeds(const stableDiffusionThread::VideoTaskData& taskData) {
+	std::vector<int64_t> seeds;
+	seeds.reserve(std::max(0, taskData.request.frameCount));
+	for (int frameIndex = 0; frameIndex < taskData.request.frameCount; ++frameIndex) {
+		seeds.push_back(ofxStableDiffusionGetFrameSeed(taskData.request, frameIndex));
 	}
-
-	ofDirectory directory(imageDir);
-	if (!directory.exists()) {
-		return;
-	}
-
-	directory.listDir();
-	for (std::size_t i = 0; i < directory.size(); ++i) {
-		const ofFile& file = directory.getFile(static_cast<int>(i));
-		if (!file.isFile()) {
-			continue;
-		}
-		const std::string extension = ofToLower(file.getExtension());
-		if (!looksLikeImageFile(extension)) {
-			continue;
-		}
-
-		ofPixels pixels;
-		if (!ofLoadImage(pixels, file.getAbsolutePath())) {
-			continue;
-		}
-
-		loadedPixels.push_back(std::move(pixels));
-	}
-
-	imageViews.reserve(loadedPixels.size());
-	for (auto& pixels : loadedPixels) {
-		if (!pixels.isAllocated()) {
-			continue;
-		}
-		imageViews.push_back({
-			static_cast<uint32_t>(pixels.getWidth()),
-			static_cast<uint32_t>(pixels.getHeight()),
-			static_cast<uint32_t>(pixels.getNumChannels()),
-			pixels.getData()
-		});
-	}
+	return seeds;
 }
 
-sd_ctx_params_t buildContextParams(
-	ofxStableDiffusion* sd,
-	std::vector<std::string>& embeddingNames,
-	std::vector<std::string>& embeddingPaths,
-	std::vector<sd_embedding_t>& embeddings) {
-	sd_ctx_params_t params{};
-	sd_ctx_params_init(&params);
-
-	collectEmbeddings(sd->embedDirCStr, embeddingNames, embeddingPaths, embeddings);
-
-	params.model_path = emptyToNull(sd->modelPath);
-	params.vae_path = emptyToNull(sd->vaePath);
-	params.taesd_path = emptyToNull(sd->taesdPath);
-	params.control_net_path = emptyToNull(sd->controlNetPathCStr);
-	params.photo_maker_path = emptyToNull(sd->stackedIdEmbedDirCStr);
-	params.embeddings = embeddings.empty() ? nullptr : embeddings.data();
-	params.embedding_count = static_cast<uint32_t>(embeddings.size());
-	params.vae_decode_only = sd->vaeDecodeOnly;
-	params.free_params_immediately = sd->freeParamsImmediately;
-	params.n_threads = sd->nThreads;
-	params.wtype = sd->wType;
-	params.rng_type = sd->rngType;
-	params.sampler_rng_type = sd->rngType;
-	params.keep_clip_on_cpu = sd->keepClipOnCpu;
-	params.keep_control_net_on_cpu = sd->keepControlNetCpu;
-	params.keep_vae_on_cpu = sd->keepVaeOnCpu;
-	return params;
-}
-
-sd_img_gen_params_t buildImageParams(
-	ofxStableDiffusion* sd,
-	sd_ctx_t* sdCtx,
-	const std::string& effectivePrompt,
-	std::vector<ofPixels>& pmPixels,
-	std::vector<sd_image_t>& pmImageViews) {
-	sd_img_gen_params_t params{};
-	sd_img_gen_params_init(&params);
-
-	const sample_method_t sampleMethod = resolveSampleMethod(sdCtx, sd->sampleMethodEnum);
-
-	params.prompt = emptyToNull(effectivePrompt);
-	params.negative_prompt = emptyToNull(sd->negativePrompt);
-	params.clip_skip = sd->clipSkip;
-	params.init_image = sd->inputImage;
-	params.width = sd->width;
-	params.height = sd->height;
-	params.sample_params.sample_method = sampleMethod;
-	params.sample_params.scheduler = resolveScheduler(sdCtx, sampleMethod, sd->schedule);
-	params.sample_params.sample_steps = sd->sampleSteps;
-	params.sample_params.guidance.txt_cfg = sd->cfgScale;
-	if (sd->inputImage.data != nullptr || !sd->instruction.empty()) {
-		params.sample_params.guidance.img_cfg = sd->cfgScale;
+sd_image_t* makeOwnedImageArray(const std::vector<stableDiffusionThread::OwnedImage>& frames) {
+	if (frames.empty()) {
+		return nullptr;
 	}
-	params.strength = sd->strength;
-	params.seed = sd->seed;
-	params.batch_count = sd->batchCount;
-	params.control_image = sd->controlCond ? *sd->controlCond : sd_image_t{0, 0, 0, nullptr};
-	params.control_strength = sd->controlStrength;
-	params.vae_tiling_params = makeTilingParams(sd->vaeTiling);
 
-	if (!sd->stackedIdEmbedDirCStr.empty() && !sd->inputIdImagesPath.empty()) {
-		collectPhotoMakerImages(sd->inputIdImagesPath, pmPixels, pmImageViews);
-		if (!pmImageViews.empty()) {
-			params.pm_params.id_images = pmImageViews.data();
-			params.pm_params.id_images_count = static_cast<int>(pmImageViews.size());
-			params.pm_params.id_embed_path = sd->stackedIdEmbedDirCStr.c_str();
-			params.pm_params.style_strength = sd->styleStrength;
+	auto* output = static_cast<sd_image_t*>(std::malloc(sizeof(sd_image_t) * frames.size()));
+	if (!output) {
+		return nullptr;
+	}
+
+	for (std::size_t i = 0; i < frames.size(); ++i) {
+		output[i] = {0, 0, 0, nullptr};
+		const auto& frame = frames[i];
+		if (!frame.isAllocated()) {
+			continue;
 		}
+
+		const std::size_t byteCount =
+			static_cast<std::size_t>(frame.image.width) *
+			static_cast<std::size_t>(frame.image.height) *
+			static_cast<std::size_t>(frame.image.channel);
+		auto* pixels = static_cast<uint8_t*>(std::malloc(byteCount));
+		if (!pixels) {
+			ofxSdReleaseImageArray(output, static_cast<int>(i));
+			return nullptr;
+		}
+		std::memcpy(pixels, frame.image.data, byteCount);
+		output[i] = {frame.image.width, frame.image.height, frame.image.channel, pixels};
 	}
 
-	return params;
-}
-
-sd_vid_gen_params_t buildVideoParams(ofxStableDiffusion* sd, sd_ctx_t* sdCtx) {
-	sd_vid_gen_params_t params{};
-	sd_vid_gen_params_init(&params);
-
-	const sample_method_t sampleMethod = resolveSampleMethod(sdCtx, sd->sampleMethodEnum);
-	const scheduler_t scheduler = resolveScheduler(sdCtx, sampleMethod, sd->schedule);
-
-	params.prompt = emptyToNull(sd->prompt);
-	params.negative_prompt = emptyToNull(sd->negativePrompt);
-	params.clip_skip = sd->clipSkip;
-	params.init_image = sd->inputImage;
-	params.width = sd->width;
-	params.height = sd->height;
-	params.sample_params.sample_method = sampleMethod;
-	params.sample_params.scheduler = scheduler;
-	params.sample_params.sample_steps = sd->sampleSteps;
-	params.sample_params.guidance.txt_cfg = sd->cfgScale;
-	params.high_noise_sample_params = params.sample_params;
-	params.strength = sd->strength;
-	params.seed = sd->seed;
-	params.video_frames = sd->videoFrames;
-	params.vae_tiling_params = makeTilingParams(sd->vaeTiling);
-	return params;
+	return output;
 }
 
 } // namespace
@@ -269,13 +161,30 @@ void stableDiffusionThread::clearContexts() {
 	isUpscalerCtxLoaded = false;
 }
 
+void stableDiffusionThread::prepareContextTask(const ContextTaskData& data) {
+	task = ofxStableDiffusionTask::LoadModel;
+	contextTaskData = data;
+}
+
+void stableDiffusionThread::prepareImageTask(const ImageTaskData& data) {
+	task = data.task;
+	imageTaskData = data;
+	imageTaskData.syncViews();
+}
+
+void stableDiffusionThread::prepareVideoTask(const VideoTaskData& data) {
+	task = data.task;
+	videoTaskData = data;
+	videoTaskData.syncViews();
+}
+
 void stableDiffusionThread::threadedFunction() {
 	ofxStableDiffusion* sd = static_cast<ofxStableDiffusion*>(userData);
 	if (!sd) {
 		return;
 	}
 
-	if (sd->activeTask == ofxStableDiffusionTask::LoadModel || sd->isModelLoading) {
+	if (task == ofxStableDiffusionTask::LoadModel || sd->isModelLoading) {
 		if (sdCtx) {
 			free_sd_ctx(sdCtx);
 			sdCtx = nullptr;
@@ -285,7 +194,11 @@ void stableDiffusionThread::threadedFunction() {
 		std::vector<std::string> embeddingPaths;
 		std::vector<sd_embedding_t> embeddings;
 		sd_ctx_params_t ctxParams =
-			buildContextParams(sd, embeddingNames, embeddingPaths, embeddings);
+			ofxStableDiffusionNativeAdapter::buildContextParams(
+				contextTaskData,
+				embeddingNames,
+				embeddingPaths,
+				embeddings);
 		sdCtx = new_sd_ctx(&ctxParams);
 
 		if (upscalerCtx) {
@@ -293,13 +206,19 @@ void stableDiffusionThread::threadedFunction() {
 			upscalerCtx = nullptr;
 			isUpscalerCtxLoaded = false;
 		}
-		if (sd->isESRGAN && !sd->esrganPath.empty()) {
-			upscalerCtx = new_upscaler_ctx(sd->esrganPath.c_str(), false, false, sd->nThreads, 0);
+		if (contextTaskData.upscalerSettings.enabled && !contextTaskData.upscalerSettings.modelPath.empty()) {
+			upscalerCtx = new_upscaler_ctx(
+				contextTaskData.upscalerSettings.modelPath.c_str(),
+				false,
+				false,
+				contextTaskData.upscalerSettings.nThreads,
+				0);
 			isUpscalerCtxLoaded = (upscalerCtx != nullptr);
 		}
 		isSdCtxLoaded = (sdCtx != nullptr);
 		sd->isModelLoading = false;
 		sd->activeTask = ofxStableDiffusionTask::None;
+		task = ofxStableDiffusionTask::None;
 		if (!isSdCtxLoaded) {
 			sd->setLastError("Failed to create stable-diffusion context");
 		}
@@ -308,35 +227,253 @@ void stableDiffusionThread::threadedFunction() {
 
 	if (!sdCtx) {
 		sd->activeTask = ofxStableDiffusionTask::None;
+		task = ofxStableDiffusionTask::None;
 		sd->setLastError("Stable Diffusion context is not loaded");
 		return;
 	}
 
-	if (sd->activeTask == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo) {
-		sd_vid_gen_params_t params = buildVideoParams(sd, sdCtx);
-		int generatedFrameCount = 0;
-		sd_image_t* output = generate_video(sdCtx, &params, &generatedFrameCount);
-		const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
-		if (!output || generatedFrameCount <= 0) {
+	if (task == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo) {
+		if (videoTaskData.request.hasAnimation()) {
+			const int frameCount = std::max(0, videoTaskData.request.frameCount);
+			std::vector<OwnedImage> generatedFrames;
+			generatedFrames.reserve(static_cast<std::size_t>(frameCount));
+			std::vector<int64_t> frameSeeds = buildAnimatedVideoSeeds(videoTaskData);
+			std::vector<ofxStableDiffusionGenerationParameters> frameGeneration;
+			frameGeneration.reserve(static_cast<std::size_t>(frameCount));
+			std::string generationError;
+
+			videoTaskData.animationProgressEnabled = (videoTaskData.progressCallback != nullptr);
+			videoTaskData.animationFrameIndex = 0;
+			videoTaskData.animationFrameCount = frameCount;
+			videoTaskData.animationSampleSteps = videoTaskData.request.sampleSteps;
+
+			{
+				std::lock_guard<std::mutex> callbackLock(generationCallbackMutex());
+				if (videoTaskData.progressCallback) {
+					sd_set_progress_callback(threadProgressCallback, this);
+				} else {
+					sd_set_progress_callback(nullptr, nullptr);
+				}
+
+				for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+					videoTaskData.animationFrameIndex = frameIndex;
+
+					OwnedImage blendedInitImage;
+					const sd_image_t& frameInitImage =
+						resolveAnimatedBaseImage(videoTaskData, frameIndex, blendedInitImage);
+
+					ImageTaskData frameTask;
+					frameTask.task = ofxStableDiffusionTask::ImageToImage;
+					frameTask.contextSettings = videoTaskData.contextSettings;
+					frameTask.upscalerSettings = videoTaskData.upscalerSettings;
+					frameTask.request.mode = ofxStableDiffusionImageMode::ImageToImage;
+					frameTask.request.initImage = frameInitImage;
+					frameTask.request.prompt =
+						ofxStableDiffusionGetFramePrompt(videoTaskData.request, frameIndex);
+					frameTask.request.negativePrompt =
+						ofxStableDiffusionGetFrameNegativePrompt(videoTaskData.request, frameIndex);
+					frameTask.request.clipSkip = videoTaskData.request.clipSkip;
+					frameTask.request.cfgScale =
+						ofxStableDiffusionGetFrameCfgScale(videoTaskData.request, frameIndex);
+					frameTask.request.width = videoTaskData.request.width;
+					frameTask.request.height = videoTaskData.request.height;
+					frameTask.request.sampleMethod = videoTaskData.request.sampleMethod;
+					frameTask.request.sampleSteps = videoTaskData.request.sampleSteps;
+					frameTask.request.strength =
+						ofxStableDiffusionGetFrameStrength(videoTaskData.request, frameIndex);
+					frameTask.request.seed =
+						static_cast<std::size_t>(frameIndex) < frameSeeds.size() ?
+							frameSeeds[static_cast<std::size_t>(frameIndex)] :
+							videoTaskData.request.seed;
+					frameTask.request.batchCount = 1;
+					frameTask.request.loras = videoTaskData.request.loras;
+					frameGeneration.push_back({
+						frameTask.request.prompt,
+						frameTask.request.negativePrompt,
+						frameTask.request.cfgScale,
+						frameTask.request.strength
+					});
+					frameTask.initImage.assign(frameInitImage);
+					frameTask.syncViews();
+
+					const std::string effectivePrompt =
+						ofxStableDiffusionNativeAdapter::buildEffectivePrompt(frameTask.request);
+					std::vector<ofPixels> pmPixels;
+					std::vector<sd_image_t> pmImageViews;
+					sd_img_gen_params_t frameParams = ofxStableDiffusionNativeAdapter::buildImageParams(
+						frameTask,
+						sdCtx,
+						effectivePrompt,
+						loraBuffer,
+						pmPixels,
+						pmImageViews);
+
+					sd_image_t* frameOutput = generate_image(sdCtx, &frameParams);
+					if (!frameOutput || !frameOutput[0].data) {
+						ofxSdReleaseImageArray(frameOutput, 1);
+						generationError = "Animated video generation returned no frame output";
+						break;
+					}
+
+					if (videoTaskData.upscalerSettings.enabled) {
+						if (!upscalerCtx) {
+							ofxSdReleaseImageArray(frameOutput, 1);
+							sd->setLastError(
+								ofxStableDiffusionErrorCode::UpscaleFailed,
+								"Upscaler context is not loaded");
+							generationError.clear();
+							break;
+						}
+
+						sd_image_t upscaled =
+							upscale(upscalerCtx, frameOutput[0], videoTaskData.upscalerSettings.multiplier);
+						if (!upscaled.data) {
+							ofxSdReleaseImageArray(frameOutput, 1);
+							sd->setLastError(
+								ofxStableDiffusionErrorCode::UpscaleFailed,
+								"Upscaling failed for one or more video frames");
+							generationError.clear();
+							break;
+						}
+
+						ofxSdReleaseImage(frameOutput[0]);
+						frameOutput[0] = upscaled;
+					}
+
+					OwnedImage generatedFrame;
+					if (!generatedFrame.assign(frameOutput[0])) {
+						ofxSdReleaseImageArray(frameOutput, 1);
+						generationError = "Animated video generation produced an invalid frame";
+						break;
+					}
+
+					ofxSdReleaseImageArray(frameOutput, 1);
+					generatedFrames.push_back(std::move(generatedFrame));
+				}
+
+				sd_set_progress_callback(nullptr, nullptr);
+			}
+
+			videoTaskData.animationProgressEnabled = false;
+			videoTaskData.animationFrameIndex = 0;
+			videoTaskData.animationFrameCount = 0;
+			videoTaskData.animationSampleSteps = 0;
+
+			if (generatedFrames.size() != static_cast<std::size_t>(frameCount)) {
+				if (!generationError.empty()) {
+					sd->setLastError(generationError);
+				}
+				sd->activeTask = ofxStableDiffusionTask::None;
+				task = ofxStableDiffusionTask::None;
+				return;
+			}
+
+			sd_image_t* output = makeOwnedImageArray(generatedFrames);
+			const float elapsedMs =
+				static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
+			if (!output) {
+				sd->setLastError("Animated video generation could not allocate output frames");
+				sd->activeTask = ofxStableDiffusionTask::None;
+				task = ofxStableDiffusionTask::None;
+				return;
+			}
+
+			const int64_t actualSeedUsed = frameSeeds.empty() ? videoTaskData.request.seed : frameSeeds.front();
+			sd->captureVideoResults(
+				output,
+				static_cast<int>(generatedFrames.size()),
+				actualSeedUsed,
+				frameSeeds,
+				frameGeneration,
+				elapsedMs,
+				task,
+				videoTaskData.request);
 			sd->activeTask = ofxStableDiffusionTask::None;
-			sd->setLastError("Image-to-video generation returned no frames");
+			task = ofxStableDiffusionTask::None;
 			return;
 		}
-		sd->captureVideoResults(output, generatedFrameCount, sd->seed, elapsedMs);
+
+		sd_vid_gen_params_t params =
+			ofxStableDiffusionNativeAdapter::buildVideoParams(videoTaskData, sdCtx, loraBuffer);
+		int generatedFrameCount = 0;
+		sd_image_t* output = nullptr;
+		{
+			std::lock_guard<std::mutex> callbackLock(generationCallbackMutex());
+			if (videoTaskData.progressCallback) {
+				sd_set_progress_callback(threadProgressCallback, this);
+			} else {
+				sd_set_progress_callback(nullptr, nullptr);
+			}
+			output = generate_video(sdCtx, &params, &generatedFrameCount);
+			sd_set_progress_callback(nullptr, nullptr);
+		}
+		const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
+		if (!output || generatedFrameCount <= 0) {
+			ofxSdReleaseImageArray(output, generatedFrameCount);
+			sd->setLastError("Image-to-video generation returned no frames");
+			sd->activeTask = ofxStableDiffusionTask::None;
+			task = ofxStableDiffusionTask::None;
+			return;
+		}
+		sd->captureVideoResults(
+			output,
+			generatedFrameCount,
+			params.seed,
+			{},
+			{},
+			elapsedMs,
+			task,
+			videoTaskData.request);
 		sd->activeTask = ofxStableDiffusionTask::None;
+		task = ofxStableDiffusionTask::None;
 		return;
 	}
 
-	const std::string effectivePrompt = buildEffectivePrompt(sd);
+	const std::string effectivePrompt =
+		ofxStableDiffusionNativeAdapter::buildEffectivePrompt(imageTaskData.request);
 	std::vector<ofPixels> pmPixels;
 	std::vector<sd_image_t> pmImageViews;
 	sd_img_gen_params_t params =
-		buildImageParams(sd, sdCtx, effectivePrompt, pmPixels, pmImageViews);
-	sd_image_t* output = generate_image(sdCtx, &params);
+		ofxStableDiffusionNativeAdapter::buildImageParams(
+			imageTaskData,
+			sdCtx,
+			effectivePrompt,
+			loraBuffer,
+			pmPixels,
+			pmImageViews);
+	sd_image_t* output = nullptr;
+	{
+		std::lock_guard<std::mutex> callbackLock(generationCallbackMutex());
+		if (imageTaskData.progressCallback) {
+			sd_set_progress_callback(threadProgressCallback, this);
+		} else {
+			sd_set_progress_callback(nullptr, nullptr);
+		}
+		output = generate_image(sdCtx, &params);
+		sd_set_progress_callback(nullptr, nullptr);
+	}
 
-	if (output && sd->isESRGAN && upscalerCtx) {
-		for (int i = 0; i < sd->batchCount; i++) {
-			output[i] = upscale(upscalerCtx, output[i], sd->esrganMultiplier);
+	if (output && imageTaskData.upscalerSettings.enabled) {
+		if (!upscalerCtx) {
+			ofxSdReleaseImageArray(output, imageTaskData.request.batchCount);
+			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Upscaler context is not loaded");
+			sd->activeTask = ofxStableDiffusionTask::None;
+			task = ofxStableDiffusionTask::None;
+			return;
+		}
+
+		for (int i = 0; i < imageTaskData.request.batchCount; i++) {
+			sd_image_t upscaled = upscale(upscalerCtx, output[i], imageTaskData.upscalerSettings.multiplier);
+			if (!upscaled.data) {
+				ofxSdReleaseImage(output[i]);
+				ofxSdReleaseImageArray(output, imageTaskData.request.batchCount);
+				sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Upscaling failed for one or more images");
+				sd->activeTask = ofxStableDiffusionTask::None;
+				task = ofxStableDiffusionTask::None;
+				return;
+			}
+			ofxSdReleaseImage(output[i]);
+			output[i] = upscaled;
 		}
 	}
 
@@ -344,9 +481,18 @@ void stableDiffusionThread::threadedFunction() {
 	if (!output) {
 		sd->setLastError("Image generation returned no images");
 		sd->activeTask = ofxStableDiffusionTask::None;
+		task = ofxStableDiffusionTask::None;
 		return;
 	}
 
-	sd->captureImageResults(output, sd->batchCount, sd->seed, elapsedMs);
+	sd->captureImageResults(
+		output,
+		imageTaskData.request.batchCount,
+		params.seed,
+		elapsedMs,
+		task,
+		imageTaskData.request,
+		imageTaskData.imageRankCallback);
 	sd->activeTask = ofxStableDiffusionTask::None;
+	task = ofxStableDiffusionTask::None;
 }

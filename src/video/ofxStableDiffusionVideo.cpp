@@ -1,6 +1,7 @@
 #include "../core/ofxStableDiffusionTypes.h"
 #include "../core/ofxStableDiffusionImageHelpers.h"
 #include "ofxStableDiffusionVideoHelpers.h"
+#include "ofxStableDiffusionNativeVideoExport.h"
 
 #include <functional>
 
@@ -41,6 +42,15 @@ const ofxStableDiffusionImageFrame * ofxStableDiffusionVideoClip::frameForTime(f
 	return &frames[static_cast<std::size_t>(index)];
 }
 
+std::vector<int64_t> ofxStableDiffusionVideoClip::seeds() const {
+	std::vector<int64_t> output;
+	output.reserve(frames.size());
+	for (const auto& frame : frames) {
+		output.push_back(frame.seed);
+	}
+	return output;
+}
+
 bool ofxStableDiffusionVideoClip::saveFrameSequence(
 	const std::string & directory,
 	const std::string & prefix) const {
@@ -62,6 +72,60 @@ bool ofxStableDiffusionVideoClip::saveFrameSequence(
 	}
 
 	return true;
+}
+
+bool ofxStableDiffusionVideoClip::saveMetadataJson(const std::string & path) const {
+	if (frames.empty()) {
+		return false;
+	}
+
+	ofJson root;
+	root["fps"] = fps;
+	root["frame_count"] = static_cast<int>(frames.size());
+	root["source_frame_count"] = sourceFrameCount;
+	root["mode"] = ofxStableDiffusionVideoModeName(mode);
+	root["duration_seconds"] = durationSeconds();
+
+	ofJson frameArray = ofJson::array();
+	for (const auto& frame : frames) {
+		ofJson frameJson;
+		frameJson["index"] = frame.index;
+		frameJson["source_index"] = frame.sourceIndex;
+		frameJson["seed"] = frame.seed;
+		frameJson["width"] = frame.width();
+		frameJson["height"] = frame.height();
+		frameJson["channels"] = frame.channels();
+		if (!frame.generation.prompt.empty()) {
+			frameJson["prompt"] = frame.generation.prompt;
+		}
+		if (!frame.generation.negativePrompt.empty()) {
+			frameJson["negative_prompt"] = frame.generation.negativePrompt;
+		}
+		if (frame.generation.cfgScale >= 0.0f) {
+			frameJson["cfg_scale"] = frame.generation.cfgScale;
+		}
+		if (frame.generation.strength >= 0.0f) {
+			frameJson["strength"] = frame.generation.strength;
+		}
+		frameArray.push_back(std::move(frameJson));
+	}
+
+	root["frames"] = std::move(frameArray);
+	return ofSavePrettyJson(path, root);
+}
+
+bool ofxStableDiffusionVideoClip::saveFrameSequenceWithMetadata(
+	const std::string & directory,
+	const std::string & prefix,
+	const std::string & metadataFilename) const {
+	if (!saveFrameSequence(directory, prefix)) {
+		return false;
+	}
+	return saveMetadataJson(ofFilePath::join(directory, metadataFilename));
+}
+
+bool ofxStableDiffusionVideoClip::saveWebm(const std::string & path, int quality) const {
+	return ofxStableDiffusionNativeVideoExport::saveWebm(path, *this, quality);
 }
 
 const char * ofxStableDiffusionTaskLabel(ofxStableDiffusionTask task) {
@@ -103,6 +167,7 @@ const char * ofxStableDiffusionErrorCodeLabel(ofxStableDiffusionErrorCode code) 
 	case ofxStableDiffusionErrorCode::InvalidDimensions: return "InvalidDimensions";
 	case ofxStableDiffusionErrorCode::InvalidBatchCount: return "InvalidBatchCount";
 	case ofxStableDiffusionErrorCode::InvalidFrameCount: return "InvalidFrameCount";
+	case ofxStableDiffusionErrorCode::InvalidParameter: return "InvalidParameter";
 	case ofxStableDiffusionErrorCode::MissingInputImage: return "MissingInputImage";
 	case ofxStableDiffusionErrorCode::GenerationFailed: return "GenerationFailed";
 	case ofxStableDiffusionErrorCode::ThreadBusy: return "ThreadBusy";
@@ -130,6 +195,8 @@ std::string ofxStableDiffusionErrorCodeSuggestion(ofxStableDiffusionErrorCode co
 		return "Set batch count between 1 and 16";
 	case ofxStableDiffusionErrorCode::InvalidFrameCount:
 		return "Set frame count between 1 and 100";
+	case ofxStableDiffusionErrorCode::InvalidParameter:
+		return "Verify numeric parameters are within supported ranges";
 	case ofxStableDiffusionErrorCode::MissingInputImage:
 		return "Load an input image using loadImage() before calling this operation";
 	case ofxStableDiffusionErrorCode::GenerationFailed:
@@ -174,3 +241,4 @@ int64_t ofxStableDiffusionHashStringToSeed(const std::string& text) {
 	// Convert to int64_t, ensuring we stay in valid seed range
 	return static_cast<int64_t>(hash & 0x7FFFFFFFFFFFFFFF);
 }
+

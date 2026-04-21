@@ -1,21 +1,28 @@
 #pragma once
 
 #include "ofMain.h"
+#include "bridges/ofxStableDiffusionHoloscanBridge.h"
+#include "core/ofxStableDiffusionParameterTuningHelpers.h"
 #include "core/ofxStableDiffusionTypes.h"
+#include "video/ofxStableDiffusionLongVideoManifest.h"
+#include "video/ofxStableDiffusionLongVideoWorkflow.h"
+#include "video/ofxStableDiffusionVideoWorkflowHelpers.h"
 #include "ofxStableDiffusionThread.h"
-#include "../libs/stable-diffusion/include/stable-diffusion.h"
+#include "stable-diffusion.h"
 
+#include <deque>
 #include <functional>
+#include <mutex>
 #include <vector>
 
 /// Callback type for generation progress reporting.
 /// @param step Current step number.
 /// @param steps Total number of steps.
 /// @param time Time elapsed in seconds.
-typedef std::function<void(int step, int steps, float time)> ofxSdProgressCallback;
-typedef std::function<std::vector<ofxStableDiffusionImageScore>(
+using ofxSdProgressCallback = std::function<void(int step, int steps, float time)>;
+using ofxSdImageRankCallback = std::function<std::vector<ofxStableDiffusionImageScore>(
 	const ofxStableDiffusionImageRequest& request,
-	const std::vector<ofxStableDiffusionImageFrame>& images)> ofxSdImageRankCallback;
+	const std::vector<ofxStableDiffusionImageFrame>& images)>;
 
 class ofxStableDiffusion {
 public:
@@ -28,20 +35,27 @@ public:
 	void setUpscalerSettings(const ofxStableDiffusionUpscalerSettings& settings);
 	ofxStableDiffusionContextSettings getContextSettings() const;
 	ofxStableDiffusionUpscalerSettings getUpscalerSettings() const;
-	const ofxStableDiffusionResult& getLastResult() const;
-	const std::vector<ofxStableDiffusionImageFrame>& getImages() const;
-	const ofxStableDiffusionVideoClip& getVideoClip() const;
+	ofxStableDiffusionCapabilities getCapabilities() const;
+	ofxStableDiffusionResult getLastResult() const;
+	std::vector<ofxStableDiffusionImageFrame> getImages() const;
+	ofxStableDiffusionVideoClip getVideoClip() const;
 	bool hasImageResult() const;
 	bool hasVideoResult() const;
 	int getOutputCount() const;
-	const std::string& getLastError() const;
+	std::string getLastError() const;
 	ofxStableDiffusionErrorCode getLastErrorCode() const;
-	const ofxStableDiffusionError& getLastErrorInfo() const;
-	const std::vector<ofxStableDiffusionError>& getErrorHistory() const;
+	ofxStableDiffusionError getLastErrorInfo() const;
+	std::vector<ofxStableDiffusionError> getErrorHistory() const;
 	void clearErrorHistory();
 	int getVideoFrameIndexForTime(float seconds) const;
 	const ofPixels* getVideoFramePixels(int index) const;
 	bool saveVideoFrames(const std::string& directory, const std::string& prefix = "frame") const;
+	bool saveVideoMetadata(const std::string& path) const;
+	bool saveVideoFramesWithMetadata(
+		const std::string& directory,
+		const std::string& prefix = "frame",
+		const std::string& metadataFilename = "metadata.json") const;
+	bool saveVideoWebm(const std::string& path, int quality = 90) const;
 	void setVideoGenerationMode(ofxStableDiffusionVideoMode mode);
 	ofxStableDiffusionVideoMode getVideoGenerationMode() const;
 	void setImageGenerationMode(ofxStableDiffusionImageMode mode);
@@ -55,8 +69,20 @@ public:
 	/// lifetime of any subsequent img2img / img2vid call.
 	void loadImage(const ofPixels& pixels);
 
+	/// Replace the active LoRA/LoCon stack for subsequent generations.
+	void setLoras(const std::vector<ofxStableDiffusionLora>& loras_);
+	std::vector<ofxStableDiffusionLora> getLoras() const;
+
+	/// Reload embeddings by rebuilding the context with the current (or provided) embed directory.
+	void reloadEmbeddings(const std::string& embedDir = "");
+
+	/// Query current embeddings on disk (resolved from embedDir); loads names and paths.
+	std::vector<std::pair<std::string, std::string>> listEmbeddings() const;
+
 	bool isDiffused() const;
 	void setDiffused(bool diffused);
+	/// Returned buffers are owned by the addon; they become invalid after a new
+	/// generation starts, output is cleared, or the addon is destroyed.
 	sd_image_t* returnImages() const;
 
 	/// Return the human-readable name for an sd_type_t enum value.
@@ -68,23 +94,7 @@ public:
 	/// Set an optional progress callback that fires on each diffusion step.
 	void setProgressCallback(ofxSdProgressCallback cb);
 
-	void newSdCtx(const std::string& modelPath,
-		const std::string& vaePath,
-		const std::string& taesdPath,
-		const std::string& controlNetPathCStr,
-		const std::string& loraModelDir,
-		const std::string& embedDirCStr,
-		const std::string& stackedIdEmbedDirCStr,
-		bool vaeDecodeOnly,
-		bool vaeTiling,
-		bool freeParamsImmediately,
-		int nThreads,
-		enum sd_type_t wType,
-		enum rng_type_t rngType,
-		enum scheduler_t s,
-		bool keepClipOnCpu,
-		bool keepControlNetCpu,
-		bool keepVaeOnCpu);
+	void newSdCtx(const ofxStableDiffusionContextSettings& settings);
 	void freeSdCtx();
 
 	void txt2img(const std::string& prompt,
@@ -140,10 +150,7 @@ public:
 		int width,
 		int height,
 		int videoFrames,
-		int motionBucketId,
 		int fps,
-		float augmentationLevel,
-		float minCfg,
 		float cfgScale,
 		enum sample_method_t sampleMethod,
 		int sampleSteps,
@@ -181,7 +188,7 @@ public:
 	int64_t getLastUsedSeed() const;
 
 	/// Returns the seed history from recent generations (up to 20 most recent).
-	const std::vector<int64_t>& getSeedHistory() const;
+	std::vector<int64_t> getSeedHistory() const;
 
 	/// Clear the seed history.
 	void clearSeedHistory();
@@ -197,10 +204,15 @@ public:
 	float cfgScale = 7.0f;
 	int batchCount = 1;
 	float strength = 0.5f;
-	int seed = -1;
+	int64_t seed = -1;
 	int clipSkip = -1;
+	// Context model paths
 	std::string modelPath;
 	std::string modelName;
+	std::string diffusionModelPath;
+	std::string clipLPath;
+	std::string clipGPath;
+	std::string t5xxlPath;
 	std::string taesdPath;
 	std::string controlNetPathCStr;
 	std::string embedDirCStr;
@@ -212,10 +224,8 @@ public:
 	sample_method_t sampleMethodEnum = EULER_A_SAMPLE_METHOD;
 	int sampleSteps = 20;
 	int videoFrames = 6;
-	int motionBucketId = 127;
 	int fps = 6;
-	float augmentationLevel = 0.0f;
-	float minCfg = 1.0f;
+	float vaceStrength = 1.0f;
 	bool vaeDecodeOnly = false;
 	bool vaeTiling = false;
 	bool freeParamsImmediately = false;
@@ -225,17 +235,26 @@ public:
 	bool keepClipOnCpu = false;
 	bool keepControlNetCpu = false;
 	bool keepVaeOnCpu = false;
+	bool offloadParamsToCpu = false;
+	bool flashAttn = false;
+	bool enableMmap = true;
 	float styleStrength = 20.0f;
 	bool normalizeInput = true;
 	int nThreads = -1;
 	int esrganMultiplier = 4;
 	sd_type_t wType = SD_TYPE_COUNT;
+	sd_backend_t backend = SD_BACKEND_CUDA;
 	scheduler_t schedule = SCHEDULER_COUNT;
 	rng_type_t rngType = STD_DEFAULT_RNG;
+	prediction_t prediction = EPS_PRED;
+	lora_apply_mode_t loraApplyMode = LORA_APPLY_AUTO;
 	std::string controlImagePath;
 	float controlStrength = 0.9f;
+	std::vector<ofxStableDiffusionLora> loras;
 
 	sd_image_t inputImage = {0, 0, 0, nullptr};
+	sd_image_t maskImage = {0, 0, 0, nullptr};
+	sd_image_t endImage = {0, 0, 0, nullptr};
 	sd_image_t* outputImages = nullptr;
 	sd_image_t* controlCond = nullptr;
 	stableDiffusionThread thread;
@@ -254,18 +273,40 @@ private:
 	void applyContextSettings(const ofxStableDiffusionContextSettings& settings);
 	void applyImageRequest(const ofxStableDiffusionImageRequest& request);
 	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
+	bool validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task);
+	bool validateVideoRequestAndSetError(const ofxStableDiffusionVideoRequest& request);
 	void clearOutputState();
+	ofxStableDiffusionContextSettings captureContextSettingsNoLock() const;
+	ofxStableDiffusionUpscalerSettings captureUpscalerSettingsNoLock() const;
 	void setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::Unknown);
 	void setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage);
 	void clearLastError();
-	void captureImageResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
-	void captureVideoResults(sd_image_t* images, int count, int seedValue, float elapsedMs);
-	void applyImageRanking(std::vector<ofxStableDiffusionImageFrame>& frames);
-	void rebuildLegacyOutputViews();
+	void captureImageResults(
+		sd_image_t* images,
+		int count,
+		int64_t seedValue,
+		float elapsedMs,
+		ofxStableDiffusionTask task,
+		const ofxStableDiffusionImageRequest& request,
+		const ofxSdImageRankCallback& rankCallback);
+	void captureVideoResults(
+		sd_image_t* images,
+		int count,
+		int64_t seedValue,
+		const std::vector<int64_t>& frameSeeds,
+		const std::vector<ofxStableDiffusionGenerationParameters>& frameGeneration,
+		float elapsedMs,
+		ofxStableDiffusionTask task,
+		const ofxStableDiffusionVideoRequest& request);
+	void applyImageRanking(
+		std::vector<ofxStableDiffusionImageFrame>& frames,
+		ofxStableDiffusionResult& result,
+		const ofxStableDiffusionImageRequest& request,
+		const ofxSdImageRankCallback& rankCallback);
+	std::vector<sd_image_t> buildOutputImageViews(const ofxStableDiffusionResult& result) const;
 	ofPixels makePixelsCopy(const sd_image_t& image) const;
 
 	ofxStableDiffusionTask activeTask = ofxStableDiffusionTask::None;
-	ofxStableDiffusionImageRequest currentImageRequest;
 	ofxStableDiffusionImageMode imageMode = ofxStableDiffusionImageMode::TextToImage;
 	ofxStableDiffusionImageSelectionMode imageSelectionMode =
 		ofxStableDiffusionImageSelectionMode::KeepOrder;
@@ -274,9 +315,13 @@ private:
 	std::vector<sd_image_t> outputImageViews;
 	std::string lastError;
 	ofxStableDiffusionError lastErrorInfo;
-	std::vector<ofxStableDiffusionError> errorHistory;
+	std::deque<ofxStableDiffusionError> errorHistory;
 	static constexpr std::size_t maxErrorHistorySize = 10;
-	std::vector<int64_t> seedHistory;
+	std::deque<int64_t> seedHistory;
 	static constexpr std::size_t maxSeedHistorySize = 20;
 	uint64_t taskStartMicros = 0;
+	stableDiffusionThread::OwnedImage loadedInputImage;
+	mutable std::mutex stateMutex;
 };
+
+

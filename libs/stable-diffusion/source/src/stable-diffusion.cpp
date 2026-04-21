@@ -170,20 +170,30 @@ public:
         ggml_backend_free(backend);
     }
 
-    void init_backend() {
+    void init_backend(enum sd_backend_t requested_backend) {
+        auto try_cuda = [&]() -> bool {
 #ifdef SD_USE_CUDA
-        LOG_DEBUG("Using CUDA backend");
-        backend = ggml_backend_cuda_init(0);
+            LOG_DEBUG("Trying CUDA backend");
+            backend = ggml_backend_cuda_init(0);
+            if (backend != nullptr) {
+                LOG_INFO("Using CUDA backend");
+                return true;
+            }
+            LOG_WARN("Failed to initialize CUDA backend");
 #endif
-#ifdef SD_USE_METAL
-        LOG_DEBUG("Using Metal backend");
-        backend = ggml_backend_metal_init();
-#endif
+            return false;
+        };
+
+        auto try_vulkan = [&]() -> bool {
 #ifdef SD_USE_VULKAN
-        LOG_DEBUG("Using Vulkan backend");
-        size_t device          = 0;
-        const int device_count = ggml_backend_vk_get_device_count();
-        if (device_count) {
+            LOG_DEBUG("Trying Vulkan backend");
+            size_t device          = 0;
+            const int device_count = ggml_backend_vk_get_device_count();
+            if (device_count <= 0) {
+                LOG_WARN("No Vulkan devices available");
+                return false;
+            }
+
             const char* SD_VK_DEVICE = getenv("SD_VK_DEVICE");
             if (SD_VK_DEVICE != nullptr) {
                 std::string sd_vk_device_str = SD_VK_DEVICE;
@@ -196,34 +206,55 @@ public:
                     LOG_WARN("SD_VK_DEVICE environment variable value is out of range for `unsigned long long` type (%s). Falling back to device 0.", SD_VK_DEVICE);
                     device = 0;
                 }
-                if (device >= device_count) {
+                if (device >= (size_t)device_count) {
                     LOG_WARN("Cannot find targeted vulkan device (%llu). Falling back to device 0.", device);
                     device = 0;
                 }
             }
+
             LOG_INFO("Vulkan: Using device %llu", device);
             backend = ggml_backend_vk_init(device);
-        }
-        if (!backend) {
+            if (backend != nullptr) {
+                LOG_INFO("Using Vulkan backend");
+                return true;
+            }
             LOG_WARN("Failed to initialize Vulkan backend");
-        }
 #endif
-#ifdef SD_USE_OPENCL
-        LOG_DEBUG("Using OpenCL backend");
-        // ggml_log_set(ggml_log_callback_default, nullptr); // Optional ggml logs
-        backend = ggml_backend_opencl_init();
-        if (!backend) {
-            LOG_WARN("Failed to initialize OpenCL backend");
-        }
-#endif
-#ifdef SD_USE_SYCL
-        LOG_DEBUG("Using SYCL backend");
-        backend = ggml_backend_sycl_init(0);
-#endif
+            return false;
+        };
 
-        if (!backend) {
-            LOG_DEBUG("Using CPU backend");
+        auto try_cpu = [&]() -> bool {
+            LOG_INFO("Using CPU backend");
             backend = ggml_backend_cpu_init();
+            if (backend == nullptr) {
+                LOG_ERROR("Failed to initialize CPU backend");
+                return false;
+            }
+            return true;
+        };
+
+        backend = nullptr;
+
+        switch (requested_backend) {
+            case SD_BACKEND_VULKAN:
+                if (try_vulkan()) {
+                    return;
+                }
+                try_cpu();
+                return;
+            case SD_BACKEND_CPU:
+                try_cpu();
+                return;
+            case SD_BACKEND_CUDA:
+            default:
+                if (try_cuda()) {
+                    return;
+                }
+                if (try_vulkan()) {
+                    return;
+                }
+                try_cpu();
+                return;
         }
     }
 
@@ -254,7 +285,7 @@ public:
 
         ggml_log_set(ggml_log_callback_default, nullptr);
 
-        init_backend();
+        init_backend(sd_ctx_params->backend);
 
         ModelLoader model_loader;
 
@@ -943,6 +974,8 @@ public:
                     pred_type = FLOW_PRED;
                     if (sd_version_is_wan(version)) {
                         default_flow_shift = 5.f;
+                    } else if (sd_version_is_ernie_image(version)) {
+                        default_flow_shift = 4.f;
                     } else {
                         default_flow_shift = 3.f;
                     }
@@ -1955,6 +1988,19 @@ enum sd_type_t str_to_sd_type(const char* str) {
     return SD_TYPE_COUNT;
 }
 
+const char* backend_to_str[] = {
+    "cuda",
+    "vulkan",
+    "cpu",
+};
+
+const char* sd_backend_name(enum sd_backend_t backend) {
+    if (backend < SD_BACKEND_COUNT) {
+        return backend_to_str[backend];
+    }
+    return NONE_STR;
+}
+
 const char* rng_type_to_str[] = {
     "std_default",
     "cuda",
@@ -2145,6 +2191,7 @@ void sd_ctx_params_init(sd_ctx_params_t* sd_ctx_params) {
     sd_ctx_params->free_params_immediately = true;
     sd_ctx_params->n_threads               = sd_get_num_physical_cores();
     sd_ctx_params->wtype                   = SD_TYPE_COUNT;
+    sd_ctx_params->backend                 = SD_BACKEND_CUDA;
     sd_ctx_params->rng_type                = CUDA_RNG;
     sd_ctx_params->sampler_rng_type        = RNG_TYPE_COUNT;
     sd_ctx_params->prediction              = PREDICTION_COUNT;
@@ -2184,10 +2231,11 @@ char* sd_ctx_params_to_str(const sd_ctx_params_t* sd_ctx_params) {
              "photo_maker_path: %s\n"
              "tensor_type_rules: %s\n"
              "vae_decode_only: %s\n"
-             "free_params_immediately: %s\n"
-             "n_threads: %d\n"
-             "wtype: %s\n"
-             "rng_type: %s\n"
+               "free_params_immediately: %s\n"
+               "n_threads: %d\n"
+               "wtype: %s\n"
+               "backend: %s\n"
+               "rng_type: %s\n"
              "sampler_rng_type: %s\n"
              "prediction: %s\n"
              "offload_params_to_cpu: %s\n"
@@ -2216,10 +2264,11 @@ char* sd_ctx_params_to_str(const sd_ctx_params_t* sd_ctx_params) {
              SAFE_STR(sd_ctx_params->photo_maker_path),
              SAFE_STR(sd_ctx_params->tensor_type_rules),
              BOOL_STR(sd_ctx_params->vae_decode_only),
-             BOOL_STR(sd_ctx_params->free_params_immediately),
-             sd_ctx_params->n_threads,
-             sd_type_name(sd_ctx_params->wtype),
-             sd_rng_type_name(sd_ctx_params->rng_type),
+               BOOL_STR(sd_ctx_params->free_params_immediately),
+               sd_ctx_params->n_threads,
+               sd_type_name(sd_ctx_params->wtype),
+               sd_backend_name(sd_ctx_params->backend),
+               sd_rng_type_name(sd_ctx_params->rng_type),
              sd_rng_type_name(sd_ctx_params->sampler_rng_type),
              sd_prediction_name(sd_ctx_params->prediction),
              BOOL_STR(sd_ctx_params->offload_params_to_cpu),
@@ -2388,6 +2437,14 @@ struct sd_ctx_t {
     StableDiffusionGGML* sd = nullptr;
 };
 
+static bool sd_version_supports_video_generation(SDVersion version) {
+    return version == VERSION_SVD || sd_version_is_wan(version);
+}
+
+static bool sd_version_supports_image_generation(SDVersion version) {
+    return !sd_version_supports_video_generation(version);
+}
+
 sd_ctx_t* new_sd_ctx(const sd_ctx_params_t* sd_ctx_params) {
     sd_ctx_t* sd_ctx = (sd_ctx_t*)malloc(sizeof(sd_ctx_t));
     if (sd_ctx == nullptr) {
@@ -2417,6 +2474,20 @@ void free_sd_ctx(sd_ctx_t* sd_ctx) {
     free(sd_ctx);
 }
 
+SD_API bool sd_ctx_supports_image_generation(const sd_ctx_t* sd_ctx) {
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
+        return false;
+    }
+    return sd_version_supports_image_generation(sd_ctx->sd->version);
+}
+
+SD_API bool sd_ctx_supports_video_generation(const sd_ctx_t* sd_ctx) {
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
+        return false;
+    }
+    return sd_version_supports_video_generation(sd_ctx->sd->version);
+}
+
 enum sample_method_t sd_get_default_sample_method(const sd_ctx_t* sd_ctx) {
     if (sd_ctx != nullptr && sd_ctx->sd != nullptr) {
         if (sd_version_is_dit(sd_ctx->sd->version)) {
@@ -2433,8 +2504,10 @@ enum scheduler_t sd_get_default_scheduler(const sd_ctx_t* sd_ctx, enum sample_me
             return EXPONENTIAL_SCHEDULER;
         }
     }
-    if (sample_method == LCM_SAMPLE_METHOD) {
+    if (sample_method == LCM_SAMPLE_METHOD || sample_method == TCD_SAMPLE_METHOD) {
         return LCM_SCHEDULER;
+    } else if (sample_method == DDIM_TRAILING_SAMPLE_METHOD) {
+        return SIMPLE_SCHEDULER;
     }
     return DISCRETE_SCHEDULER;
 }

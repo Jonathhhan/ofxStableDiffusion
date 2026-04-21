@@ -13,21 +13,23 @@ It is designed for two use cases:
 
 - `GET /sdcpp/v1/capabilities`
 - `POST /sdcpp/v1/img_gen`
+- `POST /sdcpp/v1/vid_gen`
 - `GET /sdcpp/v1/jobs/:id`
 - `POST /sdcpp/v1/jobs/:id/cancel`
 
 The current UI supports:
 
+- image generation and video generation mode switching
 - prompt and negative prompt editing
-- width, height, batch count, and seed
+- width, height, seed, batch count, video frames, and fps
 - sampler and scheduler selection
-- guidance controls
-- conditioning controls such as `clip_skip`, `strength`, and `control_strength`
+- guidance controls, including the video high-noise stage
+- conditioning controls such as `clip_skip`, `strength`, `control_strength`, `moe_boundary`, and `vace_strength`
 - LoRA selection from server capabilities
-- init image, mask image, control image, and reference images
+- init image, end image, mask image, control image, control frames, and reference images
 - VAE tiling controls
 - cache controls
-- job polling, cancellation, and output preview
+- job polling, cancellation, image preview, and video or animated WebP preview
 
 ## Requirements
 

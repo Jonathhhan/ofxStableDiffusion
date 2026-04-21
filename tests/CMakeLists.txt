@@ -7,12 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(CTest)
 
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+set(STUB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 
 add_executable(test_video_helpers
     test_video_helpers.cpp
 )
 
 target_include_directories(test_video_helpers PRIVATE
+    "${STUB_DIR}"
     "${SRC_DIR}"
 )
 
@@ -63,7 +65,41 @@ add_executable(test_video_helpers_extended
 )
 
 target_include_directories(test_video_helpers_extended PRIVATE
+    "${STUB_DIR}"
     "${SRC_DIR}"
 )
 
 add_test(NAME video_helpers_extended COMMAND test_video_helpers_extended)
+
+add_executable(test_capability_helpers
+    test_capability_helpers.cpp
+)
+
+target_include_directories(test_capability_helpers PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+)
+
+add_test(NAME capability_helpers COMMAND test_capability_helpers)
+
+add_executable(test_parameter_tuning_helpers
+    test_parameter_tuning_helpers.cpp
+)
+
+target_include_directories(test_parameter_tuning_helpers PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+)
+
+add_test(NAME parameter_tuning_helpers COMMAND test_parameter_tuning_helpers)
+
+add_executable(test_long_video_workflow
+    test_long_video_workflow.cpp
+)
+
+target_include_directories(test_long_video_workflow PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+)
+
+add_test(NAME long_video_workflow COMMAND test_long_video_workflow)

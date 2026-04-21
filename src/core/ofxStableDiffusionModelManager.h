@@ -2,7 +2,7 @@
 
 #include "ofMain.h"
 #include "ofxStableDiffusionEnums.h"
-#include "../../libs/stable-diffusion/include/stable-diffusion.h"
+#include "stable-diffusion.h"
 
 #include <string>
 #include <map>
@@ -50,7 +50,7 @@ struct ofxStableDiffusionModelCacheEntry {
 };
 
 /// Model loading progress callback
-typedef std::function<void(const std::string& modelPath, float progress, const std::string& stage)> ofxModelLoadProgressCallback;
+using ofxModelLoadProgressCallback = std::function<void(const std::string& modelPath, float progress, const std::string& stage)>;
 
 /// Model Manager for preloading and caching models
 class ofxStableDiffusionModelManager {
@@ -143,3 +143,4 @@ private:
 	std::string extractModelType(const std::string& modelPath) const;
 	bool isValidModelFile(const std::string& modelPath) const;
 };
+

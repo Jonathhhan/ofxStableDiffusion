@@ -41,12 +41,6 @@ Or use the addon-level setup entrypoint:
 scripts\setup_windows.bat --auto
 ```
 
-Or stage a pinned upstream Windows release instead of building from source:
-
-```bat
-scripts\setup_windows.bat --use-release --auto
-```
-
 ### Linux / macOS-style shell
 
 ```bash
@@ -69,45 +63,48 @@ The native build scripts now mirror the backend flag style used by `ofxGgml`.
   Enable Metal explicitly where supported
 
 On Windows, `scripts/setup_windows.bat` forwards the same flags into
-`scripts/setup_addon.ps1`, which builds the native runtime and, by default,
-also rebuilds `ofxStableDiffusionExample`.
+`scripts/setup_addon.ps1`, which builds the native runtime.
 
-## Optional Prebuilt Windows Runtime
+## Windows Source Snapshot Flow
 
-For faster setup on Windows, the addon can stage a pinned upstream release from
-`stable-diffusion.cpp` instead of compiling from source.
+On Windows, the addon setup entrypoints now always fetch the source snapshot
+for the latest upstream `stable-diffusion.cpp` release tag, then refresh
+`libs/stable-diffusion/source/ggml` from the latest upstream `ggml` release,
+replace `libs/stable-diffusion/source`, and compile locally.
 
 Available setup flags:
 
-- `--use-release`
-  Use the prebuilt upstream runtime path
-- `--release-tag TAG`
-  Override the pinned upstream release tag
-- `--release-variant auto|cpu|noavx|avx|avx2|avx512|cuda12`
-  Choose the Windows release package to stage
+- `--source-release-tag TAG`
+  Override the upstream release tag used for the vendored source snapshot
+- `--ggml-release-tag TAG`
+  Override the upstream `ggml` release tag used for the vendored `ggml` subtree
 
-Behavior:
+Example:
 
-- `--auto` stays the default behavior overall
-- `--use-release --auto` prefers `cuda12` when CUDA is available, otherwise `avx2`
-- `--use-release --cuda` stages the `cuda12` release directly
-- `--use-release --cpu` stages a CPU release
-- Windows Vulkan is still a source-build path, because the upstream Windows release assets do not currently include a Vulkan package
-- If the upstream Windows zip omits `stable-diffusion.lib`, the addon script synthesizes the import library from the downloaded DLL exports automatically
+```bat
+scripts\setup_windows.bat --cuda
+```
+
+Pin a specific source snapshot:
+
+```bat
+scripts\setup_windows.bat --cuda --source-release-tag master-585-44cca3d
+```
+
+Pin both upstream trees explicitly:
+
+```bat
+scripts\setup_windows.bat --cuda --source-release-tag master-585-44cca3d --ggml-release-tag v0.9.11
+```
+
+The legacy-named helper below now does the same source-refresh job instead of
+staging prebuilt runtime binaries:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\download-stable-diffusion-release.ps1 -ReleaseTag master-585-44cca3d
+```
 
 ## Current Pin
-
-The addon currently vendors upstream `stable-diffusion.cpp` from:
-
-- repo: `https://github.com/leejet/stable-diffusion.cpp`
-- commit: `a564fdf642780d1df123f1c413b19961375b8346`
-- vendored on: `2026-04-17`
-
-The optional Windows prebuilt-runtime path is currently pinned to:
-
-- release tag: `master-572-1b4e9be`
-- published: `2026-04-16`
-- release page: [stable-diffusion.cpp releases](https://github.com/leejet/stable-diffusion.cpp/releases)
 
 The vendored tree includes the required submodules so the native rebuild scripts
 can run end-to-end.
@@ -133,4 +130,4 @@ When vendoring upstream:
 1. Choose a known-compatible upstream commit.
 2. Record that commit hash in this document and the changelog.
 3. Rebuild the staged header/library pair together.
-4. Re-run the wrapper test suite and the example build.
+4. Re-run the wrapper test suite.

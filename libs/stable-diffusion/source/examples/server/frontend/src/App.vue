@@ -1,19 +1,29 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 
 import CollapsibleSection from "./components/CollapsibleSection.vue";
 import ImageDropzone from "./components/ImageDropzone.vue";
 import StatusChip from "./components/StatusChip.vue";
-import { cancelJob, getCapabilities, getJob, submitImageJob } from "./lib/api";
-import { buildRequestBody, CACHE_MODES, createBlankForm, formFromCapabilities } from "./lib/form";
-import { IMAGE_INPUTS } from "./lib/image-inputs";
+import { cancelJob, getCapabilities, getJob, submitImageJob, submitVideoJob } from "./lib/api";
+import { buildRequestBodyForMode, CACHE_MODES, createBlankForm, formFromCapabilities } from "./lib/form";
+import { IMAGE_INPUTS, VIDEO_IMAGE_INPUTS } from "./lib/image-inputs";
 import { assignImageEntries, clearImageEntries, filesToImageEntries, removeImageEntry } from "./lib/images";
 import { createStoredRef, normalizePollIntervalMs } from "./lib/settings";
-import type { Capabilities, GenerationForm, ImageEntry, ImageTarget, Job } from "./lib/types";
+import type {
+    Capabilities,
+    GenerationForm,
+    GenerationMode,
+    ImageEntry,
+    ImageTarget,
+    Job,
+    SampleParams,
+} from "./lib/types";
 
 const baseUrl = createStoredRef<string>("sdcpp-webui-base-url", "", (value: unknown) => String(value || ""));
 const pollIntervalMs = createStoredRef<number>("sdcpp-webui-poll-interval-ms", 100, normalizePollIntervalMs);
-const activeTab = ref<string>("generation");
+const activeTab = ref<"image" | "video" | "settings">("image");
+const selectedGenerationTab = ref<"image" | "video">("image");
+const generationMode = computed<GenerationMode>(() => selectedGenerationTab.value === "video" ? "video" : "image");
 const lightboxOpen = ref(false);
 const lightboxImageSrc = ref("");
 const lightboxImageAlt = ref("");
@@ -22,6 +32,9 @@ const sectionState = reactive<Record<string, boolean>>({
     sampleAdvanced: false,
     guidance: true,
     guidanceAdvanced: false,
+    highNoise: false,
+    highNoiseSample: true,
+    highNoiseGuidance: true,
     conditioning: false,
     auxiliaryImages: false,
     lora: false,
@@ -47,18 +60,41 @@ const modelName = computed(() => {
     return model?.stem || model?.name || "No model info";
 });
 
-const outputFormats = computed(() => capabilities.value?.output_formats || ["png", "jpeg"]);
+const supportedModes = computed(() => capabilities.value?.supported_modes || []);
+const supportsImageMode = computed(() => {
+    return !supportedModes.value.length || supportedModes.value.includes("img_gen");
+});
+const supportsVideoMode = computed(() => {
+    return !supportedModes.value.length || supportedModes.value.includes("vid_gen");
+});
+const selectedModeKey = computed<"img_gen" | "vid_gen">(() => generationMode.value === "video" ? "vid_gen" : "img_gen");
+const currentJobModeKey = computed<"img_gen" | "vid_gen">(() => currentJob.value?.kind || selectedModeKey.value);
+const selectedModeFeatures = computed(() => {
+    return capabilities.value?.features_by_mode?.[selectedModeKey.value] || {};
+});
+const currentJobFeatures = computed(() => {
+    return capabilities.value?.features_by_mode?.[currentJobModeKey.value] || selectedModeFeatures.value;
+});
+const imageOutputFormats = computed(() => {
+    return capabilities.value?.output_formats_by_mode?.img_gen || ["png", "jpeg"];
+});
+const videoOutputFormats = computed(() => {
+    return capabilities.value?.output_formats_by_mode?.vid_gen || ["webm", "avi"];
+});
+const outputFormats = computed(() => generationMode.value === "video" ? videoOutputFormats.value : imageOutputFormats.value);
 const samplers = computed(() => capabilities.value?.samplers || ["default"]);
 const schedulers = computed(() => capabilities.value?.schedulers || ["default"]);
 const availableLoras = computed(() => capabilities.value?.loras || []);
-const gridImageInputs = IMAGE_INPUTS.filter((input) => input.layout === "grid");
-const fullImageInputs = IMAGE_INPUTS.filter((input) => input.layout === "full");
+const currentImageInputs = computed(() => generationMode.value === "video" ? VIDEO_IMAGE_INPUTS : IMAGE_INPUTS);
+const gridImageInputs = computed(() => currentImageInputs.value.filter((input) => input.layout === "grid"));
+const fullImageInputs = computed(() => currentImageInputs.value.filter((input) => input.layout === "full"));
 const queueLimit = computed(() => capabilities.value?.limits?.max_queue_size ?? "unknown");
-const canCancelQueued = computed(() => Boolean(capabilities.value?.features?.cancel_queued));
-const canCancelGenerating = computed(() => Boolean(capabilities.value?.features?.cancel_generating));
+const canCancelQueued = computed(() => Boolean(currentJobFeatures.value.cancel_queued));
+const canCancelGenerating = computed(() => Boolean(currentJobFeatures.value.cancel_generating));
 
 const currentStatus = computed(() => currentJob.value?.status || "idle");
-const currentImages = computed(() => currentJob.value?.result?.images || []);
+const currentJobKind = computed(() => currentJob.value?.kind || null);
+const currentImages = computed(() => currentJobKind.value === "img_gen" ? currentJob.value?.result?.images || [] : []);
 const selectedImage = computed(() => {
     if (!currentImages.value.length) {
         return null;
@@ -67,6 +103,38 @@ const selectedImage = computed(() => {
     const image = currentImages.value[index];
     const format = currentJob.value?.result?.output_format || form.output_format || "png";
     return `data:image/${format};base64,${image.b64_json}`;
+});
+const videoMimeType = computed(() => currentJobKind.value === "vid_gen" ? currentJob.value?.result?.mime_type || "" : "");
+const videoFrameCount = computed(() => currentJobKind.value === "vid_gen" ? currentJob.value?.result?.frame_count || 0 : 0);
+const videoFps = computed(() => currentJobKind.value === "vid_gen" ? currentJob.value?.result?.fps || 0 : 0);
+const videoPreviewSrc = computed(() => {
+    if (currentJobKind.value !== "vid_gen" || !currentJob.value?.result?.b64_json) {
+        return null;
+    }
+    if (currentJob.value?.result?.output_format === "avi") {
+        return null;
+    }
+    if (!videoMimeType.value.startsWith("video/")) {
+        return null;
+    }
+    return `data:${videoMimeType.value};base64,${currentJob.value.result.b64_json}`;
+});
+const animatedVideoImageSrc = computed(() => {
+    if (currentJobKind.value !== "vid_gen" || !currentJob.value?.result?.b64_json) {
+        return null;
+    }
+    if (videoMimeType.value !== "image/webp") {
+        return null;
+    }
+    return `data:image/webp;base64,${currentJob.value.result.b64_json}`;
+});
+const previewImageSrc = computed(() => animatedVideoImageSrc.value || selectedImage.value);
+const downloadableSrc = computed(() => {
+    const result = currentJob.value?.result;
+    if (currentJobKind.value === "vid_gen" && result?.b64_json && videoMimeType.value) {
+        return `data:${videoMimeType.value};base64,${result.b64_json}`;
+    }
+    return selectedImage.value;
 });
 
 const canCancelCurrentJob = computed(() => {
@@ -86,45 +154,52 @@ const isJobRunning = computed(() => {
     return currentStatus.value === "queued" || currentStatus.value === "generating";
 });
 
-const sampleSummary = computed(() => {
-    const scheduler = form.sample_params.scheduler || "default";
-    const method = form.sample_params.sample_method || "default";
-    const steps = form.sample_params.sample_steps || 0;
-    const flowShift = form.sample_params.flow_shift === "" || form.sample_params.flow_shift == null
+function buildSampleSummary(sample: SampleParams): string {
+    const scheduler = sample.scheduler || "default";
+    const method = sample.sample_method || "default";
+    const steps = sample.sample_steps || 0;
+    const flowShift = sample.flow_shift === "" || sample.flow_shift == null
         ? "flow auto"
-        : `flow ${form.sample_params.flow_shift}`;
+        : `flow ${sample.flow_shift}`;
     return `${scheduler} · ${flowShift} · ${method} · ${steps} steps`;
-});
+}
 
-const guidanceSummary = computed(() => {
-    const cfg = form.sample_params.guidance.txt_cfg;
-    const distilled = form.sample_params.guidance.distilled_guidance;
+function buildGuidanceSummary(sample: SampleParams): string {
+    const cfg = sample.guidance.txt_cfg;
+    const distilled = sample.guidance.distilled_guidance;
     return `cfg ${cfg} · distilled ${distilled}`;
-});
+}
 
+const sampleSummary = computed(() => buildSampleSummary(form.sample_params));
+const guidanceSummary = computed(() => buildGuidanceSummary(form.sample_params));
+const highNoiseSummary = computed(() => {
+    return `moe ${formatSummaryNumber(form.moe_boundary)} · ${buildSampleSummary(form.high_noise_sample_params)} · ${buildGuidanceSummary(form.high_noise_sample_params)}`;
+});
 const loraSummary = computed(() => {
     if (!form.lora.length) {
         return "No LoRA";
     }
     return `${form.lora.length} configured`;
 });
-
 const imageInputsSummary = computed(() => {
     const parts: string[] = [];
-    if (form.init_image) parts.push("init");
-    if (form.mask_image) parts.push("mask");
-    if (form.control_image) parts.push("control");
-    if (form.ref_images.length) parts.push(`${form.ref_images.length} refs`);
+    if (form.init_image) parts.push(generationMode.value === "video" ? "start" : "init");
+    if (generationMode.value === "image") {
+        if (form.mask_image) parts.push("mask");
+        if (form.control_image) parts.push("control");
+        if (form.ref_images.length) parts.push(`${form.ref_images.length} refs`);
+    } else {
+        if (form.end_image) parts.push("end");
+        if (form.control_frames.length) parts.push(`${form.control_frames.length} frames`);
+    }
     return parts.length ? parts.join(" · ") : "No images";
 });
-
 const vaeTilingSummary = computed(() => {
     if (!form.vae_tiling_params.enabled) {
         return "Disabled";
     }
     return `${form.vae_tiling_params.tile_size_x}×${form.vae_tiling_params.tile_size_y} · overlap ${form.vae_tiling_params.target_overlap}`;
 });
-
 const cacheSummary = computed(() => {
     const mode = form.cache.mode || "disabled";
     if (mode === "disabled") {
@@ -133,13 +208,32 @@ const cacheSummary = computed(() => {
     const option = String(form.cache.option || "").trim();
     return option ? `${mode} · ${option}` : mode;
 });
-
 const conditioningSummary = computed(() => {
     const clipSkip = formatSummaryNumber(form.clip_skip, 0);
     const strength = formatSummaryNumber(form.strength);
+    if (generationMode.value === "video") {
+        return `clip_skip ${clipSkip} · strength ${strength} · vace ${formatSummaryNumber(form.vace_strength)}`;
+    }
     const controlStrength = formatSummaryNumber(form.control_strength);
     return `clip_skip ${clipSkip} · img ${strength} · control ${controlStrength}`;
 });
+
+function defaultOutputFormatForMode(mode: GenerationMode): string {
+    if (mode === "video") {
+        return videoOutputFormats.value[0] || "webm";
+    }
+    return imageOutputFormats.value[0] || "png";
+}
+
+function ensureOutputFormatForMode(mode = generationMode.value): void {
+    const validFormats = mode === "video" ? videoOutputFormats.value : imageOutputFormats.value;
+    if (!validFormats.length) {
+        return;
+    }
+    if (!validFormats.includes(form.output_format)) {
+        form.output_format = defaultOutputFormatForMode(mode);
+    }
+}
 
 function setMessage(message: string, tone = ""): void {
     statusMessage.value = message;
@@ -178,6 +272,17 @@ async function refreshCapabilities(): Promise<void> {
         capabilities.value = response;
         serviceOnline.value = true;
         applyForm(formFromCapabilities(response));
+        if (selectedGenerationTab.value === "image" && !supportsImageMode.value && supportsVideoMode.value) {
+            selectedGenerationTab.value = "video";
+        } else if (selectedGenerationTab.value === "video" && !supportsVideoMode.value && supportsImageMode.value) {
+            selectedGenerationTab.value = "image";
+        }
+        if (activeTab.value === "image" && !supportsImageMode.value && supportsVideoMode.value) {
+            activeTab.value = "video";
+        } else if (activeTab.value === "video" && !supportsVideoMode.value && supportsImageMode.value) {
+            activeTab.value = "image";
+        }
+        ensureOutputFormatForMode();
         clearMessage();
     } catch (error) {
         capabilitiesError.value = error instanceof Error ? error.message : String(error);
@@ -190,6 +295,20 @@ async function refreshCapabilities(): Promise<void> {
 
 function toggleSection(section: string): void {
     sectionState[section] = !sectionState[section];
+}
+
+function selectGenerationMode(mode: GenerationMode): void {
+    if (mode === "image" && !supportsImageMode.value) {
+        setMessage("Current model only supports video generation.", "error");
+        return;
+    }
+    if (mode === "video" && !supportsVideoMode.value) {
+        setMessage("Current model only supports image generation.", "error");
+        return;
+    }
+    selectedGenerationTab.value = mode;
+    activeTab.value = mode;
+    ensureOutputFormatForMode(mode);
 }
 
 function stopPolling(): void {
@@ -226,7 +345,7 @@ async function pollJob(id: string): Promise<void> {
         }
         stopElapsedTimer();
         if (currentStatus.value === "completed") {
-            setMessage("Generation completed.", "success");
+            setMessage(currentJob.value?.kind === "vid_gen" ? "Video generation completed." : "Image generation completed.", "success");
             return;
         }
         if (currentStatus.value === "cancelled") {
@@ -245,11 +364,13 @@ async function pollJob(id: string): Promise<void> {
 
 async function generate(): Promise<void> {
     try {
-        const request = buildRequestBody(form);
+        const request = buildRequestBodyForMode(generationMode.value, form);
         clearMessage();
         selectedOutputIndex.value = 0;
         startElapsedTimer();
-        currentJob.value = await submitImageJob(baseUrl.value, request);
+        currentJob.value = generationMode.value === "video"
+            ? await submitVideoJob(baseUrl.value, request)
+            : await submitImageJob(baseUrl.value, request);
         await pollJob(currentJob.value.id);
     } catch (error) {
         stopElapsedTimer();
@@ -296,7 +417,7 @@ function clearImage(target: ImageTarget): void {
 }
 
 function getFormImage(target: ImageTarget): ImageEntry | null {
-    if (target === "ref_images") return null;
+    if (target === "ref_images" || target === "control_frames") return null;
     return form[target];
 }
 
@@ -304,8 +425,8 @@ function openImageEntry(image: ImageEntry | null): void {
     openLightbox(image?.dataUrl, image?.name);
 }
 
-function removeRefImage(index: number): void {
-    removeImageEntry(form, "ref_images", index);
+function removeCollectionImage(target: "ref_images" | "control_frames", index: number): void {
+    removeImageEntry(form, target, index);
 }
 
 function selectOutput(index: number): void {
@@ -342,18 +463,18 @@ function formatSummaryNumber(value: number, digits = 3): string {
 }
 
 function downloadSelected(): void {
-    if (!selectedImage.value) {
+    if (!downloadableSrc.value) {
         return;
     }
     const link = document.createElement("a");
-    link.href = selectedImage.value;
-    link.download = `${currentJob.value?.id || "output"}.${currentJob.value?.result?.output_format || "png"}`;
+    link.href = downloadableSrc.value;
+    link.download = `${currentJob.value?.id || "output"}.${currentJob.value?.result?.output_format || form.output_format}`;
     document.body.appendChild(link);
     link.click();
     link.remove();
 }
 
-function openLightbox(src: string | null | undefined = selectedImage.value, alt = "Expanded image"): void {
+function openLightbox(src: string | null | undefined = previewImageSrc.value, alt = "Expanded image"): void {
     if (!src) {
         return;
     }
@@ -375,6 +496,18 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
     await assignImages("init_image", event.clipboardData.files);
     setMessage("Pasted image into init_image.", "success");
 }
+
+watch(generationMode, (mode) => {
+    ensureOutputFormatForMode(mode);
+});
+
+watch(imageOutputFormats, () => {
+    ensureOutputFormatForMode();
+});
+
+watch(videoOutputFormats, () => {
+    ensureOutputFormatForMode();
+});
 
 onMounted(() => {
     window.addEventListener("paste", onPaste);
@@ -400,7 +533,7 @@ onBeforeUnmount(() => {
                     </div>
                     <h1 class="page-title">{{ modelName }}</h1>
                     <p class="page-description">
-                        Native async image generation interface for the local `stable-diffusion.cpp` server.
+                        Native async image and video generation interface for the local `stable-diffusion.cpp` server.
                     </p>
                 </div>
                 <div class="page-header__meta">
@@ -411,7 +544,8 @@ onBeforeUnmount(() => {
             </div>
             <div class="page-tabs">
                 <div class="page-tabs__list">
-                    <button class="page-tab" :class="{ 'page-tab--active': activeTab === 'generation' }" type="button" @click="activeTab = 'generation'">Image Generation</button>
+                    <button class="page-tab" :class="{ 'page-tab--active': activeTab === 'image' }" type="button" @click="selectGenerationMode('image')" :disabled="!supportsImageMode">Image Generation</button>
+                    <button class="page-tab" :class="{ 'page-tab--active': activeTab === 'video' }" type="button" @click="selectGenerationMode('video')" :disabled="!supportsVideoMode">Video Generation</button>
                     <button class="page-tab" :class="{ 'page-tab--active': activeTab === 'settings' }" type="button" @click="activeTab = 'settings'">Settings</button>
                 </div>
                 <div class="page-tabs__actions">
@@ -429,7 +563,7 @@ onBeforeUnmount(() => {
                         <input :value="queueLimit" readonly />
                     </div>
                     <div class="field">
-                        <label>Output Formats</label>
+                        <label>Output Formats ({{ generationMode === "video" ? "video" : "image" }})</label>
                         <input :value="outputFormats.join(', ')" readonly />
                     </div>
                     <div class="field">
@@ -451,7 +585,7 @@ onBeforeUnmount(() => {
             </div>
         </header>
 
-        <div v-if="activeTab === 'generation'" class="layout">
+        <div v-if="activeTab !== 'settings'" class="layout">
             <section class="panel control-panel">
                 <div class="panel-header">
                     <div>
@@ -462,7 +596,7 @@ onBeforeUnmount(() => {
                 <div class="prompt-card">
                     <div class="field--full">
                         <label>Prompt</label>
-                        <textarea v-model="form.prompt" placeholder="Describe the image you want to generate" />
+                        <textarea v-model="form.prompt" :placeholder="generationMode === 'video' ? 'Describe the motion, scene, and framing you want to generate' : 'Describe the image you want to generate'" />
                     </div>
                     <div class="field--full stack-top">
                         <label>Negative Prompt</label>
@@ -475,9 +609,17 @@ onBeforeUnmount(() => {
                     <div class="field"><label>Height</label><input v-model.number="form.height" type="number" min="64" /></div>
                 </div>
 
-                <div class="fields stack-top">
+                <div v-if="generationMode === 'image'" class="fields stack-top">
                     <div class="field"><label>Batch Count</label><input v-model.number="form.batch_count" type="number" min="1" /></div>
                     <div class="field"><label>Seed</label><input v-model.number="form.seed" type="number" /></div>
+                </div>
+                <div v-else class="fields stack-top">
+                    <div class="field"><label>Video Frames</label><input v-model.number="form.video_frames" type="number" min="1" /></div>
+                    <div class="field"><label>FPS</label><input v-model.number="form.fps" type="number" min="1" /></div>
+                </div>
+                <div v-if="generationMode === 'video'" class="field stack-top">
+                    <label>Seed</label>
+                    <input v-model.number="form.seed" type="number" />
                 </div>
 
                 <CollapsibleSection class="stack-top" eyebrow="Sample" :summary="sampleSummary" :open="sectionState.sample" variant="module" @toggle="toggleSection('sample')">
@@ -529,11 +671,52 @@ onBeforeUnmount(() => {
                     </div>
                 </CollapsibleSection>
 
+                <CollapsibleSection v-if="generationMode === 'video'" class="stack-top" eyebrow="High Noise Pass" :summary="highNoiseSummary" :open="sectionState.highNoise" variant="module" @toggle="toggleSection('highNoise')">
+                    <div class="field">
+                        <label>MoE Boundary</label>
+                        <input v-model.number="form.moe_boundary" type="number" step="0.001" />
+                    </div>
+                    <CollapsibleSection eyebrow="Sample" :summary="buildSampleSummary(form.high_noise_sample_params)" :open="sectionState.highNoiseSample" variant="plain" @toggle="toggleSection('highNoiseSample')">
+                        <div class="fields">
+                            <div class="field">
+                                <label>Scheduler</label>
+                                <select v-model="form.high_noise_sample_params.scheduler">
+                                    <option value="default">default</option>
+                                    <option v-for="scheduler in schedulers" :key="`high-noise-${scheduler}`" :value="scheduler">{{ scheduler }}</option>
+                                </select>
+                            </div>
+                            <div class="field"><label>Flow Shift</label><input v-model="form.high_noise_sample_params.flow_shift" type="number" step="0.01" placeholder="blank = default" /></div>
+                            <div class="field">
+                                <label>Method</label>
+                                <select v-model="form.high_noise_sample_params.sample_method">
+                                    <option value="default">default</option>
+                                    <option v-for="sampler in samplers" :key="`high-noise-${sampler}`" :value="sampler">{{ sampler }}</option>
+                                </select>
+                            </div>
+                            <div class="field"><label>Steps</label><input v-model.number="form.high_noise_sample_params.sample_steps" type="number" /></div>
+                            <div class="field"><label>Eta</label><input v-model="form.high_noise_sample_params.eta" type="number" step="0.01" placeholder="blank = auto" /></div>
+                            <div class="field"><label>Shifted Timestep</label><input v-model.number="form.high_noise_sample_params.shifted_timestep" type="number" /></div>
+                        </div>
+                    </CollapsibleSection>
+                    <CollapsibleSection class="stack-top" eyebrow="Guidance" :summary="buildGuidanceSummary(form.high_noise_sample_params)" :open="sectionState.highNoiseGuidance" variant="plain" @toggle="toggleSection('highNoiseGuidance')">
+                        <div class="fields">
+                            <div class="field"><label>CFG Scale</label><input v-model.number="form.high_noise_sample_params.guidance.txt_cfg" type="number" step="0.1" /></div>
+                            <div class="field"><label>Distilled Guidance</label><input v-model.number="form.high_noise_sample_params.guidance.distilled_guidance" type="number" step="0.1" /></div>
+                            <div class="field"><label>Image CFG</label><input v-model="form.high_noise_sample_params.guidance.img_cfg" type="number" step="0.1" placeholder="blank = follow text cfg" /></div>
+                            <div class="field"><label>SLG Layers</label><input v-model="form.high_noise_sample_params.guidance.slg_layers" placeholder="7,8,9" /></div>
+                            <div class="field"><label>SLG Layer Start</label><input v-model.number="form.high_noise_sample_params.guidance.layer_start" type="number" step="0.01" /></div>
+                            <div class="field"><label>SLG Layer End</label><input v-model.number="form.high_noise_sample_params.guidance.layer_end" type="number" step="0.01" /></div>
+                            <div class="field"><label>SLG Scale</label><input v-model.number="form.high_noise_sample_params.guidance.scale" type="number" step="0.01" /></div>
+                        </div>
+                    </CollapsibleSection>
+                </CollapsibleSection>
+
                 <CollapsibleSection class="stack-top" eyebrow="Conditioning" :summary="conditioningSummary" :open="sectionState.conditioning" @toggle="toggleSection('conditioning')">
                     <div class="fields">
                         <div class="field"><label>CLIP Skip</label><input v-model.number="form.clip_skip" type="number" /></div>
                         <div class="field"><label>Strength</label><input v-model.number="form.strength" type="number" step="0.01" /></div>
-                        <div class="field"><label>Control Strength</label><input v-model.number="form.control_strength" type="number" step="0.01" /></div>
+                        <div v-if="generationMode === 'image'" class="field"><label>Control Strength</label><input v-model.number="form.control_strength" type="number" step="0.01" /></div>
+                        <div v-if="generationMode === 'video'" class="field"><label>VACE Strength</label><input v-model.number="form.vace_strength" type="number" step="0.01" /></div>
                     </div>
                 </CollapsibleSection>
 
@@ -544,6 +727,7 @@ onBeforeUnmount(() => {
                         <div class="list-row list-row--header">
                             <div>LoRA</div>
                             <div>Multiplier</div>
+                            <div>High Noise</div>
                             <div></div>
                         </div>
                         <div v-for="(item, index) in form.lora" :key="index" class="list-row">
@@ -553,6 +737,10 @@ onBeforeUnmount(() => {
                                 </option>
                             </select>
                             <input v-model.number="item.multiplier" type="number" step="0.1" />
+                            <label class="checkbox list-row__checkbox">
+                                <input v-model="item.is_high_noise" type="checkbox" />
+                                <span>{{ item.is_high_noise ? "On" : "Off" }}</span>
+                            </label>
                             <button class="btn-ghost" type="button" @click="removeLora(index)">Remove</button>
                         </div>
                     </div>
@@ -582,7 +770,8 @@ onBeforeUnmount(() => {
                             @preview="openImageEntry($event)"
                         />
                     </div>
-                    <div class="group">
+
+                    <div v-if="generationMode === 'image'" class="group">
                         <label>Reference Images</label>
                         <ImageDropzone
                             label="Reference Images"
@@ -599,7 +788,29 @@ onBeforeUnmount(() => {
                                     <img class="file-chip__thumb" :src="item.dataUrl" :alt="item.name" />
                                 </button>
                                 <span class="file-chip__name">{{ item.name }}</span>
-                                <button class="icon-button" type="button" @click="removeRefImage(index)">Remove</button>
+                                <button class="icon-button" type="button" @click="removeCollectionImage('ref_images', index)">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else class="group">
+                        <label>Control Frames</label>
+                        <ImageDropzone
+                            label="Control Frames"
+                            description="Upload ordered conditioning frames. The server preserves the array order."
+                            :items="form.control_frames"
+                            multiple
+                            @select="assignImages('control_frames', $event)"
+                            @clear="clearImage('control_frames')"
+                        />
+                        <div v-if="!form.control_frames.length" class="hint">No files selected.</div>
+                        <div v-else class="file-list">
+                            <div v-for="(item, index) in form.control_frames" :key="item.name + index" class="file-chip file-chip--preview">
+                                <button class="file-chip__thumb-button" type="button" @click="openLightbox(item.dataUrl, item.name)">
+                                    <img class="file-chip__thumb" :src="item.dataUrl" :alt="item.name" />
+                                </button>
+                                <span class="file-chip__name">{{ item.name }}</span>
+                                <button class="icon-button" type="button" @click="removeCollectionImage('control_frames', index)">Remove</button>
                             </div>
                         </div>
                     </div>
@@ -638,13 +849,24 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <button class="hero-frame hero-frame--button" type="button" :disabled="!selectedImage" @click="openLightbox(selectedImage, 'Generated output')">
-                    <img v-if="selectedImage" :src="selectedImage" alt="Generated output" />
+                <div v-if="videoPreviewSrc" class="hero-frame hero-frame--media">
+                    <video class="hero-frame__video" :src="videoPreviewSrc" controls autoplay loop muted playsinline />
+                </div>
+                <button v-else class="hero-frame hero-frame--button" type="button" :disabled="!previewImageSrc" @click="openLightbox(previewImageSrc, 'Generated output')">
+                    <img v-if="previewImageSrc" :src="previewImageSrc" alt="Generated output" />
                     <div v-else class="hero-placeholder">
-                        <h2>Run a prediction</h2>
-                        <p>Generated images will appear here once the current job finishes.</p>
+                        <h2>{{ generationMode === "video" ? "Generate Video" : "Generate Images" }}</h2>
+                        <p>
+                            {{ generationMode === "video"
+                                ? "Generated video or animated WebP output will appear here once the current job finishes."
+                                : "Generated images will appear here once the current job finishes." }}
+                        </p>
                     </div>
                 </button>
+
+                <div v-if="currentJobKind === 'vid_gen' && currentJob?.result?.output_format === 'avi'" class="hint stack-top">
+                    Browser playback for AVI depends on codec support. Download the file if the preview cannot play.
+                </div>
 
                 <div class="metrics output-metrics">
                     <div class="metric">
@@ -663,6 +885,14 @@ onBeforeUnmount(() => {
                         <div class="metric__label">Elapsed</div>
                         <div class="metric__value">{{ formatElapsed(currentJob?.started, currentJob?.completed) }}</div>
                     </div>
+                    <div v-if="currentJobKind === 'vid_gen'" class="metric">
+                        <div class="metric__label">FPS</div>
+                        <div class="metric__value">{{ videoFps || "-" }}</div>
+                    </div>
+                    <div v-if="currentJobKind === 'vid_gen'" class="metric">
+                        <div class="metric__label">Frames</div>
+                        <div class="metric__value">{{ videoFrameCount || "-" }}</div>
+                    </div>
                 </div>
 
                 <div v-if="statusMessage" class="status-message" :class="statusTone === 'error' ? 'status-message--error' : 'status-message--success'">{{ statusMessage }}</div>
@@ -670,10 +900,10 @@ onBeforeUnmount(() => {
 
                 <div class="output-controls">
                     <button class="btn output-controls__primary" type="button" :disabled="isJobRunning" @click="generate">
-                        Generate
+                        {{ generationMode === "video" ? "Generate Video" : "Generate Image" }}
                     </button>
                     <div class="actions output-controls__secondary">
-                        <button class="btn-secondary" type="button" :disabled="!selectedImage" @click="downloadSelected">Download</button>
+                        <button class="btn-secondary" type="button" :disabled="!downloadableSrc" @click="downloadSelected">Download</button>
                         <button class="btn-danger" type="button" :disabled="!canCancelCurrentJob" @click="cancelCurrentJob">Cancel</button>
                     </div>
                 </div>
