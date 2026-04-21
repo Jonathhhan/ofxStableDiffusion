@@ -20,6 +20,59 @@ struct ofxStableDiffusionVideoPromptValidation {
 	std::vector<std::string> warnings;
 };
 
+struct ofxStableDiffusionVideoProgressInfo {
+	int currentFrame = 0;
+	int totalFrames = 0;
+	int currentStep = 0;
+	int totalSteps = 0;
+	float elapsedSeconds = 0.0f;
+	float estimatedRemainingSeconds = 0.0f;
+	float percentComplete = 0.0f;
+
+	std::string formatETA() const {
+		if (estimatedRemainingSeconds <= 0.0f) {
+			return "calculating...";
+		}
+		const int mins = static_cast<int>(estimatedRemainingSeconds) / 60;
+		const int secs = static_cast<int>(estimatedRemainingSeconds) % 60;
+		if (mins > 0) {
+			return std::to_string(mins) + "m " + std::to_string(secs) + "s";
+		}
+		return std::to_string(secs) + "s";
+	}
+
+	std::string formatProgress() const {
+		return "Frame " + std::to_string(currentFrame) + "/" +
+		       std::to_string(totalFrames) + " (" +
+		       std::to_string(static_cast<int>(percentComplete * 100)) + "%)";
+	}
+};
+
+inline ofxStableDiffusionVideoProgressInfo ofxStableDiffusionCalculateVideoProgress(
+	int currentStep,
+	int stepsPerFrame,
+	int currentFrame,
+	int totalFrames,
+	float elapsedSeconds) {
+	ofxStableDiffusionVideoProgressInfo info;
+	info.currentFrame = currentFrame;
+	info.totalFrames = totalFrames;
+	info.currentStep = currentStep;
+	info.totalSteps = totalFrames * stepsPerFrame;
+	info.elapsedSeconds = elapsedSeconds;
+
+	if (currentStep > 0 && info.totalSteps > 0) {
+		info.percentComplete = static_cast<float>(currentStep) / static_cast<float>(info.totalSteps);
+		if (elapsedSeconds > 0.0f && info.percentComplete > 0.01f) {
+			const float totalEstimatedTime = elapsedSeconds / info.percentComplete;
+			info.estimatedRemainingSeconds = totalEstimatedTime - elapsedSeconds;
+		}
+	}
+
+	return info;
+}
+
+
 inline const char * ofxStableDiffusionVideoWorkflowPresetLabel(
 	ofxStableDiffusionVideoWorkflowPreset preset) {
 	switch (preset) {
@@ -97,6 +150,10 @@ inline ofxStableDiffusionVideoPromptValidation ofxStableDiffusionValidateVideoPr
 		validation.ok = false;
 		validation.errors.push_back("Frame count must be greater than zero.");
 	}
+	if (request.frameCount > 300) {
+		validation.ok = false;
+		validation.errors.push_back("Frame count exceeds maximum of 300 frames.");
+	}
 	if (request.fps <= 0) {
 		validation.ok = false;
 		validation.errors.push_back("FPS must be greater than zero.");
@@ -104,6 +161,29 @@ inline ofxStableDiffusionVideoPromptValidation ofxStableDiffusionValidateVideoPr
 	if (request.width <= 0 || request.height <= 0) {
 		validation.ok = false;
 		validation.errors.push_back("Output width and height must be greater than zero.");
+	}
+	// Dimension validation with auto-correction suggestions
+	if (request.width % 64 != 0 || request.height % 64 != 0) {
+		validation.ok = false;
+		const int suggestedWidth = ((request.width + 31) / 64) * 64;
+		const int suggestedHeight = ((request.height + 31) / 64) * 64;
+		validation.errors.push_back(
+			"Width and height must be multiples of 64. Suggestion: " +
+			std::to_string(suggestedWidth) + "x" + std::to_string(suggestedHeight));
+	}
+	// Temporal coherence validation
+	if (request.animationSettings.temporalCoherence < 0.0f ||
+	    request.animationSettings.temporalCoherence > 1.0f) {
+		validation.warnings.push_back(
+			"Temporal coherence should be between 0.0 and 1.0 (currently " +
+			std::to_string(request.animationSettings.temporalCoherence) + ").");
+	}
+	// Frame count optimization suggestions
+	if (request.frameCount > 100 && request.sampleSteps > 25) {
+		validation.warnings.push_back(
+			"Large frame count (" + std::to_string(request.frameCount) +
+			") with high sample steps (" + std::to_string(request.sampleSteps) +
+			") will take significant time. Consider reducing steps or using a preset.");
 	}
 	if (prompt.find("dialog") == std::string::npos &&
 		prompt.find("speak") == std::string::npos &&

@@ -187,6 +187,30 @@ Each returned frame now carries the prompt / negative prompt / CFG / strength /
 seed values that were actually used, and clips can export both PNG sequences and
 JSON metadata.
 
+### Advanced Animation Features
+
+**Interpolation Modes:**
+- `Linear` - Simple linear interpolation
+- `Smooth` - Cosine-based smooth transitions
+- `EaseIn`, `EaseOut`, `EaseInOut` - Cubic easing functions
+- `Cubic` - Smoothstep interpolation
+- `Back` - Overshooting easing
+- `Elastic` - Spring-like oscillation
+- `Bounce` - Bouncing effect
+- `Expo` - Exponential acceleration
+- `CatmullRom`, `BSpline` - Spline-based interpolation (multi-keyframe)
+
+**Seed Variation Modes:**
+- `Sequential` - Linear increment (default)
+- `Noise` - Pseudo-random noise-based variation for organic feel
+- `Random` - Reproducible random variation per frame
+
+**Temporal Coherence:**
+Control frame-to-frame consistency with the `temporalCoherence` setting (0.0-1.0).
+Higher values produce smoother transitions between frames.
+
+**Frame Count:** Supports up to 300 frames (increased from 100) for longer video sequences.
+
 Useful video-export helpers:
 
 - `ofxStableDiffusionVideoClip::saveMetadataJson(...)`
@@ -207,6 +231,15 @@ Supported playback/presentation modes:
 
 This is especially useful when a UI layer or another addon wants a more natural
 preview clip without re-asking the native runtime for more frames.
+
+### Video Model Support
+
+The addon now detects video-specific model families:
+- **SVD** (Stable Video Diffusion) - Dedicated video generation models
+- **AnimateDiff** - Motion module-based animation
+- **WAN** family (WANI2V, WANTI2V, WANFLF2V, WANVACE) - Specialized video models
+
+Model capabilities are automatically detected and exposed through `getCapabilities()`.
 
 ## Image Modes
 
