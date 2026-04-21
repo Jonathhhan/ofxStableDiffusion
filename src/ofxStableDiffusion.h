@@ -10,6 +10,7 @@
 #include "ofxStableDiffusionThread.h"
 #include "stable-diffusion.h"
 
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <vector>
@@ -18,10 +19,10 @@
 /// @param step Current step number.
 /// @param steps Total number of steps.
 /// @param time Time elapsed in seconds.
-typedef std::function<void(int step, int steps, float time)> ofxSdProgressCallback;
-typedef std::function<std::vector<ofxStableDiffusionImageScore>(
+using ofxSdProgressCallback = std::function<void(int step, int steps, float time)>;
+using ofxSdImageRankCallback = std::function<std::vector<ofxStableDiffusionImageScore>(
 	const ofxStableDiffusionImageRequest& request,
-	const std::vector<ofxStableDiffusionImageFrame>& images)> ofxSdImageRankCallback;
+	const std::vector<ofxStableDiffusionImageFrame>& images)>;
 
 class ofxStableDiffusion {
 public:
@@ -314,9 +315,9 @@ private:
 	std::vector<sd_image_t> outputImageViews;
 	std::string lastError;
 	ofxStableDiffusionError lastErrorInfo;
-	std::vector<ofxStableDiffusionError> errorHistory;
+	std::deque<ofxStableDiffusionError> errorHistory;
 	static constexpr std::size_t maxErrorHistorySize = 10;
-	std::vector<int64_t> seedHistory;
+	std::deque<int64_t> seedHistory;
 	static constexpr std::size_t maxSeedHistorySize = 20;
 	uint64_t taskStartMicros = 0;
 	stableDiffusionThread::OwnedImage loadedInputImage;

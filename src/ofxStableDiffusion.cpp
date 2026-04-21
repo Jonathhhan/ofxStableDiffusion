@@ -421,7 +421,7 @@ ofxStableDiffusionError ofxStableDiffusion::getLastErrorInfo() const {
 
 std::vector<ofxStableDiffusionError> ofxStableDiffusion::getErrorHistory() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	return errorHistory;
+	return std::vector<ofxStableDiffusionError>(errorHistory.begin(), errorHistory.end());
 }
 
 void ofxStableDiffusion::clearErrorHistory() {
@@ -511,12 +511,7 @@ void ofxStableDiffusion::loadImage(const ofPixels& pixels) {
 		static_cast<uint32_t>(pixels.getNumChannels()),
 		const_cast<unsigned char*>(pixels.getData())
 	});
-	inputImage = {
-		loadedInputImage.image.width,
-		loadedInputImage.image.height,
-		loadedInputImage.image.channel,
-		loadedInputImage.image.data
-	};
+	inputImage = loadedInputImage.image;
 }
 
 void ofxStableDiffusion::setLoras(const std::vector<ofxStableDiffusionLora>& loras_) {
@@ -891,7 +886,7 @@ int64_t ofxStableDiffusion::getLastUsedSeed() const {
 
 std::vector<int64_t> ofxStableDiffusion::getSeedHistory() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	return seedHistory;
+	return std::vector<int64_t>(seedHistory.begin(), seedHistory.end());
 }
 
 void ofxStableDiffusion::clearSeedHistory() {
@@ -1136,7 +1131,7 @@ void ofxStableDiffusion::setLastError(const std::string& errorMessage, ofxStable
 	lastErrorInfo.timestampMicros = ofGetElapsedTimeMicros();
 	errorHistory.push_back(lastErrorInfo);
 	if (errorHistory.size() > maxErrorHistorySize) {
-		errorHistory.erase(errorHistory.begin());
+		errorHistory.pop_front();
 	}
 
 	lastResult = {};
@@ -1221,7 +1216,7 @@ void ofxStableDiffusion::captureImageResults(
 		std::lock_guard<std::mutex> lock(stateMutex);
 		seedHistory.push_back(seedValue);
 		if (seedHistory.size() > maxSeedHistorySize) {
-			seedHistory.erase(seedHistory.begin());
+			seedHistory.pop_front();
 		}
 		lastResult = std::move(result);
 		outputImageViews = buildOutputImageViews(lastResult);
@@ -1279,7 +1274,7 @@ void ofxStableDiffusion::captureVideoResults(
 		std::lock_guard<std::mutex> lock(stateMutex);
 		seedHistory.push_back(seedValue);
 		if (seedHistory.size() > maxSeedHistorySize) {
-			seedHistory.erase(seedHistory.begin());
+			seedHistory.pop_front();
 		}
 		lastResult = std::move(result);
 		outputImageViews = buildOutputImageViews(lastResult);

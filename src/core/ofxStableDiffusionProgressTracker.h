@@ -119,7 +119,7 @@ private:
 	ofxStableDiffusionProgressInfo currentInfo;
 
 	// Historical data for ETA calculation
-	std::vector<float> stepTimes;
+	std::deque<float> stepTimes;
 	static constexpr int maxHistorySize = 20;
 
 	// Timing

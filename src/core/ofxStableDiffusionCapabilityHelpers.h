@@ -1,9 +1,8 @@
 #pragma once
 
+#include "ofxStableDiffusionStringUtils.h"
 #include "ofxStableDiffusionTypes.h"
 
-#include <algorithm>
-#include <cctype>
 #include <initializer_list>
 #include <string>
 
@@ -30,15 +29,6 @@ inline const char * ofxStableDiffusionModelFamilyLabel(ofxStableDiffusionModelFa
 
 namespace ofxStableDiffusionCapabilityHelpers {
 
-inline std::string toLowerCopy(std::string value) {
-	std::transform(
-		value.begin(),
-		value.end(),
-		value.begin(),
-		[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-	return value;
-}
-
 inline bool containsAny(
 	const std::string& haystack,
 	std::initializer_list<const char*> needles) {
@@ -60,22 +50,22 @@ inline bool hasConfiguredModelPaths(const ofxStableDiffusionContextSettings& set
 
 inline std::string buildPrimaryModelDescriptor(const ofxStableDiffusionContextSettings& settings) {
 	if (!settings.modelPath.empty()) {
-		return toLowerCopy(settings.modelPath);
+		return ofxSdToLowerCopy(settings.modelPath);
 	}
 	if (!settings.diffusionModelPath.empty()) {
-		return toLowerCopy(settings.diffusionModelPath);
+		return ofxSdToLowerCopy(settings.diffusionModelPath);
 	}
 	if (!settings.clipLPath.empty()) {
-		return toLowerCopy(settings.clipLPath);
+		return ofxSdToLowerCopy(settings.clipLPath);
 	}
 	if (!settings.clipGPath.empty()) {
-		return toLowerCopy(settings.clipGPath);
+		return ofxSdToLowerCopy(settings.clipGPath);
 	}
-	return toLowerCopy(settings.t5xxlPath);
+	return ofxSdToLowerCopy(settings.t5xxlPath);
 }
 
 inline std::string buildAllModelDescriptors(const ofxStableDiffusionContextSettings& settings) {
-	return toLowerCopy(
+	return ofxSdToLowerCopy(
 		settings.modelPath + " " +
 		settings.diffusionModelPath + " " +
 		settings.clipLPath + " " +
