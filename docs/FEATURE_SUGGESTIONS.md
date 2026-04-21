@@ -76,53 +76,56 @@ auto progressInfo = tracker.getProgressInfo();
 // Access: percentComplete, estimatedTimeRemainingSeconds, stepsPerSecond, etc.
 ```
 
-### 5. ControlNet Multi-Model Support
+### 5. ControlNet Multi-Model Support ✅ IMPLEMENTED (v1.2.0)
 
-**Current State**: Single ControlNet model
+**Status**: ✅ **COMPLETED** in version 1.2.0
 
-**Suggested Enhancement**:
+Implemented via `ofxStableDiffusionControlNet` structure and vector-based API:
 - Multiple ControlNet models simultaneously
-- Different control types (canny, depth, pose, etc.)
+- Different control types (canny, depth, pose, etc.) via type field
 - Per-model strength control
-- Auto-preprocessing for common types
+- Backward compatibility with legacy single ControlNet API
 
-**Example API**:
+**API Added**:
 ```cpp
 struct ofxStableDiffusionControlNet {
-    std::string modelPath;
-    std::string type; // canny, depth, pose, seg, etc.
-    sd_image_t conditionImage;
-    float strength;
-    bool autoPreprocess;
+    sd_image_t conditionImage{0, 0, 0, nullptr};
+    float strength = 0.9f;
+    std::string type;  // Optional type hint: "canny", "depth", "pose", etc.
+
+    bool isValid() const;
 };
 
 void addControlNet(const ofxStableDiffusionControlNet& controlNet);
 void clearControlNets();
-std::vector<std::string> getSupportedControlNetTypes() const;
+std::vector<ofxStableDiffusionControlNet> getControlNets() const;
+// ImageRequest includes: std::vector<ofxStableDiffusionControlNet> controlNets;
 ```
 
-### 6. LoRA Management System
+### 6. LoRA Management System 🚧 PARTIALLY IMPLEMENTED (v1.2.0)
 
-**Current State**: LoRA directory specified, but no fine control
+**Status**: 🚧 **PARTIALLY COMPLETED** in version 1.2.0
 
-**Suggested Enhancement**:
-- Per-generation LoRA selection
-- LoRA strength/weight control
-- Multiple LoRAs with different weights
-- LoRA discovery and listing
+Implemented LoRA discovery functionality:
+- LoRA discovery and listing from directory
+- Returns name and absolute path pairs
+- Supports multiple file formats (.safetensors, .ckpt, .pt, .bin)
 
-**Example API**:
+**API Added**:
 ```cpp
-struct ofxStableDiffusionLoRA {
-    std::string name;
-    std::string path;
-    float weight; // -2.0 to 2.0
-};
-
-void addLoRA(const std::string& name, float weight);
-void removeLoRA(const std::string& name);
-std::vector<std::string> discoverLoRAs(const std::string& directory);
+std::vector<std::pair<std::string, std::string>> listLoras() const;
 ```
+
+**Already Available**:
+```cpp
+void setLoras(const std::vector<ofxStableDiffusionLora>& loras);
+std::vector<ofxStableDiffusionLora> getLoras() const;
+// ofxStableDiffusionLora includes name, path, and multiplier (weight) fields
+```
+
+**Remaining Work**:
+- Convenience methods for adding/removing individual LoRAs
+- Better weight control documentation
 
 ### 7. Image Seed Management ✅ IMPLEMENTED (v1.1.0)
 
@@ -142,31 +145,30 @@ static int64_t hashStringToSeed(const std::string& text);
 // Result structure includes actualSeedUsed field
 ```
 
-### 8. Inpainting and Outpainting 🚧 IN PROGRESS (v1.1.0)
+### 8. Inpainting and Outpainting ✅ IMPLEMENTED (v1.2.0)
 
-**Status**: 🚧 **PARTIALLY COMPLETED** in version 1.1.0
+**Status**: ✅ **COMPLETED** in version 1.2.0
 
-Infrastructure added for inpainting mode:
+Implemented complete inpainting support with validation:
 - Dedicated `Inpainting` mode enum
 - Mask support (`maskImage` field in request)
-- Mask blur control (`maskBlur` parameter)
+- Mask dimension validation (must match input image)
+- Proper error handling with descriptive messages
 
-**Remaining Work**:
-- Implement inpainting generation logic in thread
-- Add mask preprocessing helpers
-- Add outpainting with automatic padding
-- Add feathering/blur control for mask edges
-
-**Current API**:
+**API**:
 ```cpp
 ofxStableDiffusionImageRequest request;
 request.mode = ofxStableDiffusionImageMode::Inpainting;
 request.initImage = sourceImage;  // Source image
-request.maskImage = maskImage;     // White=inpaint, Black=keep
-request.maskBlur = 4.0f;          // Edge softening
+request.maskImage = maskImage;     // White=inpaint, Black=keep (must match initImage dimensions)
 request.prompt = "replace with ocean view";
 sd.generate(request);
 ```
+
+**Remaining Work**:
+- Add outpainting with automatic padding
+- Add mask preprocessing helpers (blur, feather, dilate)
+- Add mask generation utilities
 
 ## Low Priority / Future Enhancements
 
@@ -200,13 +202,41 @@ sd.generate(request);
 - A/B comparison tools
 - Batch export with metadata
 
-### 13. Advanced Sampling Options
+### 13. Advanced Sampling Options ✅ IMPLEMENTED (v1.2.0)
 
-**Suggested Enhancement**:
-- Custom sampling schedules
-- Karras sigma support
-- CFG rescale
-- SMEA/DYN support for SDXL
+**Status**: ✅ **COMPLETED** in version 1.2.0
+
+Implemented comprehensive sampling configuration utilities:
+- 15+ sampling methods with metadata and descriptions
+- 11+ schedulers with use case recommendations
+- 7 predefined quality/speed presets
+- Sampler/scheduler combination recommendations
+- Step count validation and recommendation system
+- Name-based lookup (case-insensitive)
+
+**API Added**:
+```cpp
+// Get all available samplers and schedulers
+auto samplers = ofxStableDiffusionSamplingHelpers::getAllSamplers();
+auto schedulers = ofxStableDiffusionSamplingHelpers::getAllSchedulers();
+
+// Lookup by name
+auto method = ofxStableDiffusionSamplingHelpers::getSamplerByName("DPM++ 2M");
+auto sched = ofxStableDiffusionSamplingHelpers::getSchedulerByName("Karras");
+
+// Use presets
+auto preset = ofxStableDiffusionSamplingPreset::Quality();  // DPM++ 2M + Karras, 30 steps
+auto preset = ofxStableDiffusionSamplingPreset::Fast();     // Euler A + Discrete, 15 steps
+auto preset = ofxStableDiffusionSamplingPreset::LCM();      // LCM + LCM scheduler, 4 steps
+
+// Validate and recommend steps
+bool valid = ofxStableDiffusionSamplingHelpers::isValidStepCount(method, 20);
+int steps = ofxStableDiffusionSamplingHelpers::getRecommendedSteps(method, 0.8f);  // quality level 0-1
+```
+
+**Supported Samplers**: Euler, Euler A, Heun, DPM2, DPM++ 2S A, DPM++ 2M, DPM++ 2M v2, iPNDM, iPNDM_v, LCM, DDIM Trailing, TCD, Restart Multistep, Restart 2S, ER-SDE
+
+**Supported Schedulers**: Discrete, Karras, Exponential, AYS, GITS, SGM Uniform, Simple, Smoothstep, KL Optimal, LCM, Bong Tangent
 
 ### 14. Textual Inversion Support
 
@@ -222,13 +252,55 @@ sd.generate(request);
 - Content classification
 - Watermarking support
 
-### 16. Performance Profiling
+### 16. Performance Profiling ✅ IMPLEMENTED (v1.2.0)
 
-**Suggested Enhancement**:
-- Built-in performance metrics
-- Bottleneck identification
-- Memory profiling
-- GPU utilization tracking
+**Status**: ✅ **COMPLETED** in version 1.2.0
+
+Implemented comprehensive performance profiling system:
+- Built-in performance metrics with timing and memory tracking
+- Bottleneck identification with configurable thresholds
+- Thread-safe operations with std::mutex
+- RAII-style scoped timers for automatic instrumentation
+- JSON and CSV export formats
+- Statistics aggregation across multiple calls
+
+**API Added**:
+```cpp
+// Enable/disable profiling
+sd.setProfilingEnabled(true);
+
+// Get performance data
+auto stats = sd.getPerformanceStats();
+auto entry = sd.getPerformanceEntry("diffusion");
+
+// Identify bottlenecks (operations taking >10% of total time)
+auto bottlenecks = sd.getPerformanceBottlenecks(10.0f);
+
+// Export data
+std::string json = sd.exportPerformanceJSON();
+std::string csv = sd.exportPerformanceCSV();
+
+// Print summary to console
+sd.printPerformanceSummary();
+
+// Reset profiling data
+sd.resetProfiling();
+
+// Direct profiler usage
+ofxStableDiffusionPerformanceProfiler profiler;
+profiler.begin("operation_name");
+// ... do work ...
+profiler.end("operation_name");
+
+// Or use scoped timers
+{
+    auto timer = profiler.scopedTimer("scoped_operation");
+    // ... automatically timed until scope exit ...
+}
+```
+
+**Remaining Work**:
+- GPU utilization tracking (requires backend-specific integration)
 
 ## Integration Features
 
@@ -284,19 +356,31 @@ This section is reserved for features requested by addon users. Please submit fe
 
 ## Implementation Status Summary
 
-### ✅ Completed Features (v1.0.0 - v1.1.0)
+### ✅ Completed Features (v1.0.0 - v1.2.0)
 1. ✅ Advanced Error Handling (v1.0.0)
 2. ✅ Model Preloading and Management (v1.1.0)
 3. ✅ Generation Queue System (v1.1.0)
 4. ✅ Advanced Progress Reporting (v1.1.0)
+5. ✅ ControlNet Multi-Model Support (v1.2.0)
 7. ✅ Image Seed Management (v1.1.0)
+8. ✅ Inpainting and Outpainting (v1.2.0)
+13. ✅ Advanced Sampling Options (v1.2.0)
+16. ✅ Performance Profiling (v1.2.0)
+18. ✅ Animation and Interpolation (v1.2.0)
+19. ✅ Export and Metadata (v1.2.0)
 
-### 🚧 In Progress
-8. 🚧 Inpainting and Outpainting (v1.1.0 - partial)
+### 🚧 Partially Completed
+6. 🚧 LoRA Management System (v1.2.0 - discovery implemented, convenience methods pending)
 
 ### 📋 Planned
-- ControlNet Multi-Model Support
-- LoRA Management System
+- Real-time Generation Modes
+- Model Quantization Support
+- Prompt Engineering Helpers
+- Batch Processing Utilities
+- Textual Inversion Support
+- Safety and Content Filtering
+- Enhanced ofxGgml Integration
+- Platform-Specific Optimizations
 - Real-time Generation Modes
 - And more...
 

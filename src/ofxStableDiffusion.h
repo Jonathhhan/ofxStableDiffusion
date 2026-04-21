@@ -2,7 +2,10 @@
 
 #include "ofMain.h"
 #include "bridges/ofxStableDiffusionHoloscanBridge.h"
+#include "core/ofxStableDiffusionModelManager.h"
 #include "core/ofxStableDiffusionParameterTuningHelpers.h"
+#include "core/ofxStableDiffusionPerformanceProfiler.h"
+#include "core/ofxStableDiffusionSamplingHelpers.h"
 #include "core/ofxStableDiffusionTypes.h"
 #include "video/ofxStableDiffusionLongVideoManifest.h"
 #include "video/ofxStableDiffusionLongVideoWorkflow.h"
@@ -72,6 +75,62 @@ public:
 	/// Replace the active LoRA/LoCon stack for subsequent generations.
 	void setLoras(const std::vector<ofxStableDiffusionLora>& loras_);
 	std::vector<ofxStableDiffusionLora> getLoras() const;
+
+	/// Query available LoRA files in the loraModelDir; returns name and absolute path pairs.
+	std::vector<std::pair<std::string, std::string>> listLoras() const;
+
+	/// Add a ControlNet to the active stack for subsequent generations.
+	void addControlNet(const ofxStableDiffusionControlNet& controlNet);
+
+	/// Clear all active ControlNets.
+	void clearControlNets();
+
+	/// Get the current ControlNet stack.
+	std::vector<ofxStableDiffusionControlNet> getControlNets() const;
+
+	/// Scan a directory for available model files
+	std::vector<ofxStableDiffusionModelInfo> scanModels(const std::string& directory);
+
+	/// Get metadata for a specific model file
+	ofxStableDiffusionModelInfo getModelInfo(const std::string& modelPath);
+
+	/// Get list of cached models
+	std::vector<ofxStableDiffusionModelInfo> getCachedModels() const;
+
+	/// Preload a model into cache for faster switching
+	bool preloadModel(const std::string& modelPath, std::string& errorMessage);
+
+	/// Clear the model cache
+	void clearModelCache();
+
+	/// Set model manager cache limits
+	void setModelCacheSize(uint64_t maxBytes);
+	void setMaxCachedModels(int count);
+
+	/// Enable or disable performance profiling
+	void setProfilingEnabled(bool enabled);
+	bool isProfilingEnabled() const;
+
+	/// Get performance statistics from the profiler
+	ofxStableDiffusionPerformanceStats getPerformanceStats() const;
+
+	/// Get a specific performance profile entry
+	ofxStableDiffusionProfileEntry getPerformanceEntry(const std::string& name) const;
+
+	/// Reset all performance profiling data
+	void resetProfiling();
+
+	/// Print performance summary to console
+	void printPerformanceSummary() const;
+
+	/// Get performance bottlenecks (operations taking > threshold % of total time)
+	std::vector<std::string> getPerformanceBottlenecks(float thresholdPercent = 10.0f) const;
+
+	/// Export performance data to JSON
+	std::string exportPerformanceJSON() const;
+
+	/// Export performance data to CSV
+	std::string exportPerformanceCSV() const;
 
 	/// Reload embeddings by rebuilding the context with the current (or provided) embed directory.
 	void reloadEmbeddings(const std::string& embedDir = "");
@@ -251,6 +310,7 @@ public:
 	std::string controlImagePath;
 	float controlStrength = 0.9f;
 	std::vector<ofxStableDiffusionLora> loras;
+	std::vector<ofxStableDiffusionControlNet> controlNets;
 
 	sd_image_t inputImage = {0, 0, 0, nullptr};
 	sd_image_t maskImage = {0, 0, 0, nullptr};
@@ -321,6 +381,8 @@ private:
 	static constexpr std::size_t maxSeedHistorySize = 20;
 	uint64_t taskStartMicros = 0;
 	stableDiffusionThread::OwnedImage loadedInputImage;
+	ofxStableDiffusionModelManager modelManager;
+	ofxStableDiffusionPerformanceProfiler performanceProfiler;
 	mutable std::mutex stateMutex;
 };
 

@@ -524,6 +524,112 @@ std::vector<ofxStableDiffusionLora> ofxStableDiffusion::getLoras() const {
 	return loras;
 }
 
+std::vector<std::pair<std::string, std::string>> ofxStableDiffusion::listLoras() const {
+	std::vector<std::pair<std::string, std::string>> results;
+	const std::string targetDir = loraModelDir;
+	if (targetDir.empty()) {
+		return results;
+	}
+
+	ofDirectory dir(targetDir);
+	if (!dir.exists()) {
+		return results;
+	}
+	dir.allowExt("safetensors");
+	dir.allowExt("ckpt");
+	dir.allowExt("pt");
+	dir.allowExt("bin");
+	dir.listDir();
+
+	for (std::size_t i = 0; i < dir.size(); ++i) {
+		const ofFile& file = dir.getFile(static_cast<int>(i));
+		if (file.isFile()) {
+			results.emplace_back(file.getBaseName(), file.getAbsolutePath());
+		}
+	}
+	return results;
+}
+
+std::vector<ofxStableDiffusionModelInfo> ofxStableDiffusion::scanModels(const std::string& directory) {
+	return modelManager.scanModelsInDirectory(directory);
+}
+
+ofxStableDiffusionModelInfo ofxStableDiffusion::getModelInfo(const std::string& modelPath) {
+	return modelManager.extractModelInfo(modelPath);
+}
+
+std::vector<ofxStableDiffusionModelInfo> ofxStableDiffusion::getCachedModels() const {
+	return modelManager.getCachedModels();
+}
+
+bool ofxStableDiffusion::preloadModel(const std::string& modelPath, std::string& errorMessage) {
+	ofxStableDiffusionModelInfo info = modelManager.extractModelInfo(modelPath);
+	return modelManager.preloadModel(info, errorMessage);
+}
+
+void ofxStableDiffusion::clearModelCache() {
+	modelManager.clearCache();
+}
+
+void ofxStableDiffusion::setModelCacheSize(uint64_t maxBytes) {
+	modelManager.setMaxCacheSize(maxBytes);
+}
+
+void ofxStableDiffusion::setMaxCachedModels(int count) {
+	modelManager.setMaxCachedModels(count);
+}
+
+void ofxStableDiffusion::setProfilingEnabled(bool enabled) {
+	performanceProfiler.setEnabled(enabled);
+}
+
+bool ofxStableDiffusion::isProfilingEnabled() const {
+	return performanceProfiler.isEnabled();
+}
+
+ofxStableDiffusionPerformanceStats ofxStableDiffusion::getPerformanceStats() const {
+	return performanceProfiler.getStats();
+}
+
+ofxStableDiffusionProfileEntry ofxStableDiffusion::getPerformanceEntry(const std::string& name) const {
+	return performanceProfiler.getEntry(name);
+}
+
+void ofxStableDiffusion::resetProfiling() {
+	performanceProfiler.reset();
+}
+
+void ofxStableDiffusion::printPerformanceSummary() const {
+	performanceProfiler.printSummary();
+}
+
+std::vector<std::string> ofxStableDiffusion::getPerformanceBottlenecks(float thresholdPercent) const {
+	return performanceProfiler.getBottlenecks(thresholdPercent);
+}
+
+std::string ofxStableDiffusion::exportPerformanceJSON() const {
+	return performanceProfiler.toJSON();
+}
+
+std::string ofxStableDiffusion::exportPerformanceCSV() const {
+	return performanceProfiler.toCSV();
+}
+
+void ofxStableDiffusion::addControlNet(const ofxStableDiffusionControlNet& controlNet) {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	controlNets.push_back(controlNet);
+}
+
+void ofxStableDiffusion::clearControlNets() {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	controlNets.clear();
+}
+
+std::vector<ofxStableDiffusionControlNet> ofxStableDiffusion::getControlNets() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return controlNets;
+}
+
 void ofxStableDiffusion::reloadEmbeddings(const std::string& embedDir) {
 	ofxStableDiffusionContextSettings settings = getContextSettings();
 	if (!embedDir.empty()) {
@@ -1238,6 +1344,18 @@ bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusio
 	if (request.mode == ofxStableDiffusionImageMode::Inpainting && request.maskImage.data == nullptr) {
 		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Inpainting requires a mask image");
 		return false;
+	}
+
+	// Validate mask dimensions match init image if both are provided
+	if (request.mode == ofxStableDiffusionImageMode::Inpainting &&
+		request.maskImage.data != nullptr &&
+		candidateInputImage.data != nullptr) {
+		if (request.maskImage.width != candidateInputImage.width ||
+			request.maskImage.height != candidateInputImage.height) {
+			setLastError(ofxStableDiffusionErrorCode::InvalidDimensions,
+				"Inpainting mask dimensions must match input image dimensions");
+			return false;
+		}
 	}
 
 	return true;

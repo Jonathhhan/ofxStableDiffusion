@@ -72,6 +72,16 @@ struct ofxStableDiffusionLora {
 	}
 };
 
+struct ofxStableDiffusionControlNet {
+	sd_image_t conditionImage{0, 0, 0, nullptr};
+	float strength = 0.9f;
+	std::string type;  // Optional type hint: "canny", "depth", "pose", etc.
+
+	bool isValid() const {
+		return conditionImage.data != nullptr;
+	}
+};
+
 struct ofxStableDiffusionUpscalerSettings {
 	std::string modelPath;
 	int nThreads = -1;
@@ -155,8 +165,11 @@ struct ofxStableDiffusionImageRequest {
 	float strength = 0.5f;
 	int64_t seed = -1;
 	int batchCount = 1;
+	// Legacy single ControlNet (deprecated, use controlNets vector instead)
 	sd_image_t * controlCond = nullptr;
 	float controlStrength = 0.9f;
+	// Multi-ControlNet support
+	std::vector<ofxStableDiffusionControlNet> controlNets;
 	float styleStrength = 20.0f;
 	bool normalizeInput = true;
 	std::string inputIdImagesPath;
