@@ -550,6 +550,35 @@ std::vector<std::pair<std::string, std::string>> ofxStableDiffusion::listLoras()
 	return results;
 }
 
+std::vector<ofxStableDiffusionModelInfo> ofxStableDiffusion::scanModels(const std::string& directory) {
+	return modelManager.scanModelsInDirectory(directory);
+}
+
+ofxStableDiffusionModelInfo ofxStableDiffusion::getModelInfo(const std::string& modelPath) {
+	return modelManager.extractModelInfo(modelPath);
+}
+
+std::vector<ofxStableDiffusionModelInfo> ofxStableDiffusion::getCachedModels() const {
+	return modelManager.getCachedModels();
+}
+
+bool ofxStableDiffusion::preloadModel(const std::string& modelPath, std::string& errorMessage) {
+	ofxStableDiffusionModelInfo info = modelManager.extractModelInfo(modelPath);
+	return modelManager.preloadModel(info, errorMessage);
+}
+
+void ofxStableDiffusion::clearModelCache() {
+	modelManager.clearCache();
+}
+
+void ofxStableDiffusion::setModelCacheSize(uint64_t maxBytes) {
+	modelManager.setMaxCacheSize(maxBytes);
+}
+
+void ofxStableDiffusion::setMaxCachedModels(int count) {
+	modelManager.setMaxCachedModels(count);
+}
+
 void ofxStableDiffusion::reloadEmbeddings(const std::string& embedDir) {
 	ofxStableDiffusionContextSettings settings = getContextSettings();
 	if (!embedDir.empty()) {

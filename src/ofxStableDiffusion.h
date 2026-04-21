@@ -2,6 +2,7 @@
 
 #include "ofMain.h"
 #include "bridges/ofxStableDiffusionHoloscanBridge.h"
+#include "core/ofxStableDiffusionModelManager.h"
 #include "core/ofxStableDiffusionParameterTuningHelpers.h"
 #include "core/ofxStableDiffusionTypes.h"
 #include "video/ofxStableDiffusionLongVideoManifest.h"
@@ -75,6 +76,25 @@ public:
 
 	/// Query available LoRA files in the loraModelDir; returns name and absolute path pairs.
 	std::vector<std::pair<std::string, std::string>> listLoras() const;
+
+	/// Scan a directory for available model files
+	std::vector<ofxStableDiffusionModelInfo> scanModels(const std::string& directory);
+
+	/// Get metadata for a specific model file
+	ofxStableDiffusionModelInfo getModelInfo(const std::string& modelPath);
+
+	/// Get list of cached models
+	std::vector<ofxStableDiffusionModelInfo> getCachedModels() const;
+
+	/// Preload a model into cache for faster switching
+	bool preloadModel(const std::string& modelPath, std::string& errorMessage);
+
+	/// Clear the model cache
+	void clearModelCache();
+
+	/// Set model manager cache limits
+	void setModelCacheSize(uint64_t maxBytes);
+	void setMaxCachedModels(int count);
 
 	/// Reload embeddings by rebuilding the context with the current (or provided) embed directory.
 	void reloadEmbeddings(const std::string& embedDir = "");
@@ -324,6 +344,7 @@ private:
 	static constexpr std::size_t maxSeedHistorySize = 20;
 	uint64_t taskStartMicros = 0;
 	stableDiffusionThread::OwnedImage loadedInputImage;
+	ofxStableDiffusionModelManager modelManager;
 	mutable std::mutex stateMutex;
 };
 

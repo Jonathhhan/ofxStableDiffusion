@@ -137,3 +137,15 @@ target_include_directories(test_inpainting_validation PRIVATE
 )
 
 add_test(NAME inpainting_validation COMMAND test_inpainting_validation)
+
+add_executable(test_model_manager_integration
+    test_model_manager_integration.cpp
+)
+
+target_include_directories(test_model_manager_integration PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME model_manager_integration COMMAND test_model_manager_integration)
