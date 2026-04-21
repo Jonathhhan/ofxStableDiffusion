@@ -208,6 +208,26 @@ Supported playback/presentation modes:
 This is especially useful when a UI layer or another addon wants a more natural
 preview clip without re-asking the native runtime for more frames.
 
+### Video Performance Recommendations
+
+- **Use fast models for previews**: Prefer LCM/Turbo-style checkpoints with 4–8 steps for quick iteration; only re-run hero frames at higher quality.
+- **Quantize when possible**: F16 or Q8/Q5 levels often cut VRAM use by 50–75% and speed up inference, enabling higher resolutions or longer clips without swapping.
+- **Keep the model warm and resident**: Reuse the same loaded context via the model manager; avoid swapping checkpoints mid-run and consider a throwaway warmup frame to eliminate first-run latency.
+- **Minimize unique frames**: Generate the smallest necessary source frame count, then stretch duration with `PingPong`, `Boomerang`, or `Loop` playback instead of regenerating.
+- **Right-size resolution, fps, and steps**: Lower resolution and fps where acceptable; clamp `sampleSteps` to ~15–25 for finals (lower for previews). Per-frame time scales directly with unique frames.
+- **Trim preview I/O**: Skip metadata/JSON exports on preview passes; save sidecar files only on final renders to avoid extra disk churn.
+
+## Coding Conventions (openFrameworks-aligned)
+
+- Use tabs (as in existing headers) with K&R braces; lowerCamelCase for functions/members and PascalCase for types, keeping the `ofxStableDiffusion*` prefix for public types.
+- Include order: `ofMain.h`, then addon headers, then STL/system headers.
+- Document public API with `///` Doxygen-style comments; avoid mixing `//` for header docs.
+- Avoid exceptions; return `bool` or error codes and populate `ofxStableDiffusionError` for failures.
+- Keep small helpers inline in headers; move heavier logic to `.cpp` files to limit inline bloat.
+- Prefer RAII and STL containers over raw `new`/`delete`.
+- Keep generation calls on the main thread; callbacks should stay lightweight for the OF event loop.
+- Favor openFrameworks core types at the API edge: `ofPixels`/`ofImage` for images, `ofJson` for metadata, `ofVec*`/`ofFloatColor`/`ofRectangle` where geometry or color is needed. Convert to STL or native structs internally only when necessary for performance or binding.
+
 ## Image Modes
 
 The typed image request layer now exposes addon-level image modes:
