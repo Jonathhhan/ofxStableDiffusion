@@ -628,6 +628,239 @@ That is the intended integration point for `ofxGgml` CLIP scoring:
 This keeps diffusion and CLIP loosely coupled while still enabling a strong
 cross-addon workflow.
 
+### ofxGgml CLIP Bridge
+
+The addon provides `src/bridges/ofxStableDiffusionGgmlBridge.h` for clean
+integration with ofxGgml's CLIP inference without runtime coupling.
+
+#### Implementing the CLIP Scorer Interface
+
+Create a wrapper around your ofxGgml CLIP inference:
+
+```cpp
+#include "ofxStableDiffusionGgmlBridge.h"
+#include "ofxGgml.h"  // Your ofxGgml addon
+
+class MyClipScorer : public ofxStableDiffusionClipScorer {
+public:
+    MyClipScorer(std::shared_ptr<ofxGgmlClipInference> clip)
+        : clipInference(clip) {}
+
+    float scoreImage(const ofPixels& pixels, const std::string& text) override {
+        // Use ofxGgml to score image-text similarity
+        return clipInference->computeSimilarity(pixels, text);
+    }
+
+    std::vector<float> scoreImages(
+        const std::vector<ofPixels>& images,
+        const std::string& text) override {
+        // Batch scoring for efficiency
+        return clipInference->batchComputeSimilarity(images, text);
+    }
+
+    std::vector<float> encodeImage(const ofPixels& pixels) override {
+        return clipInference->encodeImage(pixels);
+    }
+
+    std::vector<float> encodeText(const std::string& text) override {
+        return clipInference->encodeText(text);
+    }
+
+    std::string getModelName() const override {
+        return clipInference->getModelName();
+    }
+
+private:
+    std::shared_ptr<ofxGgmlClipInference> clipInference;
+};
+```
+
+#### Automatic CLIP-Based Ranking
+
+Use the bridge to create a ranking callback:
+
+```cpp
+// Setup
+auto clipInference = std::make_shared<ofxGgmlClipInference>();
+clipInference->loadModel("path/to/clip-model.gguf");
+
+auto clipScorer = std::make_shared<MyClipScorer>(clipInference);
+
+// Configure ranking
+ofxStableDiffusionClipRankingConfig config;
+config.targetPrompt = "high quality, aesthetic, professional";
+config.normalizeScores = true;
+config.includeMetadata = true;
+
+// Create callback and attach to generator
+auto rankingCallback = ofxStableDiffusionGgmlBridge::createClipRankingCallback(
+    clipScorer, config);
+
+ofxStableDiffusion generator;
+generator.setImageRankCallback(rankingCallback);
+
+// Generate with automatic CLIP ranking
+ofxStableDiffusionImageRequest request;
+request.prompt = "a beautiful landscape";
+request.batchSize = 8;  // Generate 8 candidates
+request.imageSelectionMode = ofxStableDiffusionImageSelectionMode::BestOnly;
+
+auto result = generator.generateImage(request);
+// Result contains the best image according to CLIP scoring
+```
+
+#### Manual Image Ranking
+
+Rank images directly without the callback mechanism:
+
+```cpp
+// Generate multiple candidates
+ofxStableDiffusionImageRequest request;
+request.prompt = "a serene mountain lake";
+request.batchSize = 8;
+request.imageSelectionMode = ofxStableDiffusionImageSelectionMode::KeepOrder;
+
+auto result = generator.generateImage(request);
+
+// Rank using CLIP
+ofxStableDiffusionClipRankingConfig config;
+config.targetPrompt = "serene, peaceful, high quality";
+
+auto ranking = ofxStableDiffusionGgmlBridge::rankImagesWithClip(
+    clipScorer,
+    result.images,
+    request.prompt,
+    config);
+
+if (ranking.success) {
+    ofLogNotice() << "Best image index: " << ranking.bestImageIndex;
+    ofLogNotice() << "Best score: " << ranking.bestScore;
+    ofLogNotice() << "Average score: " << ranking.averageScore;
+
+    // Access images in ranked order
+    for (int idx : ranking.rankedIndices) {
+        const auto& frame = result.images[idx];
+        ofLogNotice() << "Frame " << idx << " score: "
+                      << ranking.scores[idx].score;
+    }
+}
+```
+
+#### Batch Processing Optimization
+
+Process large sets of images efficiently:
+
+```cpp
+// Prepare batches for optimal CLIP processing
+auto batches = ofxStableDiffusionGgmlBridge::prepareBatches(
+    result.images,
+    16  // Max 16 images per batch
+);
+
+ofLogNotice() << "Split " << result.images.size() << " frames into "
+              << batches.size() << " batches";
+
+for (const auto& batch : batches) {
+    // Process each batch
+    std::vector<float> scores = clipScorer->scoreImages(
+        batch.images,
+        batch.prompt);
+
+    // Handle scores...
+}
+```
+
+#### Embedding-Based Image Search
+
+Find images similar to a reference:
+
+```cpp
+// Encode reference image
+ofPixels referenceImage;
+referenceImage.load("reference.png");
+auto referenceEmbedding = clipScorer->encodeImage(referenceImage);
+
+// Generate candidates
+auto result = generator.generateImage(request);
+
+// Find most similar
+int bestIndex = ofxStableDiffusionGgmlBridge::findMostSimilarImage(
+    clipScorer,
+    result.images,
+    referenceEmbedding);
+
+if (bestIndex >= 0) {
+    ofLogNotice() << "Most similar image: " << bestIndex;
+    result.images[bestIndex].pixels.save("similar.png");
+}
+
+// Compare embeddings directly
+for (const auto& frame : result.images) {
+    auto embedding = clipScorer->encodeImage(frame.pixels);
+    auto comparison = ofxStableDiffusionGgmlBridge::compareEmbeddings(
+        referenceEmbedding, embedding);
+
+    ofLogNotice() << "Cosine similarity: " << comparison.cosineSimilarity;
+    ofLogNotice() << "Euclidean distance: " << comparison.euclideanDistance;
+}
+```
+
+#### Aesthetic Scoring
+
+Rank by aesthetic quality:
+
+```cpp
+auto aestheticCallback = ofxStableDiffusionGgmlBridge::createAestheticRankingCallback(
+    clipScorer);
+
+generator.setImageRankCallback(aestheticCallback);
+
+// Generate and automatically select most aesthetic result
+auto result = generator.generateImage(request);
+```
+
+#### Multi-Criteria Ranking
+
+Combine prompt accuracy and aesthetic quality:
+
+```cpp
+ofxStableDiffusionClipRankingConfig config;
+config.targetPrompt = "beautiful mountain landscape";
+config.promptWeight = 0.7f;  // 70% weight on prompt match
+config.aestheticWeight = 0.3f;  // 30% weight on aesthetics
+
+auto callback = ofxStableDiffusionGgmlBridge::createClipRankingCallback(
+    clipScorer, config);
+
+generator.setImageRankCallback(callback);
+```
+
+#### Best Practices
+
+**Performance:**
+- Use batch scoring when processing multiple images
+- Enable metadata only when needed for debugging
+- Cache CLIP embeddings for reference images
+- Use frame caching for iterative workflows
+
+**Architecture:**
+- Keep ofxStableDiffusion and ofxGgml as separate addons
+- Communicate only through the ClipScorer interface
+- Never share native ggml binaries between addons
+- Each addon manages its own ggml runtime independently
+
+**Quality:**
+- Normalize scores when comparing across different prompts
+- Use higher batchSize (8-16) for better candidate selection
+- Combine CLIP ranking with other quality metrics
+- Test with diverse prompts to validate scoring accuracy
+
+**Memory:**
+- Limit maxCandidates when processing large batches
+- Clear frame cache between unrelated generations
+- Use streaming mode for very large video projects
+- Consider resolution trade-offs for batch processing
+
 ## `ofxGgml` Integration Guidance
 
 Recommended architecture:
