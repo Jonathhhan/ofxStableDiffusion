@@ -1,5 +1,6 @@
 #include "ofxStableDiffusionRealtimeSession.h"
 #include "../ofxStableDiffusion.h"
+#include <algorithm>
 #include <numeric>
 
 ofxStableDiffusionRealtimeSession::ofxStableDiffusionRealtimeSession() {
@@ -16,10 +17,13 @@ bool ofxStableDiffusionRealtimeSession::start(const ofxStableDiffusionRealtimeSe
 	}
 
 	settings = settings_;
+	// Ensure maxSampleSteps is never below minSampleSteps
+	settings.maxSampleSteps = std::max(settings.maxSampleSteps, settings.minSampleSteps);
 	active = true;
 	generationInFlight = false;
 	hasPendingRequest = false;
 	warmingUp = false;
+	currentSampleSteps = settings.minSampleSteps;
 	stats = ofxStableDiffusionRealtimeStats();
 	stats.sessionStartTime = ofGetElapsedTimeMillis();
 	stats.isActive = true;
@@ -60,6 +64,7 @@ void ofxStableDiffusionRealtimeSession::stop() {
 	generationInFlight = false;
 	hasPendingRequest = false;
 	warmingUp = false;
+	currentSampleSteps = settings.minSampleSteps;
 
 	ofLogNotice("ofxStableDiffusionRealtimeSession")
 		<< "Session stopped. Total generations: " << stats.totalGenerations
@@ -82,8 +87,12 @@ bool ofxStableDiffusionRealtimeSession::submit(const ofxStableDiffusionRealtimeR
 		return false;
 	}
 
-	// If no queuing is allowed and a generation is already running, drop this request
-	if (generationInFlight && settings.maxQueueDepth == 0) {
+	// Drop if busy and no buffering is allowed.
+	// LowLatency mode always drops rather than queuing, regardless of maxQueueDepth.
+	const bool mustDropIfBusy =
+		(settings.maxQueueDepth == 0 ||
+		settings.mode == ofxStableDiffusionRealtimeMode::LowLatency);
+	if (generationInFlight && mustDropIfBusy) {
 		stats.droppedFrames++;
 		return false;
 	}
@@ -164,6 +173,29 @@ void ofxStableDiffusionRealtimeSession::updateStrength(float strength) {
 	pendingRequest.strength = strength;
 }
 
+void ofxStableDiffusionRealtimeSession::updateNegativePrompt(const std::string& negativePrompt) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.negativePrompt = negativePrompt;
+}
+
+void ofxStableDiffusionRealtimeSession::updateSeed(int seed) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.seed = seed;
+}
+
+void ofxStableDiffusionRealtimeSession::updateSampleSteps(int steps) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.sampleSteps = steps;
+	// Also reset the adaptive step counter so the explicit value takes effect immediately
+	currentSampleSteps = clampToStepRange(steps);
+}
+
+void ofxStableDiffusionRealtimeSession::updateDimensions(int width, int height) {
+	std::lock_guard<std::mutex> lock(requestMutex);
+	pendingRequest.width = width;
+	pendingRequest.height = height;
+}
+
 void ofxStableDiffusionRealtimeSession::setResultCallback(ofxSdRealtimeResultCallback callback) {
 	resultCallback = callback;
 }
@@ -190,6 +222,14 @@ void ofxStableDiffusionRealtimeSession::resetStats() {
 ofxStableDiffusionResult ofxStableDiffusionRealtimeSession::getLastResult() const {
 	std::lock_guard<std::mutex> lock(requestMutex);
 	return lastResult;
+}
+
+bool ofxStableDiffusionRealtimeSession::isGenerating() const {
+	return generationInFlight;
+}
+
+int ofxStableDiffusionRealtimeSession::getCurrentSampleSteps() const {
+	return currentSampleSteps;
 }
 
 bool ofxStableDiffusionRealtimeSession::warmup() {
@@ -229,6 +269,10 @@ bool ofxStableDiffusionRealtimeSession::warmup() {
 	return true;
 }
 
+int ofxStableDiffusionRealtimeSession::clampToStepRange(int steps) const {
+	return std::max(settings.minSampleSteps, std::min(steps, settings.maxSampleSteps));
+}
+
 void ofxStableDiffusionRealtimeSession::processQueue() {
 	if (!generator || generator->isGenerating() || generationInFlight) {
 		return;
@@ -252,7 +296,10 @@ void ofxStableDiffusionRealtimeSession::processQueue() {
 	imageReq.seed = static_cast<int64_t>(req.seed);
 	imageReq.width = req.width;
 	imageReq.height = req.height;
-	imageReq.sampleSteps = req.sampleSteps;
+	imageReq.sampleMethod = req.sampleMethod;
+	// Use the session-managed adaptive step count when progressive refinement is on;
+	// otherwise honour the value the caller placed on the request.
+	imageReq.sampleSteps = settings.enableProgressiveRefinement ? currentSampleSteps : req.sampleSteps;
 	imageReq.batchCount = 1;
 	imageReq.mode = ofxStableDiffusionImageMode::TextToImage;
 
@@ -285,8 +332,20 @@ void ofxStableDiffusionRealtimeSession::updateStats(float latencyMs) {
 		latencyCallback(latencyMs);
 	}
 
-	// Increment dropped-frames counter if latency significantly exceeds target
-	if (latencyMs > settings.targetLatencyMs * 1.5f) {
-		stats.droppedFrames++;
+	// Track frames that significantly exceeded the latency target (distinct from dropped frames)
+	const float target = static_cast<float>(settings.targetLatencyMs);
+	if (latencyMs > target * 1.5f) {
+		stats.slowFrames++;
+	}
+
+	// Adaptive step count: ramp quality up when fast, down when slow
+	if (settings.enableProgressiveRefinement) {
+		if (latencyMs < target * 0.8f) {
+			// Plenty of headroom — raise quality
+			currentSampleSteps = clampToStepRange(currentSampleSteps + 1);
+		} else if (latencyMs > target) {
+			// Over budget — reduce quality
+			currentSampleSteps = clampToStepRange(currentSampleSteps - 1);
+		}
 	}
 }
