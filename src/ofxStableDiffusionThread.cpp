@@ -7,10 +7,14 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
+#include <filesystem>
 #include <mutex>
 #include <vector>
 
 namespace {
+
+namespace fs = std::filesystem;
 
 std::mutex& generationCallbackMutex() {
 	static std::mutex mutex;
@@ -21,25 +25,37 @@ void threadProgressCallback(int step, int steps, float time, void* data) {
 	auto* thread = static_cast<stableDiffusionThread*>(data);
 	if (thread && thread->task == ofxStableDiffusionTask::ImageToVideo) {
 		if (thread->videoTaskData.progressCallback) {
-			if (thread->videoTaskData.animationProgressEnabled) {
-				const int stepsPerFrame =
-					std::max(1, thread->videoTaskData.animationSampleSteps > 0 ?
-						thread->videoTaskData.animationSampleSteps :
-						steps);
-				const int totalSteps = std::max(1, thread->videoTaskData.animationFrameCount) * stepsPerFrame;
-				const int compositeStep =
-					(thread->videoTaskData.animationFrameIndex * stepsPerFrame) +
-					std::max(0, std::min(step, stepsPerFrame));
-				thread->videoTaskData.progressCallback(compositeStep, totalSteps, time);
-			} else {
-				thread->videoTaskData.progressCallback(step, steps, time);
+			try {
+				if (thread->videoTaskData.animationProgressEnabled) {
+					const int stepsPerFrame =
+						std::max(1, thread->videoTaskData.animationSampleSteps > 0 ?
+							thread->videoTaskData.animationSampleSteps :
+							steps);
+					const int totalSteps = std::max(1, thread->videoTaskData.animationFrameCount) * stepsPerFrame;
+					const int compositeStep =
+						(thread->videoTaskData.animationFrameIndex * stepsPerFrame) +
+						std::max(0, std::min(step, stepsPerFrame));
+					thread->videoTaskData.progressCallback(compositeStep, totalSteps, time);
+				} else {
+					thread->videoTaskData.progressCallback(step, steps, time);
+				}
+			} catch (const std::exception& e) {
+				ofLogWarning("ofxStableDiffusion") << "Progress callback threw: " << e.what();
+			} catch (...) {
+				ofLogWarning("ofxStableDiffusion") << "Progress callback threw an unknown exception";
 			}
 		}
 		return;
 	}
 
 	if (thread && thread->imageTaskData.progressCallback) {
-		thread->imageTaskData.progressCallback(step, steps, time);
+		try {
+			thread->imageTaskData.progressCallback(step, steps, time);
+		} catch (const std::exception& e) {
+			ofLogWarning("ofxStableDiffusion") << "Progress callback threw: " << e.what();
+		} catch (...) {
+			ofLogWarning("ofxStableDiffusion") << "Progress callback threw an unknown exception";
+		}
 	}
 }
 
@@ -193,6 +209,27 @@ void stableDiffusionThread::threadedFunction() {
 		std::vector<std::string> embeddingNames;
 		std::vector<std::string> embeddingPaths;
 		std::vector<sd_embedding_t> embeddings;
+		const auto describeMissingPaths = [&contextTaskData]() {
+			std::vector<std::string> missing;
+			const auto addIfMissing = [&missing](const std::string& path, const char* label) {
+				if (path.empty()) {
+					return;
+				}
+				const fs::path p(path);
+				if (!fs::exists(p)) {
+					missing.push_back(std::string(label) + ": " + p.string());
+				}
+			};
+			addIfMissing(contextTaskData.contextSettings.modelPath, "model");
+			addIfMissing(contextTaskData.contextSettings.diffusionModelPath, "diffusion");
+			addIfMissing(contextTaskData.contextSettings.clipLPath, "clip_l");
+			addIfMissing(contextTaskData.contextSettings.clipGPath, "clip_g");
+			addIfMissing(contextTaskData.contextSettings.t5xxlPath, "text_encoder");
+			addIfMissing(contextTaskData.contextSettings.vaePath, "vae");
+			addIfMissing(contextTaskData.contextSettings.controlNetPath, "controlnet");
+			return missing;
+		};
+		bool contextErrorReported = false;
 		sd_ctx_params_t ctxParams =
 			ofxStableDiffusionNativeAdapter::buildContextParams(
 				contextTaskData,
@@ -200,6 +237,31 @@ void stableDiffusionThread::threadedFunction() {
 				embeddingPaths,
 				embeddings);
 		sdCtx = new_sd_ctx(&ctxParams);
+		if (!sdCtx) {
+			const auto missing = describeMissingPaths();
+			if (!missing.empty()) {
+				std::string message = "Missing model files: ";
+				for (std::size_t i = 0; i < missing.size(); ++i) {
+					message += missing[i];
+					if (i + 1 < missing.size()) {
+						message += "; ";
+					}
+				}
+				sd->setLastError(ofxStableDiffusionErrorCode::ModelNotFound, message);
+				contextErrorReported = true;
+			} else {
+				const std::string primary =
+					!contextTaskData.contextSettings.modelPath.empty() ?
+						contextTaskData.contextSettings.modelPath :
+						contextTaskData.contextSettings.diffusionModelPath;
+				sd->setLastError(
+					ofxStableDiffusionErrorCode::ModelLoadFailed,
+					primary.empty() ?
+						"Failed to create stable-diffusion context" :
+						"Failed to create stable-diffusion context for " + primary);
+				contextErrorReported = true;
+			}
+		}
 
 		if (upscalerCtx) {
 			free_upscaler_ctx(upscalerCtx);
@@ -222,13 +284,14 @@ void stableDiffusionThread::threadedFunction() {
 			{
 				std::lock_guard<std::mutex> lock(sd->stateMutex);
 				sd->isESRGAN = false;
+				sd->esrganPath.clear();
 			}
 			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Failed to create upscaler context");
 		}
 		sd->isModelLoading = false;
 		sd->activeTask = ofxStableDiffusionTask::None;
 		task = ofxStableDiffusionTask::None;
-		if (!isSdCtxLoaded) {
+		if (!isSdCtxLoaded && !contextErrorReported) {
 			sd->setLastError("Failed to create stable-diffusion context");
 		}
 		return;
