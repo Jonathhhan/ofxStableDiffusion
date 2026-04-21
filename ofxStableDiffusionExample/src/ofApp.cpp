@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <sstream>
 
 namespace {
@@ -49,9 +50,11 @@ float computeBrightnessScore(const ofPixels& pixels) {
 	if (!pixels.isAllocated() || pixels.getNumChannels() < 3) {
 		return 0.0f;
 	}
+	const int width = pixels.getWidth();
+	const int height = pixels.getHeight();
 	const std::size_t pixelCount =
-		static_cast<std::size_t>(pixels.getWidth()) *
-		static_cast<std::size_t>(pixels.getHeight());
+		static_cast<std::size_t>(width) *
+		static_cast<std::size_t>(height);
 	if (pixelCount == 0) {
 		return 0.0f;
 	}
@@ -60,20 +63,41 @@ float computeBrightnessScore(const ofPixels& pixels) {
 		static_cast<std::size_t>(pixels.getNumChannels());
 	double brightnessSum = 0.0;
 	double colorfulnessSum = 0.0;
-	for (std::size_t i = 0; i < pixelCount; ++i) {
-		const std::size_t offset = i * static_cast<std::size_t>(channels);
-		const float r = static_cast<float>(data[offset + 0]) / 255.0f;
-		const float g = static_cast<float>(data[offset + 1]) / 255.0f;
-		const float b = static_cast<float>(data[offset + 2]) / 255.0f;
-		const float maxChannel = std::max(r, std::max(g, b));
-		const float minChannel = std::min(r, std::min(g, b));
-		brightnessSum += (r + g + b) / 3.0f;
-		colorfulnessSum += (maxChannel - minChannel);
+	std::size_t samples = 0;
+	const std::size_t targetSamples = 4096;
+	const std::size_t stride = std::max<std::size_t>(
+		1,
+		static_cast<std::size_t>(std::sqrt(
+			std::max<double>(
+				1.0,
+				static_cast<double>(pixelCount) /
+					static_cast<double>(targetSamples)))));
+	for (int y = 0; y < height; y += static_cast<int>(stride)) {
+		const std::size_t rowOffset =
+			static_cast<std::size_t>(y) *
+			static_cast<std::size_t>(width) *
+			channels;
+		for (int x = 0; x < width; x += static_cast<int>(stride)) {
+			const std::size_t offset =
+				rowOffset +
+				static_cast<std::size_t>(x) * channels;
+			const float r = static_cast<float>(data[offset + 0]) / 255.0f;
+			const float g = static_cast<float>(data[offset + 1]) / 255.0f;
+			const float b = static_cast<float>(data[offset + 2]) / 255.0f;
+			const float maxChannel = std::max(r, std::max(g, b));
+			const float minChannel = std::min(r, std::min(g, b));
+			brightnessSum += (r + g + b) / 3.0f;
+			colorfulnessSum += (maxChannel - minChannel);
+			++samples;
+		}
+	}
+	if (samples == 0) {
+		return 0.0f;
 	}
 	const float meanBrightness =
-		static_cast<float>(brightnessSum / static_cast<double>(pixelCount));
+		static_cast<float>(brightnessSum / static_cast<double>(samples));
 	const float meanColorfulness =
-		static_cast<float>(colorfulnessSum / static_cast<double>(pixelCount));
+		static_cast<float>(colorfulnessSum / static_cast<double>(samples));
 	return 0.65f * meanBrightness + 0.35f * meanColorfulness;
 }
 
@@ -920,7 +944,9 @@ void ofApp::draw() {
 			if (useMaskGuide) {
 				ImGui::Dummy(ImVec2(0, 10));
 				if (ImGui::Button("Load Mask")) {
-					loadImageIntoSlot("Load Mask Image", maskGuideImage, maskGuidePixels, maskGuideInput, maskImageName);
+					if (loadImageIntoSlot("Load Mask Image", maskGuideImage, maskGuidePixels, maskGuideInput, maskImageName)) {
+						useMaskGuide = true;
+					}
 				}
 				ImGui::SameLine(0, 5);
 				ImGui::Text("%s", maskImageName.empty() ? "No mask loaded" : maskImageName.c_str());
@@ -1143,6 +1169,26 @@ void ofApp::draw() {
 		ImGui::BeginDisabled();
 	}
 	ImGui::Dummy(ImVec2(0, 10));
+	const auto capabilitiesForGenerate = stableDiffusion.getCapabilities();
+	const bool modelReady = capabilitiesForGenerate.contextConfigured;
+	const bool needsInputImage = usesInputImageMode() || isImageToVideo;
+	const bool hasInputImage = inputImage.data != nullptr;
+	const bool needsMaskImage = imageModeEnum == ofxStableDiffusionImageMode::Inpainting;
+	const bool maskReady = needsMaskImage ? (useMaskGuide && maskGuideInput.data != nullptr) : true;
+	if (!modelReady) {
+		ImGui::TextWrapped("Load a model and click Load Context before generating.");
+	}
+	if (needsInputImage && !hasInputImage) {
+		ImGui::TextWrapped("Load an input image for the selected mode.");
+	}
+	if (needsMaskImage && !maskReady) {
+		ImGui::TextWrapped("Inpainting needs a mask image. Enable Use Mask and load one before generating.");
+	}
+	const bool disableGenerate = isBusy || !modelReady || (needsInputImage && !hasInputImage) || !maskReady;
+	ImGui::Dummy(ImVec2(0, 10));
+	if (disableGenerate) {
+		ImGui::BeginDisabled();
+	}
 	if (ImGui::Button("Generate")) {
 		progressStep = 0;
 		progressSteps = 0;
@@ -1217,6 +1263,9 @@ void ofApp::draw() {
 			request.inputIdImagesPath = inputIdImagesPath;
 			stableDiffusion.generate(request);
 		}
+	}
+	if (disableGenerate) {
+		ImGui::EndDisabled();
 	}
 	if (totalVideoFrames > 0) {
 		ImGui::Dummy(ImVec2(0, 10));
