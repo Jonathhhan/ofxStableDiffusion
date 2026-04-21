@@ -226,6 +226,7 @@ preview clip without re-asking the native runtime for more frames.
 - Keep small helpers inline in headers; move heavier logic to `.cpp` files to limit inline bloat.
 - Prefer RAII and STL containers over raw `new`/`delete`.
 - Keep generation calls on the main thread; callbacks should stay lightweight for the OF event loop.
+- Favor openFrameworks core types at the API edge: `ofPixels`/`ofImage` for images, `ofJson` for metadata, `ofVec*`/`ofFloatColor`/`ofRectangle` where geometry or color is needed. Convert to STL or native structs internally only when necessary for performance or binding.
 
 ## Image Modes
 
