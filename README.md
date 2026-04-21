@@ -305,6 +305,315 @@ with the wrapper mapping legacy-style request data onto the current upstream
 parameter-struct API while still keeping the editing-oriented API clear for
 callers.
 
+### Image Generation Workflow Features
+
+The addon provides comprehensive workflow tools for efficient image generation, parallel to the video generation features:
+
+#### Workflow Presets
+
+Eight quality/speed presets for different use cases:
+
+**Quick Iteration:**
+- `QuickDraft` - 4 steps, fastest iteration for rapid experimentation
+- `FastPreview` - 12 steps, quick feedback with reasonable quality
+
+**Balanced Quality:**
+- `Balanced` - 24 steps, balanced quality and speed (default)
+- `HighQuality` - 50 steps, maximum detail and refinement
+
+**Specialized:**
+- `DetailEnhance` - Optimized for upscaling and subtle refinement (35-40 steps, light strength)
+- `StyleTransfer` - Tuned for img2img artistic transformation (35 steps, heavier strength)
+- `ProductionReady` - Conservative settings for reliable final output (45 steps, single image)
+- `ExperimentalHigh` - Aggressive settings for creative exploration (max steps/CFG)
+
+Apply presets:
+```cpp
+#include "image/ofxStableDiffusionImageWorkflowHelpers.h"
+
+ofxStableDiffusionImageRequest request;
+request.prompt = "cinematic portrait";
+request.width = 512;
+request.height = 512;
+
+// Apply preset automatically adjusts parameters based on model family
+ofxStableDiffusionImageWorkflowHelpers::applyWorkflowPreset(
+    request,
+    ofxStableDiffusionImageWorkflowPreset::HighQuality,
+    contextSettings);
+```
+
+#### Dry-Run Estimation
+
+Estimate generation time and resource requirements before starting:
+
+```cpp
+auto estimate = ofxStableDiffusionImageWorkflowHelpers::estimateImageGeneration(request, contextSettings);
+
+ofLogNotice() << "Total images: " << estimate.totalImages;
+ofLogNotice() << "Total steps: " << estimate.totalSteps;
+ofLogNotice() << "Estimated time: " << estimate.estimatedMinutes << " minutes";
+ofLogNotice() << "Estimated memory: " << estimate.estimatedMemoryMB << " MB";
+ofLogNotice() << "Recommendation: " << estimate.recommendation;
+
+if (!estimate.feasible) {
+    ofLogWarning() << "Generation may not be feasible with current settings";
+}
+
+for (const auto& warning : estimate.warnings) {
+    ofLogWarning() << warning;
+}
+```
+
+#### Enhanced Validation with Auto-Correction
+
+Validate requests and get automatic correction suggestions:
+
+```cpp
+auto validation = ofxStableDiffusionImageWorkflowHelpers::validateImageRequestWithCorrection(
+    request, contextSettings);
+
+if (!validation.isValid) {
+    for (const auto& error : validation.errors) {
+        ofLogError() << error;
+    }
+}
+
+for (const auto& warning : validation.warnings) {
+    ofLogWarning() << warning;
+}
+
+if (validation.hasCorrectedRequest) {
+    for (const auto& suggestion : validation.suggestions) {
+        ofLogNotice() << suggestion;
+    }
+    // Optionally use the corrected request
+    request = validation.correctedRequest;
+}
+```
+
+The validator automatically:
+- Rounds dimensions to multiples of 64
+- Scales down oversized images proportionally
+- Clamps parameters to model-appropriate ranges
+- Warns about suboptimal settings (e.g., high steps for turbo models)
+- Checks mode requirements (e.g., input images for img2img modes)
+
+#### Batch Diversity & Parameter Sweeps
+
+Generate varied batches systematically:
+
+```cpp
+// Create multiple requests with diversity
+std::vector<ofxStableDiffusionImageRequest> requests(5, baseRequest);
+
+ofxStableDiffusionBatchDiversitySettings diversity;
+diversity.mode = ofxStableDiffusionBatchDiversityMode::Sequential;
+diversity.seedIncrement = 1;
+
+ofxStableDiffusionImageWorkflowHelpers::applyBatchDiversity(requests, diversity);
+
+// Parameter sweep across CFG scale
+diversity.mode = ofxStableDiffusionBatchDiversityMode::ParameterSweep;
+diversity.cfgScaleStart = 5.0f;
+diversity.cfgScaleEnd = 10.0f;
+ofxStableDiffusionImageWorkflowHelpers::applyBatchDiversity(requests, diversity);
+```
+
+**Diversity Modes:**
+- `None` - All images use same seed
+- `Sequential` - Increment seed by 1
+- `LargeSteps` - Increment seed by 1000
+- `Random` - Completely random seeds
+- `ParameterSweep` - Vary CFG scale or strength systematically
+
+#### Seed Exploration
+
+Generate variations around a successful seed:
+
+```cpp
+ofxStableDiffusionSeedExplorationSettings exploration;
+exploration.centerSeed = 42;
+exploration.gridSize = 3;  // 3x3 = 9 variations
+exploration.seedRadius = 100;
+exploration.useRadialPattern = true;
+
+auto seeds = ofxStableDiffusionImageWorkflowHelpers::generateSeedExplorationGrid(exploration);
+
+// Create request for each seed
+auto requests = ofxStableDiffusionImageCompositionHelpers::createSeedExplorationRequests(
+    baseRequest, seeds);
+```
+
+#### Image Templates
+
+Built-in templates for common workflows:
+
+```cpp
+// Portrait photography
+auto portraitTemplate = ofxStableDiffusionImageWorkflowHelpers::getPortraitTemplate();
+request.width = portraitTemplate.baseRequest.width;
+request.height = portraitTemplate.baseRequest.height;
+request.cfgScale = portraitTemplate.baseRequest.cfgScale;
+request.prompt = portraitTemplate.promptSuggestions[0];
+request.negativePrompt = portraitTemplate.negativePromptSuggestions[0];
+
+// Other built-in templates:
+auto landscapeTemplate = ofxStableDiffusionImageWorkflowHelpers::getLandscapeTemplate();
+auto conceptArtTemplate = ofxStableDiffusionImageWorkflowHelpers::getConceptArtTemplate();
+auto productShotTemplate = ofxStableDiffusionImageWorkflowHelpers::getProductShotTemplate();
+```
+
+#### Advanced Prompt Features
+
+Prompt weighting and template system:
+
+```cpp
+#include "image/ofxStableDiffusionPromptHelpers.h"
+
+// Emphasize/de-emphasize tokens
+std::string prompt = ofxStableDiffusionPromptHelpers::emphasize("detailed face", 1.5f) + ", " +
+                     ofxStableDiffusionPromptHelpers::deemphasize("background", 0.7f);
+// Result: "(detailed face:1.5), [background:0.7]"
+
+// Build weighted prompt
+std::vector<ofxStableDiffusionPromptWeight> components = {
+    {"portrait", 1.3f},
+    {"professional lighting", 1.2f},
+    {"detailed", 1.1f},
+    {"background", 0.6f}
+};
+prompt = ofxStableDiffusionPromptHelpers::buildWeightedPrompt(components);
+
+// Negative prompt presets
+std::string negPrompt = ofxStableDiffusionPromptHelpers::getNegativePromptPreset("comprehensive");
+// Includes: quality issues, distortions, artifacts, watermarks
+
+// Available presets: "quality", "artifacts", "distortion", "style", "realistic", "comprehensive"
+
+// Style mixing
+auto styleMix = ofxStableDiffusionPromptHelpers::getStyleMixPreset("cinematic");
+prompt += ", " + styleMix.toPrompt();
+// Available styles: "cinematic", "anime", "photorealistic", "artistic", "fantasy", "scifi"
+
+// Prompt templates with variables
+auto charTemplate = ofxStableDiffusionPromptHelpers::getCharacterTemplate();
+charTemplate.variables = {
+    {"adjective", "mysterious"},
+    {"subject", "wizard"},
+    {"style", "fantasy art"},
+    {"lighting", "dramatic lighting"},
+    {"quality", "highly detailed, 4k"}
+};
+prompt = charTemplate.apply();
+
+// Prompt cleanup and validation
+prompt = ofxStableDiffusionPromptHelpers::cleanupPrompt(prompt);
+if (ofxStableDiffusionPromptHelpers::isPromptTooLong(prompt, 75)) {
+    prompt = ofxStableDiffusionPromptHelpers::truncatePrompt(prompt, 75);
+}
+```
+
+#### Image Composition & Blending
+
+Blend and compose images:
+
+```cpp
+#include "image/ofxStableDiffusionImageCompositionHelpers.h"
+
+// Blend two images
+ofPixels blended;
+ofxStableDiffusionImageCompositionHelpers::blendImages(
+    imageA.pixels, imageB.pixels, blended,
+    0.5f,  // blend amount
+    ofxStableDiffusionBlendMode::Smoothstep);
+
+// Available blend modes: Linear, Smoothstep, Cosine, Cubic, Overlay, Screen, Multiply
+
+// Create comparison grid
+ofxStableDiffusionGridLayout layout;
+layout.columns = 3;
+layout.rows = 3;
+layout.cellWidth = 512;
+layout.cellHeight = 512;
+layout.padding = 4;
+layout.drawBorders = true;
+layout.addLabels = true;
+
+ofxStableDiffusionComparisonConfig config;
+config.showParameters = true;
+config.showSeeds = true;
+config.labels = {"Seed 42", "Seed 43", "Seed 44", /* ... */};
+
+ofPixels grid;
+ofxStableDiffusionImageCompositionHelpers::createComparisonGrid(
+    generatedFrames, grid, layout, config);
+
+// A/B comparison (side-by-side)
+ofPixels comparison;
+ofxStableDiffusionImageCompositionHelpers::createABComparison(
+    imageA.pixels, imageB.pixels, comparison, 8 /* padding */);
+
+// Calculate similarity between images
+float similarity = ofxStableDiffusionImageCompositionHelpers::calculateImageSimilarity(
+    imageA.pixels, imageB.pixels);
+ofLogNotice() << "Images are " << (similarity * 100.0f) << "% similar";
+
+// Interpolate between images (morphing)
+std::vector<ofPixels> morphFrames;
+ofxStableDiffusionImageCompositionHelpers::interpolateImages(
+    startImage.pixels, endImage.pixels, morphFrames,
+    24,  // frame count
+    ofxStableDiffusionBlendMode::Smoothstep);
+```
+
+#### Parameter Sweep Generation
+
+Test parameter ranges systematically:
+
+```cpp
+// Create requests sweeping CFG scale from 5.0 to 10.0
+auto requests = ofxStableDiffusionImageCompositionHelpers::createParameterSweepRequests(
+    baseRequest,
+    "cfgScale",  // parameter name: "cfgScale", "steps", or "strength"
+    5.0f,        // min value
+    10.0f,       // max value
+    6);          // step count
+
+// Generate all variations and create comparison grid
+std::vector<ofxStableDiffusionImageFrame> results;
+for (auto& req : requests) {
+    auto result = sd.generate(req);
+    if (result.success && !result.images.empty()) {
+        results.push_back(result.images[0]);
+    }
+}
+
+ofPixels comparisonGrid;
+ofxStableDiffusionImageCompositionHelpers::createComparisonGrid(
+    results, comparisonGrid, layout, config);
+```
+
+#### Progress Tracking
+
+Enhanced progress information during generation:
+
+```cpp
+ofxStableDiffusionImageProgressInfo progress;
+progress.currentImage = 3;
+progress.totalImages = 8;
+progress.currentStep = 15;
+progress.totalSteps = 20;
+progress.elapsedSeconds = 45.5f;
+progress.estimatedRemainingSeconds = 60.2f;
+progress.percentComplete = 0.75f;
+progress.currentPhase = "generating";
+
+ofLogNotice() << "Progress: " << (progress.percentComplete * 100.0f) << "%";
+ofLogNotice() << "ETA: " << progress.getETA();
+ofLogNotice() << "Phase: " << progress.currentPhase;
+```
+
 ## CLIP-Rerank Integration
 
 `ofxStableDiffusion` now exposes a wrapper-level image ranking callback for
