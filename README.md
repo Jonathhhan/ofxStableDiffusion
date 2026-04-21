@@ -743,6 +743,229 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 - optional end-frame morphing
 - prompt morph / seed-sequence animation controls
 
+## Video Performance & Quality Optimization
+
+The addon provides comprehensive tools for optimizing video generation performance and quality.
+
+### Performance Helpers
+
+Include the performance helpers for advanced optimizations:
+
+```cpp
+#include "video/ofxStableDiffusionVideoPerformanceHelpers.h"
+```
+
+### Adaptive Quality Scaling
+
+Automatically adjust quality parameters based on generation performance:
+
+```cpp
+ofxStableDiffusionAdaptiveQualitySettings adaptiveSettings;
+adaptiveSettings.enabled = true;
+adaptiveSettings.targetSecondsPerFrame = 2.0f;  // Target 2 seconds per frame
+adaptiveSettings.minSampleSteps = 8;
+adaptiveSettings.maxSampleSteps = 50;
+adaptiveSettings.qualityAdjustmentRate = 0.2f;
+adaptiveSettings.warmupFrames = 2;
+
+ofxStableDiffusionVideoQualityMetrics metrics;
+
+for (int frame = 0; frame < request.frameCount; ++frame) {
+    float startTime = ofGetElapsedTimef();
+
+    // Generate frame...
+
+    float elapsed = ofGetElapsedTimef() - startTime;
+    metrics.recordFrameTime(elapsed);
+
+    // Adjust quality for next frame
+    ofxStableDiffusionVideoPerformanceHelpers::adjustQualityForPerformance(
+        request, adaptiveSettings, metrics);
+}
+```
+
+### Temporal Consistency Enhancement
+
+Improve frame-to-frame consistency for smoother videos:
+
+```cpp
+ofxStableDiffusionTemporalConsistencySettings temporalSettings;
+temporalSettings.enabled = true;
+temporalSettings.strengthModulation = 0.1f;  // Slight strength variation
+temporalSettings.cfgScaleModulation = 0.2f;  // Slight CFG variation
+temporalSettings.useFrameBlending = false;
+temporalSettings.blendWeight = 0.15f;
+
+for (int frame = 0; frame < request.frameCount; ++frame) {
+    ofxStableDiffusionVideoPerformanceHelpers::applyTemporalConsistency(
+        frameRequest, frame, temporalSettings, previousFrame);
+
+    // Generate frame...
+}
+```
+
+### Frame Caching
+
+Cache generated frames for faster iteration:
+
+```cpp
+ofxStableDiffusionFrameCache cache;
+cache.enabled = true;
+cache.maxCachedFrames = 10;
+
+for (int frame = 0; frame < request.frameCount; ++frame) {
+    if (cache.hasFrame(frame)) {
+        // Reuse cached frame
+        const auto* cachedFrame = cache.getFrame(frame);
+        // Use cached frame...
+    } else {
+        // Generate new frame
+        auto newFrame = generateFrame(frame);
+        cache.addFrame(frame, newFrame);
+    }
+}
+```
+
+### Memory Optimization
+
+Optimize memory usage for large video generations:
+
+```cpp
+ofxStableDiffusionVideoMemorySettings memorySettings;
+memorySettings.enableStreamingMode = true;  // Save frames as they're generated
+memorySettings.clearIntermediateBuffers = true;
+memorySettings.maxFramesInMemory = 30;
+memorySettings.streamingOutputDirectory = "output/video_frames";
+
+// Estimate memory usage
+float estimatedMB = ofxStableDiffusionVideoPerformanceHelpers::estimateVideoMemoryUsageMB(
+    request, memorySettings.maxFramesInMemory);
+
+ofLogNotice() << "Estimated memory usage: " << estimatedMB << " MB";
+
+// Calculate optimal batch strategy
+auto batches = ofxStableDiffusionVideoPerformanceHelpers::calculateOptimalBatchStrategy(
+    request.frameCount,
+    memorySettings.maxFramesInMemory,
+    memorySettings);
+```
+
+### Quality Metrics & Validation
+
+Track and validate video generation quality:
+
+```cpp
+ofxStableDiffusionVideoQualityMetrics metrics;
+
+// Record frame generation times
+for (int frame = 0; frame < totalFrames; ++frame) {
+    float startTime = ofGetElapsedTimef();
+    // Generate frame...
+    float elapsed = ofGetElapsedTimef() - startTime;
+    metrics.recordFrameTime(elapsed);
+}
+
+// Analyze performance
+ofLogNotice() << "Average time per frame: " << metrics.averageGenerationTimePerFrame << "s";
+ofLogNotice() << "Min/Max time: " << metrics.minGenerationTime << "s / "
+              << metrics.maxGenerationTime << "s";
+ofLogNotice() << "Time variance: " << metrics.getVariance();
+ofLogNotice() << "Std deviation: " << metrics.getStdDeviation();
+
+// Calculate frame-to-frame similarity for temporal coherence
+float similarity = ofxStableDiffusionVideoPerformanceHelpers::calculateFrameSimilarity(
+    frames[i], frames[i+1], 8 /* sample step */);
+ofLogNotice() << "Frame similarity: " << (similarity * 100.0f) << "%";
+
+// Validate video parameters
+auto warnings = ofxStableDiffusionVideoPerformanceHelpers::validateVideoPerformance(request);
+for (const auto& warning : warnings) {
+    ofLogWarning() << warning;
+}
+```
+
+### Quick Optimization Presets
+
+Apply performance/quality trade-offs with preset targets:
+
+```cpp
+ofxStableDiffusionVideoRequest request;
+request.prompt = "cinematic sequence";
+request.width = 768;
+request.height = 1024;
+request.frameCount = 48;
+
+// Optimize for different targets
+ofxStableDiffusionVideoPerformanceHelpers::optimizeVideoRequestForTarget(
+    request, "ultrafast");  // ultrafast, fast, balanced, quality, highquality
+
+// Or optimize for smooth playback
+auto smoothRequest = ofxStableDiffusionVideoPerformanceHelpers::optimizeForSmoothPlayback(
+    request, 3.0f /* target duration in seconds */);
+```
+
+### Performance Best Practices
+
+**For Fast Iteration:**
+- Use `QuickPreview_8` or `QuickPreview_4` presets
+- Reduce resolution (384x576 or smaller)
+- Lower sample steps (8-12)
+- Reduce frame count (8-16 frames)
+- Use `FastPreview` workflow preset
+
+**For Balanced Quality:**
+- Use `Balanced` workflow preset
+- 512x768 resolution
+- 20-24 sample steps
+- 12-24 frames at 10-12 FPS
+- Enable temporal coherence (0.5-0.7)
+
+**For High Quality:**
+- Use `HighQuality_24fps` or `HighQuality_30fps` presets
+- 768x1024 or higher resolution
+- 35-50 sample steps
+- Enable temporal consistency enhancements
+- Use smooth interpolation modes
+- Higher temporal coherence (0.7-0.9)
+
+**Memory Management:**
+- Enable streaming mode for very long videos (>100 frames)
+- Limit frames in memory to 30-50
+- Clear intermediate buffers between frames
+- Use batch processing for large projects
+
+**Temporal Quality:**
+- Set `temporalCoherence` to 0.7+ for smooth transitions
+- Use `Noise` seed variation mode instead of `Sequential`
+- Apply slight strength/CFG modulation (0.1-0.2)
+- Enable prompt interpolation with `Smooth` mode
+
+**Resolution vs Speed:**
+- 256x384: Ultra-fast previews (~5-10s per frame)
+- 384x576: Fast iteration (~15-30s per frame)
+- 512x768: Balanced quality (~30-60s per frame)
+- 768x1024: High quality (~60-120s per frame)
+- 1024x1536: Maximum quality (~120-300s per frame)
+
+**Sample Steps Trade-offs:**
+- 4-8 steps: Very fast, draft quality
+- 12-16 steps: Fast preview, decent quality
+- 20-28 steps: Balanced, good quality
+- 35-50 steps: High quality, diminishing returns beyond 50
+
+### Frame Skip Strategies
+
+For quick previews, generate every Nth frame:
+
+```cpp
+int frameSkip = ofxStableDiffusionVideoPerformanceHelpers::calculateOptimalFrameSkip(
+    totalFrames, 2.0f /* target duration */, 12 /* target FPS */);
+
+for (int i = 0; i < totalFrames; i += frameSkip) {
+    // Generate frame i only
+}
+```
+
 ## Troubleshooting
 
 ### Model Loading Issues
