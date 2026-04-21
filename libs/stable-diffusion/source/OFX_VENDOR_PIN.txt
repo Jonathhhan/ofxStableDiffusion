@@ -1,8 +1,0 @@
-Vendored by ofxStableDiffusion
-Upstream repository: https://github.com/leejet/stable-diffusion.cpp
-Upstream release tag: master-585-44cca3d
-Upstream commit: 44cca3d626d301e2215d5e243277e8f0e65bfa78
-Upstream target commitish: 44cca3d626d301e2215d5e243277e8f0e65bfa78
-Release URL: https://github.com/leejet/stable-diffusion.cpp/releases/tag/master-585-44cca3d
-Zipball URL: https://api.github.com/repos/leejet/stable-diffusion.cpp/zipball/master-585-44cca3d
-Fetched at: 2026-04-20T12:23:15.0983138+00:00

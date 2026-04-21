@@ -1,9 +1,0 @@
-Vendored by ofxStableDiffusion
-Upstream repository: https://github.com/ggml-org/ggml
-Upstream release tag: v0.9.11
-Upstream commit: 49f84a924f6ea4fc2ef73dbbd8cc4d734b54bd6d
-Upstream target commitish: 49f84a924f6ea4fc2ef73dbbd8cc4d734b54bd6d
-Release URL: https://github.com/ggml-org/ggml/releases/tag/v0.9.11
-Zipball URL: https://api.github.com/repos/ggml-org/ggml/zipball/v0.9.11
-Fetched at: 2026-04-20T12:23:20.0895785+00:00
-Notes: Source-only vendor refresh staged under stable-diffusion.cpp.
