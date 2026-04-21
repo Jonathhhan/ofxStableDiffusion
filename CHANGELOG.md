@@ -17,6 +17,47 @@
 
 ### Added
 
+- **Multi-ControlNet Support** (Feature #5): Multiple ControlNet models simultaneously
+  - `ofxStableDiffusionControlNet` structure with condition image, strength, and type fields
+  - Vector-based API for managing multiple ControlNets
+  - `addControlNet()`, `clearControlNets()`, and `getControlNets()` methods
+  - Per-model strength control and type hints (canny, depth, pose, etc.)
+  - Backward compatibility with legacy single ControlNet API
+  - `controlNets` vector in `ofxStableDiffusionImageRequest`
+
+- **Complete Inpainting Implementation** (Feature #8): Selective image editing with full validation
+  - Mask dimension validation (must match input image dimensions)
+  - Proper error handling with descriptive error messages
+  - `maskImage` field validation in image request processing
+  - Complete inpainting mode support with `ofxStableDiffusionImageMode::Inpainting`
+
+- **LoRA Discovery** (Feature #6 - Partial): LoRA file discovery and listing
+  - `listLoras()` method returns name and absolute path pairs
+  - Supports multiple file formats: .safetensors, .ckpt, .pt, .bin
+  - Scans loraModelDir for available LoRA files
+  - Complements existing LoRA management API
+
+- **Performance Profiling System** (Feature #16): Comprehensive performance tracking and analysis
+  - `ofxStableDiffusionPerformanceProfiler` class with timing and memory tracking
+  - RAII-style scoped timers for automatic instrumentation
+  - Thread-safe operations with std::mutex protection
+  - Bottleneck identification with configurable thresholds
+  - JSON and CSV export formats for performance data
+  - Statistics aggregation across multiple operations
+  - Main class API: `setProfilingEnabled()`, `getPerformanceStats()`, `getPerformanceBottlenecks()`
+  - `printPerformanceSummary()`, `exportPerformanceJSON()`, `exportPerformanceCSV()`
+
+- **Advanced Sampling Options** (Feature #13): Comprehensive sampler and scheduler configuration
+  - `ofxStableDiffusionSamplingHelpers` with metadata for 15+ samplers and 11+ schedulers
+  - 7 predefined quality/speed presets: Ultra Quality, Quality, Balanced, Fast, Ultra Fast, LCM, TCD
+  - Sampler information with descriptions and recommended step ranges
+  - Scheduler information with use case recommendations
+  - Name-based lookup (case-insensitive) for samplers and schedulers
+  - Recommended sampler/scheduler combinations
+  - Step count validation and quality-based recommendation system
+  - Support for: Euler, Euler A, Heun, DPM2, DPM++ variants, iPNDM, LCM, TCD, and more
+  - Scheduler support: Discrete, Karras, Exponential, AYS, GITS, LCM, and more
+
 - **Video Animation and Interpolation** (Feature #18): Advanced video generation with keyframe support
   - Prompt interpolation between keyframes with smooth transitions
   - Parameter animation for CFG scale, strength, and other settings
@@ -34,6 +75,15 @@
   - Video parameter export to JSON file
   - Complete generation history tracking per frame
   - Export helper functions for metadata and parameters
+
+- **Test Coverage Expansion**: Comprehensive unit tests for new features
+  - 15 total tests (up from 9), 100% passing
+  - Tests for LoRA discovery functionality
+  - Tests for inpainting validation logic
+  - Tests for model manager integration
+  - Tests for Multi-ControlNet support
+  - Tests for performance profiler
+  - Tests for sampling helpers
 
 ## 1.1.0 - 2026-04-17
 
