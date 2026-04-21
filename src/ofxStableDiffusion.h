@@ -5,6 +5,7 @@
 #include "core/ofxStableDiffusionModelManager.h"
 #include "core/ofxStableDiffusionParameterTuningHelpers.h"
 #include "core/ofxStableDiffusionPerformanceProfiler.h"
+#include "core/ofxStableDiffusionSamplingHelpers.h"
 #include "core/ofxStableDiffusionTypes.h"
 #include "video/ofxStableDiffusionLongVideoManifest.h"
 #include "video/ofxStableDiffusionLongVideoWorkflow.h"

@@ -173,3 +173,15 @@ target_include_directories(test_performance_profiler PRIVATE
 )
 
 add_test(NAME performance_profiler COMMAND test_performance_profiler)
+
+add_executable(test_sampling_helpers
+    test_sampling_helpers.cpp
+)
+
+target_include_directories(test_sampling_helpers PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME sampling_helpers COMMAND test_sampling_helpers)
