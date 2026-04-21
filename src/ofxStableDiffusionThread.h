@@ -4,6 +4,7 @@
 #include "core/ofxStableDiffusionTypes.h"
 #include "stable-diffusion.h"
 
+#include <cstring>
 #include <functional>
 #include <string>
 #include <vector>
@@ -20,8 +21,8 @@ public:
 		}
 
 		bool assign(const sd_image_t& source) {
-			clear();
 			if (!source.data || source.width == 0 || source.height == 0 || source.channel == 0) {
+				clear();
 				return false;
 			}
 
@@ -29,7 +30,8 @@ public:
 				static_cast<std::size_t>(source.width) *
 				static_cast<std::size_t>(source.height) *
 				static_cast<std::size_t>(source.channel);
-			storage.assign(source.data, source.data + byteCount);
+			storage.resize(byteCount);
+			std::memcpy(storage.data(), source.data, byteCount);
 			image = {source.width, source.height, source.channel, storage.data()};
 			return true;
 		}
@@ -101,4 +103,3 @@ private:
 	bool isUpscalerCtxLoaded = false;
 	std::vector<sd_lora_t> loraBuffer;
 };
-
