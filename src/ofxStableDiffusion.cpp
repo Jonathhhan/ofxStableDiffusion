@@ -421,12 +421,31 @@ void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request)
 	if (!beginBackgroundTask(task)) {
 		return;
 	}
-	applyImageRequest(request);
+	if (!applyImageRequest(request)) {
+		return;
+	}
 	thread.startThread();
 }
 
 void ofxStableDiffusion::generateVideo(const ofxStableDiffusionVideoRequest& request) {
 	if (!validateVideoRequestAndSetError(request)) {
+		return;
+	}
+	const ofxStableDiffusionCapabilities capabilities = getCapabilities();
+	if (!capabilities.contextConfigured) {
+		setLastError(ofxStableDiffusionErrorCode::ModelNotFound, "Video generation requires a loaded model");
+		return;
+	}
+	if (!capabilities.imageToVideo) {
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Current model does not support image-to-video generation");
+		return;
+	}
+	if (request.endImage.data != nullptr && !capabilities.videoEndFrame) {
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "This model does not support providing an end frame");
+		return;
+	}
+	if (request.hasAnimation() && !capabilities.videoAnimation) {
+		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Animated video generation is not supported by the current model");
 		return;
 	}
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToVideo)) {
@@ -1287,7 +1306,7 @@ void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSet
 	enableMmap = resolvedSettings.enableMmap;
 }
 
-void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest& request) {
+bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest& request) {
 	stableDiffusionThread::ImageTaskData taskData;
 	bool mergeFailed = false;
 	float mergedStrength = request.controlStrength;
@@ -1356,9 +1375,10 @@ void ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 
 	if (mergeFailed) {
 		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Failed to merge ControlNet inputs");
-		return;
+		return false;
 	}
 	thread.prepareImageTask(taskData);
+	return true;
 }
 
 void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {

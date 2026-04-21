@@ -216,6 +216,15 @@ void stableDiffusionThread::threadedFunction() {
 			isUpscalerCtxLoaded = (upscalerCtx != nullptr);
 		}
 		isSdCtxLoaded = (sdCtx != nullptr);
+		if (contextTaskData.upscalerSettings.enabled &&
+			!contextTaskData.upscalerSettings.modelPath.empty() &&
+			!isUpscalerCtxLoaded) {
+			{
+				std::lock_guard<std::mutex> lock(sd->stateMutex);
+				sd->isESRGAN = false;
+			}
+			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Failed to create upscaler context");
+		}
 		sd->isModelLoading = false;
 		sd->activeTask = ofxStableDiffusionTask::None;
 		task = ofxStableDiffusionTask::None;
