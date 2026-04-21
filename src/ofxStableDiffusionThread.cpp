@@ -21,16 +21,31 @@ std::mutex& generationCallbackMutex() {
 	return mutex;
 }
 
+class ProgressCallbackGuard {
+public:
+	ProgressCallbackGuard(std::mutex& mutex, sd_progress_cb_t cb, void* data)
+		: lock(mutex) {
+		sd_set_progress_callback(cb, data);
+	}
+
+	~ProgressCallbackGuard() {
+		sd_set_progress_callback(nullptr, nullptr);
+	}
+
+	ProgressCallbackGuard(const ProgressCallbackGuard&) = delete;
+	ProgressCallbackGuard& operator=(const ProgressCallbackGuard&) = delete;
+
+private:
+	std::unique_lock<std::mutex> lock;
+};
+
 void threadProgressCallback(int step, int steps, float time, void* data) {
 	auto* thread = static_cast<stableDiffusionThread*>(data);
 	if (thread && thread->task == ofxStableDiffusionTask::ImageToVideo) {
 		if (thread->videoTaskData.progressCallback) {
 			try {
 				if (thread->videoTaskData.animationProgressEnabled) {
-					const int stepsPerFrame =
-						std::max(1, thread->videoTaskData.animationSampleSteps > 0 ?
-							thread->videoTaskData.animationSampleSteps :
-							steps);
+					const int stepsPerFrame = std::max(1, steps);
 					const int totalSteps = std::max(1, thread->videoTaskData.animationFrameCount) * stepsPerFrame;
 					const int compositeStep =
 						(thread->videoTaskData.animationFrameIndex * stepsPerFrame) +
@@ -161,6 +176,10 @@ stableDiffusionThread::~stableDiffusionThread() {
 	if (isThreadRunning()) {
 		waitForThread(true);
 	}
+	{
+		std::lock_guard<std::mutex> callbackLock(generationCallbackMutex());
+		sd_set_progress_callback(nullptr, nullptr);
+	}
 	clearContexts();
 }
 
@@ -286,6 +305,8 @@ void stableDiffusionThread::threadedFunction() {
 				sd->isESRGAN = false;
 				sd->esrganPath.clear();
 			}
+			contextTaskData.upscalerSettings.enabled = false;
+			contextTaskData.upscalerSettings.modelPath.clear();
 			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Failed to create upscaler context");
 		}
 		sd->isModelLoading = false;
@@ -304,7 +325,19 @@ void stableDiffusionThread::threadedFunction() {
 		return;
 	}
 
+	const bool upscalerAvailable = isUpscalerCtxLoaded && upscalerCtx;
+
 	if (task == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo) {
+		if (videoTaskData.upscalerSettings.enabled && !upscalerAvailable) {
+			videoTaskData.upscalerSettings.enabled = false;
+			sd->setLastError(
+				ofxStableDiffusionErrorCode::UpscaleFailed,
+				"Upscaler context is not available for video generation");
+			sd->activeTask = ofxStableDiffusionTask::None;
+			task = ofxStableDiffusionTask::None;
+			return;
+		}
+
 		if (videoTaskData.request.hasAnimation()) {
 			const int frameCount = std::max(0, videoTaskData.request.frameCount);
 			std::vector<OwnedImage> generatedFrames;
@@ -320,12 +353,10 @@ void stableDiffusionThread::threadedFunction() {
 			videoTaskData.animationSampleSteps = videoTaskData.request.sampleSteps;
 
 			{
-				std::lock_guard<std::mutex> callbackLock(generationCallbackMutex());
-				if (videoTaskData.progressCallback) {
-					sd_set_progress_callback(threadProgressCallback, this);
-				} else {
-					sd_set_progress_callback(nullptr, nullptr);
-				}
+				ProgressCallbackGuard progressGuard(
+					generationCallbackMutex(),
+					videoTaskData.progressCallback ? threadProgressCallback : nullptr,
+					videoTaskData.progressCallback ? this : nullptr);
 
 				for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
 					videoTaskData.animationFrameIndex = frameIndex;
@@ -422,8 +453,6 @@ void stableDiffusionThread::threadedFunction() {
 					ofxSdReleaseImageArray(frameOutput, 1);
 					generatedFrames.push_back(std::move(generatedFrame));
 				}
-
-				sd_set_progress_callback(nullptr, nullptr);
 			}
 
 			videoTaskData.animationProgressEnabled = false;
@@ -470,14 +499,11 @@ void stableDiffusionThread::threadedFunction() {
 		int generatedFrameCount = 0;
 		sd_image_t* output = nullptr;
 		{
-			std::lock_guard<std::mutex> callbackLock(generationCallbackMutex());
-			if (videoTaskData.progressCallback) {
-				sd_set_progress_callback(threadProgressCallback, this);
-			} else {
-				sd_set_progress_callback(nullptr, nullptr);
-			}
+			ProgressCallbackGuard progressGuard(
+				generationCallbackMutex(),
+				videoTaskData.progressCallback ? threadProgressCallback : nullptr,
+				videoTaskData.progressCallback ? this : nullptr);
 			output = generate_video(sdCtx, &params, &generatedFrameCount);
-			sd_set_progress_callback(nullptr, nullptr);
 		}
 		const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
 		if (!output || generatedFrameCount <= 0) {
@@ -505,6 +531,17 @@ void stableDiffusionThread::threadedFunction() {
 		ofxStableDiffusionNativeAdapter::buildEffectivePrompt(imageTaskData.request);
 	std::vector<ofPixels> pmPixels;
 	std::vector<sd_image_t> pmImageViews;
+
+	if (imageTaskData.upscalerSettings.enabled && !upscalerAvailable) {
+		imageTaskData.upscalerSettings.enabled = false;
+		sd->setLastError(
+			ofxStableDiffusionErrorCode::UpscaleFailed,
+			"Upscaler context is not available for image generation");
+		sd->activeTask = ofxStableDiffusionTask::None;
+		task = ofxStableDiffusionTask::None;
+		return;
+	}
+
 	sd_img_gen_params_t params =
 		ofxStableDiffusionNativeAdapter::buildImageParams(
 			imageTaskData,
@@ -515,14 +552,11 @@ void stableDiffusionThread::threadedFunction() {
 			pmImageViews);
 	sd_image_t* output = nullptr;
 	{
-		std::lock_guard<std::mutex> callbackLock(generationCallbackMutex());
-		if (imageTaskData.progressCallback) {
-			sd_set_progress_callback(threadProgressCallback, this);
-		} else {
-			sd_set_progress_callback(nullptr, nullptr);
-		}
+		ProgressCallbackGuard progressGuard(
+			generationCallbackMutex(),
+			imageTaskData.progressCallback ? threadProgressCallback : nullptr,
+			imageTaskData.progressCallback ? this : nullptr);
 		output = generate_image(sdCtx, &params);
-		sd_set_progress_callback(nullptr, nullptr);
 	}
 
 	if (output && imageTaskData.upscalerSettings.enabled) {
