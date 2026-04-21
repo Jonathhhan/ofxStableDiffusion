@@ -524,6 +524,32 @@ std::vector<ofxStableDiffusionLora> ofxStableDiffusion::getLoras() const {
 	return loras;
 }
 
+std::vector<std::pair<std::string, std::string>> ofxStableDiffusion::listLoras() const {
+	std::vector<std::pair<std::string, std::string>> results;
+	const std::string targetDir = loraModelDir;
+	if (targetDir.empty()) {
+		return results;
+	}
+
+	ofDirectory dir(targetDir);
+	if (!dir.exists()) {
+		return results;
+	}
+	dir.allowExt("safetensors");
+	dir.allowExt("ckpt");
+	dir.allowExt("pt");
+	dir.allowExt("bin");
+	dir.listDir();
+
+	for (std::size_t i = 0; i < dir.size(); ++i) {
+		const ofFile& file = dir.getFile(static_cast<int>(i));
+		if (file.isFile()) {
+			results.emplace_back(file.getBaseName(), file.getAbsolutePath());
+		}
+	}
+	return results;
+}
+
 void ofxStableDiffusion::reloadEmbeddings(const std::string& embedDir) {
 	ofxStableDiffusionContextSettings settings = getContextSettings();
 	if (!embedDir.empty()) {

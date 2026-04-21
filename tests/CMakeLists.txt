@@ -113,3 +113,15 @@ target_include_directories(test_long_video_workflow PRIVATE
 )
 
 add_test(NAME long_video_workflow COMMAND test_long_video_workflow)
+
+add_executable(test_lora_discovery
+    test_lora_discovery.cpp
+)
+
+target_include_directories(test_lora_discovery PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME lora_discovery COMMAND test_lora_discovery)

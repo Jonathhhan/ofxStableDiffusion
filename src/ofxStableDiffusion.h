@@ -73,6 +73,9 @@ public:
 	void setLoras(const std::vector<ofxStableDiffusionLora>& loras_);
 	std::vector<ofxStableDiffusionLora> getLoras() const;
 
+	/// Query available LoRA files in the loraModelDir; returns name and absolute path pairs.
+	std::vector<std::pair<std::string, std::string>> listLoras() const;
+
 	/// Reload embeddings by rebuilding the context with the current (or provided) embed directory.
 	void reloadEmbeddings(const std::string& embedDir = "");
 
