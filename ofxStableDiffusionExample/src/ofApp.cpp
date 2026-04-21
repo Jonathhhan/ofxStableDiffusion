@@ -328,7 +328,6 @@ ofxStableDiffusionContextSettings ofApp::buildContextSettings() const {
 	settings.freeParamsImmediately = freeParamsImmediately;
 	settings.nThreads = nThreads;
 	settings.weightType = wType;
-	settings.backend = backendPreference;
 	settings.rngType = rngType;
 	settings.schedule = schedule;
 	settings.keepClipOnCpu = keepClipOnCpu;
@@ -414,8 +413,6 @@ void ofApp::setup() {
 	selectionModeEnum = ofxStableDiffusionImageSelectionMode::KeepOrder;
 	sampleMethod = "DPMPP2Mv2_SAMPLE_METHOD";
 	sampleMethodEnum = DPMPP2Mv2_SAMPLE_METHOD;
-	backendMode = "CUDA";
-	backendPreference = SD_BACKEND_CUDA;
 	videoMode = "Standard";
 	interpolationMode = "Smooth";
 	promptIsEdited = true;
@@ -771,25 +768,6 @@ void ofApp::draw() {
 		}
 		ImGui::SameLine(0, 5);
 		ImGui::Text("%s", stackedIdEmbedDir.empty() ? "No PhotoMaker model selected" : stackedIdEmbedDir.c_str());
-		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Backend", backendMode, ImGuiComboFlags_NoArrowButton)) {
-			for (int n = 0; n < IM_ARRAYSIZE(backendArray); n++) {
-				const bool is_selected = (backendMode == backendArray[n]);
-				if (ImGui::Selectable(backendArray[n], is_selected)) {
-					backendMode = backendArray[n];
-					backendPreference =
-						n == 0 ? SD_BACKEND_CUDA :
-						n == 1 ? SD_BACKEND_VULKAN :
-						SD_BACKEND_CPU;
-				}
-				if (is_selected) {
-					ImGui::SetItemDefaultFocus();
-				}
-			}
-			ImGui::EndCombo();
-		}
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::TextWrapped("CUDA prefers CUDA first and falls back to Vulkan, then CPU if needed.");
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Button("Load Context")) {
 			refreshModelContext();

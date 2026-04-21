@@ -13,6 +13,10 @@
 - A small example-side `Holoscan Bridge` panel for starting/stopping the bridge MVP, reusing current prompts, submitting the loaded image, and previewing the most recent bridge result.
 - `ofxStableDiffusionVideoWorkflowHelpers.h` with reusable video-generation presets, prompt-workflow validation, and richer render-manifest export helpers for request/result based pipelines.
 
+### Changed
+
+- Default stable-diffusion.cpp vendoring is pinned to upstream release `master-585-44cca3d` (published 2026-04-19) for compatibility stability.
+
 ## 1.2.0 - 2026-04-17
 
 ### Added

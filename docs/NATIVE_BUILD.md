@@ -109,6 +109,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\download-stable-diffusion-rel
 The vendored tree includes the required submodules so the native rebuild scripts
 can run end-to-end.
 
+- Upstream release tag: `master-585-44cca3d` (published 2026-04-19)
+- Vendored on: `2026-04-21`
+- Default rebuilds use this release tag unless you override it via
+  `--source-release-tag` / `-SourceReleaseTag`.
+
 ## Header Notes
 
 Current upstream master uses a newer parameter-struct based C API. The addon

@@ -1276,7 +1276,6 @@ ofxStableDiffusionContextSettings ofxStableDiffusion::captureContextSettingsNoLo
 	settings.freeParamsImmediately = freeParamsImmediately;
 	settings.nThreads = nThreads;
 	settings.weightType = wType;
-	settings.backend = backend;
 	settings.rngType = rngType;
 	settings.schedule = schedule;
 	settings.prediction = prediction;
@@ -1314,7 +1313,6 @@ void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSet
 	freeParamsImmediately = resolvedSettings.freeParamsImmediately;
 	nThreads = resolvedSettings.nThreads;
 	wType = resolvedSettings.weightType;
-	backend = resolvedSettings.backend;
 	rngType = resolvedSettings.rngType;
 	schedule = resolvedSettings.schedule;
 	prediction = resolvedSettings.prediction;

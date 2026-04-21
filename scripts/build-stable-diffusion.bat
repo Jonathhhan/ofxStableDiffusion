@@ -150,7 +150,7 @@ echo   --gpu, --cuda          Enable CUDA backend
 echo   --vulkan               Enable Vulkan backend
 echo   --metal                Enable Metal backend
 echo   --clean                Remove previous build directory before building
-echo   --source-release-tag TAG       Override the upstream release tag used for the source snapshot ^(default: latest release^)
+echo   --source-release-tag TAG       Override the upstream release tag used for the source snapshot ^(default: master-585-44cca3d^)
 echo   --dry-run              Print commands without running them
 echo   --config NAME          Build configuration ^(default: Release^)
 echo   --jobs N               Parallel build jobs
