@@ -185,3 +185,9 @@ target_include_directories(test_sampling_helpers PRIVATE
 )
 
 add_test(NAME sampling_helpers COMMAND test_sampling_helpers)
+
+add_executable(test_realtime_session
+    test_realtime_session.cpp
+)
+
+add_test(NAME realtime_session COMMAND test_realtime_session)

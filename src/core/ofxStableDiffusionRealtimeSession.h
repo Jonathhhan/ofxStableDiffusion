@@ -2,7 +2,11 @@
 
 #include "ofMain.h"
 #include "ofxStableDiffusionTypes.h"
+#include <deque>
 #include <functional>
+#include <mutex>
+
+class ofxStableDiffusion;
 
 /// Real-time generation mode
 enum class ofxStableDiffusionRealtimeMode {
@@ -61,12 +65,28 @@ public:
 	/// @return True if session started successfully
 	bool start(const ofxStableDiffusionRealtimeSettings& settings);
 
+	/// Start real-time generation session and attach a generator in one step.
+	/// @param settings Session configuration
+	/// @param sd Generator to use for all real-time generations
+	/// @return True if session started successfully
+	bool start(const ofxStableDiffusionRealtimeSettings& settings, ofxStableDiffusion& sd);
+
 	/// Stop real-time generation session
 	void stop();
 
 	/// Check if session is active
 	/// @return True if session is running
 	bool isActive() const;
+
+	/// Attach or detach the ofxStableDiffusion instance used for generation.
+	/// Must be called before submit() or warmup() will do real work.
+	/// Pass nullptr to detach.
+	/// @param sd Pointer to the generator (not owned by this session)
+	void setGenerator(ofxStableDiffusion* sd);
+
+	/// Poll for completed generations and dispatch result/latency callbacks.
+	/// Call this every frame from the application update() method.
+	void update();
 
 	/// Submit a real-time generation request
 	/// @param request Lightweight request for real-time generation
@@ -126,5 +146,12 @@ private:
 
 	bool active = false;
 	std::mutex requestMutex;
-	std::vector<float> latencyHistory;
+	std::deque<float> latencyHistory;
+
+	// Generator state (main-thread-only)
+	ofxStableDiffusion* generator = nullptr;
+	bool generationInFlight = false;
+	bool hasPendingRequest = false;
+	bool warmingUp = false;
+	uint64_t generationStartMicros = 0;
 };
