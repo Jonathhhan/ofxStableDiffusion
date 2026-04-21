@@ -150,6 +150,19 @@ inline bool familySupportsImageGeneration(ofxStableDiffusionModelFamily family) 
 
 inline bool familySupportsVideo(ofxStableDiffusionModelFamily family) {
 	switch (family) {
+	case ofxStableDiffusionModelFamily::WAN:
+	case ofxStableDiffusionModelFamily::WANI2V:
+	case ofxStableDiffusionModelFamily::WANTI2V:
+	case ofxStableDiffusionModelFamily::WANFLF2V:
+	case ofxStableDiffusionModelFamily::WANVACE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+inline bool familyRequiresInputImageForVideo(ofxStableDiffusionModelFamily family) {
+	switch (family) {
 	case ofxStableDiffusionModelFamily::WANI2V:
 	case ofxStableDiffusionModelFamily::WANTI2V:
 	case ofxStableDiffusionModelFamily::WANFLF2V:

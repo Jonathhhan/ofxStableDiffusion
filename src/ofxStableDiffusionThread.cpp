@@ -228,7 +228,8 @@ void stableDiffusionThread::threadedFunction() {
 		std::vector<std::string> embeddingNames;
 		std::vector<std::string> embeddingPaths;
 		std::vector<sd_embedding_t> embeddings;
-		const auto describeMissingPaths = [&contextTaskData]() {
+		const auto& contextSettings = contextTaskData.contextSettings;
+		const auto describeMissingPaths = [&contextSettings]() {
 			std::vector<std::string> missing;
 			const auto addIfMissing = [&missing](const std::string& path, const char* label) {
 				if (path.empty()) {
@@ -239,13 +240,13 @@ void stableDiffusionThread::threadedFunction() {
 					missing.push_back(std::string(label) + ": " + p.string());
 				}
 			};
-			addIfMissing(contextTaskData.contextSettings.modelPath, "model");
-			addIfMissing(contextTaskData.contextSettings.diffusionModelPath, "diffusion");
-			addIfMissing(contextTaskData.contextSettings.clipLPath, "clip_l");
-			addIfMissing(contextTaskData.contextSettings.clipGPath, "clip_g");
-			addIfMissing(contextTaskData.contextSettings.t5xxlPath, "text_encoder");
-			addIfMissing(contextTaskData.contextSettings.vaePath, "vae");
-			addIfMissing(contextTaskData.contextSettings.controlNetPath, "controlnet");
+			addIfMissing(contextSettings.modelPath, "model");
+			addIfMissing(contextSettings.diffusionModelPath, "diffusion");
+			addIfMissing(contextSettings.clipLPath, "clip_l");
+			addIfMissing(contextSettings.clipGPath, "clip_g");
+			addIfMissing(contextSettings.t5xxlPath, "text_encoder");
+			addIfMissing(contextSettings.vaePath, "vae");
+			addIfMissing(contextSettings.controlNetPath, "controlnet");
 			return missing;
 		};
 		bool contextErrorReported = false;

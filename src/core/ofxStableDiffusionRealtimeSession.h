@@ -187,7 +187,7 @@ private:
 	ofxStableDiffusionResult lastResult;
 
 	bool active = false;
-	std::mutex requestMutex;
+	mutable std::mutex requestMutex;
 	std::deque<float> latencyHistory;
 
 	// Generator state (main-thread-only)

@@ -178,7 +178,6 @@ inline sd_ctx_params_t buildContextParams(
 	params.free_params_immediately = settings.freeParamsImmediately;
 	params.n_threads = settings.nThreads;
 	params.wtype = settings.weightType;
-	params.backend = settings.backend;
 	params.rng_type = settings.rngType;
 	params.sampler_rng_type = settings.rngType;
 	params.prediction = settings.prediction;
