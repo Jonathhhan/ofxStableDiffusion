@@ -22,7 +22,7 @@ ofxStableDiffusionExample/bin/libs/
 ofxStableDiffusionExample/bin/data/models/
 
 # Native staging output
-libs/stable-diffusion/lib/vs/*.dll
+libs/stable-diffusion/lib/
 
 # CMake / test output
 Testing/
