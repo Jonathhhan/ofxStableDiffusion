@@ -25,16 +25,16 @@ void ofxStableDiffusionProgressTracker::update(int currentStep, int currentBatch
 	currentInfo.currentBatch = currentBatch;
 	currentInfo.elapsedTimeSeconds = elapsedSeconds;
 
-	uint64_t nowMicros = ofGetElapsedTimeMicros();
+	const uint64_t nowMicros = ofGetElapsedTimeMicros();
 
 	// Calculate step time
 	if (currentStep > 0 && lastUpdateMicros > 0) {
-		float stepTime = (nowMicros - lastUpdateMicros) / 1000000.0f;
+		const float stepTime = (nowMicros - lastUpdateMicros) / 1000000.0f;
 		stepTimes.push_back(stepTime);
 
 		// Keep only recent history
 		if (stepTimes.size() > maxHistorySize) {
-			stepTimes.erase(stepTimes.begin());
+			stepTimes.pop_front();
 		}
 	}
 
@@ -156,7 +156,7 @@ float ofxStableDiffusionProgressTracker::getAverageStepTime() const {
 	float weightSum = 0.0f;
 	float alpha = 0.7f;  // Decay factor
 
-	for (size_t i = 0; i < stepTimes.size(); ++i) {
+	for (std::size_t i = 0; i < stepTimes.size(); ++i) {
 		float weight = std::pow(alpha, stepTimes.size() - i - 1);
 		weightedSum += stepTimes[i] * weight;
 		weightSum += weight;

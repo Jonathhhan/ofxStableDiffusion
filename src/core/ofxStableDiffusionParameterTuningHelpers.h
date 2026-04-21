@@ -1,9 +1,8 @@
 #pragma once
 
 #include "ofxStableDiffusionCapabilityHelpers.h"
+#include "ofxStableDiffusionStringUtils.h"
 
-#include <algorithm>
-#include <cctype>
 #include <string>
 
 struct ofxStableDiffusionImageParameterProfile {
@@ -56,17 +55,8 @@ struct ofxStableDiffusionVideoParameterProfile {
 
 namespace ofxStableDiffusionParameterTuningHelpers {
 
-inline std::string toLowerCopy(std::string value) {
-	std::transform(
-		value.begin(),
-		value.end(),
-		value.begin(),
-		[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-	return value;
-}
-
 inline bool isTurboLikeModel(const ofxStableDiffusionContextSettings& settings) {
-	const std::string descriptor = toLowerCopy(
+	const std::string descriptor = ofxSdToLowerCopy(
 		settings.modelPath + " " +
 		settings.diffusionModelPath + " " +
 		settings.clipLPath + " " +

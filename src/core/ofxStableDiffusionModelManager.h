@@ -50,7 +50,7 @@ struct ofxStableDiffusionModelCacheEntry {
 };
 
 /// Model loading progress callback
-typedef std::function<void(const std::string& modelPath, float progress, const std::string& stage)> ofxModelLoadProgressCallback;
+using ofxModelLoadProgressCallback = std::function<void(const std::string& modelPath, float progress, const std::string& stage)>;
 
 /// Model Manager for preloading and caching models
 class ofxStableDiffusionModelManager {
