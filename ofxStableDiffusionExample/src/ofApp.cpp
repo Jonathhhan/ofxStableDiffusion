@@ -769,11 +769,17 @@ void ofApp::draw() {
 		ImGui::SameLine(0, 5);
 		ImGui::Text("%s", stackedIdEmbedDir.empty() ? "No PhotoMaker model selected" : stackedIdEmbedDir.c_str());
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Button("Load Context")) {
+		const bool loadContextPressed = ImGui::Button("Load Context");
+		const bool loadContextClicked =
+			loadContextPressed && ImGui::IsItemClicked(ImGuiMouseButton_Left);
+		if (loadContextClicked) {
 			refreshModelContext();
 		}
 		ImGui::SameLine(0, 5);
-		if (ImGui::Button("Unload Context")) {
+		const bool unloadContextPressed = ImGui::Button("Unload Context");
+		const bool unloadContextClicked =
+			unloadContextPressed && ImGui::IsItemClicked(ImGuiMouseButton_Left);
+		if (unloadContextClicked) {
 			stableDiffusion.freeSdCtx();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
@@ -1149,7 +1155,9 @@ void ofApp::draw() {
 	ImGui::Dummy(ImVec2(0, 10));
 	const auto capabilitiesForGenerate = stableDiffusion.getCapabilities();
 	const bool modelReady = capabilitiesForGenerate.contextConfigured;
-	const bool needsInputImage = usesInputImageMode() || isImageToVideo;
+	const bool needsInputImage =
+		usesInputImageMode() ||
+		(isImageToVideo && capabilitiesForGenerate.videoRequiresInputImage);
 	const bool hasInputImage = inputImage.data != nullptr;
 	const bool needsMaskImage = imageModeEnum == ofxStableDiffusionImageMode::Inpainting;
 	const bool maskReady = needsMaskImage ? (useMaskGuide && maskGuideInput.data != nullptr) : true;
@@ -1158,6 +1166,8 @@ void ofApp::draw() {
 	}
 	if (needsInputImage && !hasInputImage) {
 		ImGui::TextWrapped("Load an input image for the selected mode.");
+	} else if (isImageToVideo && !capabilitiesForGenerate.videoRequiresInputImage) {
+		ImGui::TextWrapped("Current model supports text-to-video, so an input image is optional.");
 	}
 	if (needsMaskImage && !maskReady) {
 		ImGui::TextWrapped("Inpainting needs a mask image. Enable Use Mask and load one before generating.");

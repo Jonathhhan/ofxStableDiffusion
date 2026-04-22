@@ -236,6 +236,8 @@ inline ofxStableDiffusionCapabilities resolveCapabilities(
 	capabilities.restyle = imageGeneration;
 	capabilities.inpainting = imageGeneration;
 	capabilities.imageToVideo = familySupportsVideo(capabilities.modelFamily);
+	capabilities.videoRequiresInputImage =
+		familyRequiresInputImageForVideo(capabilities.modelFamily);
 	capabilities.videoEndFrame = familySupportsVideoEndFrame(capabilities.modelFamily);
 	// The long-video animation wrapper requires end-frame compositing support
 	capabilities.videoAnimation = capabilities.videoEndFrame;

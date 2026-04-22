@@ -1485,7 +1485,8 @@ bool ofxStableDiffusion::validateVideoRequestAndSetError(const ofxStableDiffusio
 		setLastError(validation.code, validation.message);
 		return false;
 	}
-	if (request.initImage.data == nullptr) {
+	const ofxStableDiffusionCapabilities capabilities = getCapabilities();
+	if (capabilities.videoRequiresInputImage && request.initImage.data == nullptr) {
 		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Video generation requires an input image");
 		return false;
 	}

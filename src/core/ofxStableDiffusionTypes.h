@@ -117,6 +117,7 @@ struct ofxStableDiffusionCapabilities {
 	bool restyle = false;
 	bool inpainting = false;
 	bool imageToVideo = false;
+	bool videoRequiresInputImage = true;
 	bool videoEndFrame = false;
 	bool videoAnimation = false;
 	bool videoMetadataExport = true;
