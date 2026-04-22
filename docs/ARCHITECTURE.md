@@ -101,3 +101,5 @@ The recommended integration model is:
 
 This keeps the addon safer across upstream `ggml` changes, backend toggles, and
 ABI differences.
+
+More detail: [OFXGGML_BRIDGE.md](OFXGGML_BRIDGE.md)

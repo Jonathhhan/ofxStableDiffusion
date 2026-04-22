@@ -273,6 +273,10 @@ Why:
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+There is already an addon-level bridge seam on the `ofxGgml` side through
+`ofxGgmlStableDiffusionAdapters.h`. Notes from comparing the staged public
+surfaces of both addons live here: [docs/OFXGGML_BRIDGE.md](docs/OFXGGML_BRIDGE.md)
+
 ## Native Runtime
 
 The addon stages native artifacts into addon-local paths:
