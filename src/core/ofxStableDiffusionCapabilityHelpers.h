@@ -239,8 +239,9 @@ inline ofxStableDiffusionCapabilities resolveCapabilities(
 	capabilities.videoRequiresInputImage =
 		familyRequiresInputImageForVideo(capabilities.modelFamily);
 	capabilities.videoEndFrame = familySupportsVideoEndFrame(capabilities.modelFamily);
-	// The long-video animation wrapper requires end-frame compositing support
-	capabilities.videoAnimation = capabilities.videoEndFrame;
+	// Prompt morphing and seed sequencing only require video generation support.
+	// End-frame compositing is a narrower capability that some video models do not expose.
+	capabilities.videoAnimation = capabilities.imageToVideo;
 	capabilities.lora = imageGeneration || capabilities.imageToVideo;
 	capabilities.embeddings = imageGeneration;
 	capabilities.controlNet =
