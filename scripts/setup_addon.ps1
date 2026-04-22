@@ -5,7 +5,9 @@ param(
     [Alias('Gpu')][switch]$Cuda,
     [switch]$Vulkan,
     [switch]$Metal,
-    [switch]$Auto,
+    [switch]$All,
+    [ValidateSet('cpu-only', 'cuda', 'vulkan', 'metal')]
+    [string]$SelectBackend = "",
     [string]$GgmlReleaseTag = "",
     [switch]$Clean,
     [switch]$SkipNative,
@@ -21,6 +23,7 @@ function Write-Step {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $nativeBuilder = Join-Path $scriptRoot 'build-stable-diffusion.ps1'
+$backendSelector = Join-Path $scriptRoot 'select-stable-diffusion-backend.ps1'
 
 Write-Host ""
 Write-Host "  ============================================="
@@ -48,8 +51,8 @@ if (-not $SkipNative) {
     if ($Metal) {
         $nativeArgs.Metal = $true
     }
-    if ($Auto) {
-        $nativeArgs.Auto = $true
+    if ($All) {
+        $nativeArgs.All = $true
     }
     if (-not [string]::IsNullOrWhiteSpace($GgmlReleaseTag)) {
         $nativeArgs.GgmlReleaseTag = $GgmlReleaseTag
@@ -61,8 +64,18 @@ if (-not $SkipNative) {
         $nativeArgs.DryRun = $true
     }
     & $nativeBuilder @nativeArgs
+} elseif (-not [string]::IsNullOrWhiteSpace($SelectBackend)) {
+    Write-Step "Step 1/1: Skipping native build and selecting staged backend variant"
 } else {
     Write-Step "Step 1/1: Skipping stable-diffusion native runtime (--skip-native)"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($SelectBackend)) {
+    Write-Step "Selecting staged backend variant"
+    $selectorArgs = @{
+        Backend = $SelectBackend
+    }
+    & $backendSelector @selectorArgs
 }
 
 Write-Host ""

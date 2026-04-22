@@ -74,15 +74,13 @@ class ofApp : public ofBaseApp {
 		int previewSize;
 		int selectedImage;
 		int previousSelectedImage;
-		const char* imageSizeArray[8] = {"128", "256", "384", "512", "640", "768", "896", "1024"};
-		const char* imageWidth;
-		const char* imageHeight;
 		const char* imageModeArray[6] = {"TextToImage", "ImageToImage", "InstructImage", "Variation", "Restyle", "Inpainting"};
 		const char* imageMode;
 		const char* selectionModeArray[3] = {"KeepOrder", "Rerank", "BestOnly"};
 		const char* selectionMode;
 		const char* sampleMethodArray[8] = {"EULER_A_SAMPLE_METHOD", "EULER_SAMPLE_METHOD", "HEUN_SAMPLE_METHOD", "DPM2_SAMPLE_METHOD", "DPMPP2S_A_SAMPLE_METHOD", "DPMPP2M_SAMPLE_METHOD", "DPMPP2Mv2_SAMPLE_METHOD", "LCM_SAMPLE_METHOD"};
 		const char* sampleMethod;
+		const char* highNoiseSampleMethod;
 		const char* videoModeArray[4] = {"Standard", "Loop", "PingPong", "Boomerang"};
 		const char* videoMode;
 		const char* interpolationModeArray[5] = {"Linear", "Smooth", "EaseIn", "EaseOut", "EaseInOut"};
@@ -116,6 +114,20 @@ class ofApp : public ofBaseApp {
 		bool keepClipOnCpu;
 		bool keepControlNetCpu;
 		bool keepVaeOnCpu;
+		bool flashAttn;
+		bool diffusionFlashAttn;
+		bool useCustomEta;
+		float eta;
+		bool useCustomFlowShift;
+		float flowShift;
+		bool useHighNoiseOverrides;
+		sample_method_t highNoiseSampleMethodEnum;
+		int highNoiseSampleSteps;
+		float highNoiseCfgScale;
+		bool useCustomHighNoiseEta;
+		float highNoiseEta;
+		bool useCustomHighNoiseFlowShift;
+		float highNoiseFlowShift;
 		float styleStrength;
 		bool normalizeInput;
 		int nThreads;
@@ -161,6 +173,7 @@ class ofApp : public ofBaseApp {
 		bool useEndFrame = false;
 		bool useMaskGuide = false;
 		bool useControlGuide = false;
+		int nativeLogLevelIndex = 0;
 		int seedIncrement = 1;
 		ofxStableDiffusionInterpolationMode interpolationModeEnum =
 			ofxStableDiffusionInterpolationMode::Smooth;

@@ -13,6 +13,13 @@ of relying on a global install.
   Windows import library and runtime DLL
 - `libs/stable-diffusion/lib/Linux64`
   Linux shared library staging location
+- `libs/ggml/include`
+  Staged `ggml` public headers copied from the vendored `ggml` tree
+- `libs/ggml/lib/vs`
+  Separately staged `ggml` import/static libraries emitted by the native build
+- `libs/variants/<backend>/...`
+  Snapshot of one built backend variant, kept so the canonical addon paths can
+  be switched later without a full rebuild
 
 ## Why It Is Standalone
 
@@ -38,7 +45,7 @@ The right place to integrate with `ofxGgml` is the addon/API layer.
 Or use the addon-level setup entrypoint:
 
 ```bat
-scripts\setup_windows.bat --auto
+scripts\setup_windows.bat
 ```
 
 ### Linux / macOS-style shell
@@ -49,21 +56,58 @@ scripts\setup_windows.bat --auto
 
 ## Backend Flags
 
-The native build scripts now mirror the backend flag style used by `ofxGgml`.
+The native build scripts now select one native backend per build. If you do not
+pass a backend flag, they default to CPU-only.
 
-- `--auto` / `-Auto`
-  Auto-detect available GPU backends and enable them when the required SDKs are present
 - `--cpu`, `--cpu-only` / `-CpuOnly`
-  Disable GPU backends and build CPU-only
+  Build CPU-only
 - `--gpu`, `--cuda` / `-Cuda`
-  Enable CUDA explicitly
+  Build with CUDA
 - `--vulkan` / `-Vulkan`
-  Enable Vulkan explicitly
+  Build with Vulkan
 - `--metal` / `-Metal`
-  Enable Metal explicitly where supported
+  Build with Metal where supported
+- `--all` / `-All`
+  Build every available backend variant and leave the canonical addon runtime on
+  the best one in this priority order: `cuda`, then `vulkan`, then `cpu-only`
 
 On Windows, `scripts/setup_windows.bat` forwards the same flags into
 `scripts/setup_addon.ps1`, which builds the native runtime.
+
+Each build also snapshots the selected backend under `libs/variants/<backend>`.
+That makes it possible to switch the canonical addon runtime later without
+rebuilding.
+
+In `--all` mode, the script always snapshots `cpu-only` first, then adds any
+detected GPU backends. On Windows that means:
+
+- `cpu-only`
+- `vulkan` when Vulkan is detected
+- `cuda` when CUDA is detected
+
+Because the builds run in that order, the final canonical runtime is left on
+the highest-priority available backend: `cuda` > `vulkan` > `cpu-only`.
+
+## Variant Selection
+
+To install one already-built backend variant into the normal addon paths:
+
+```powershell
+.\scripts\select-stable-diffusion-backend.ps1 -Backend cuda
+```
+
+Or through the batch wrapper:
+
+```bat
+scripts\setup_windows.bat --skip-native --select-backend cuda
+```
+
+Available selector values:
+
+- `cpu-only`
+- `cuda`
+- `vulkan`
+- `metal`
 
 ## Windows Source Snapshot Flow
 
@@ -121,12 +165,22 @@ keeps `libs/stable-diffusion/include/stable-diffusion.h` only as a passthrough
 include to the vendored upstream header, so addon code should use the current
 upstream names directly.
 
-The native rebuild script stages:
+The native rebuild script stages the diffusion runtime pair:
 
 - `stable-diffusion.dll`
 - `stable-diffusion.lib`
 
-It intentionally does not rewrite the addon include path.
+It also stages a separate `ggml` surface when those artifacts are emitted by the
+build:
+
+- `ggml.h`, `gguf.h`, and the rest of `ggml/include/*`
+- `ggml.lib`
+- `ggml-base.lib`
+- `ggml-cpu.lib`
+- backend libs such as `ggml-cuda.lib`, `ggml-vulkan.lib`, and `ggml-metal.lib`
+
+This does not change the addon/runtime boundary by itself. It only makes the
+separately built `ggml` artifacts available under predictable addon-local paths.
 
 ## Recommended Pinning Policy
 

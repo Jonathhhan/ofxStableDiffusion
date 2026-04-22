@@ -7,6 +7,8 @@
 
 namespace {
 
+const char* nativeLogLevelLabels[5] = {"Debug", "Info", "Warn", "Error", "Off"};
+
 std::string lowerCopy(const std::string& value) {
 	std::string lowered = value;
 	std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
@@ -334,6 +336,8 @@ ofxStableDiffusionContextSettings ofApp::buildContextSettings() const {
 	settings.keepControlNetCpu = keepControlNetCpu;
 	settings.keepVaeOnCpu = keepVaeOnCpu;
 	settings.offloadParamsToCpu = offloadParamsToCpu;
+	settings.flashAttn = flashAttn;
+	settings.diffusionFlashAttn = diffusionFlashAttn;
 	return settings;
 }
 
@@ -341,8 +345,6 @@ ofxStableDiffusionContextSettings ofApp::buildContextSettings() const {
 void ofApp::refreshModelContext() {
 	modelName = ofFilePath::getFileName(modelPath.empty() ? diffusionModelPath : modelPath);
 	stableDiffusion.newSdCtx(buildContextSettings());
-	applyRecommendedImageParameters();
-	applyRecommendedVideoParameters();
 	clampCurrentParametersToProfiles();
 }
 
@@ -390,6 +392,17 @@ void ofApp::setup() {
 	keepControlNetCpu = false;
 	keepVaeOnCpu = false;
 	offloadParamsToCpu = false;
+	flashAttn = false;
+	diffusionFlashAttn = false;
+	useCustomEta = false;
+	eta = 0.0f;
+	useCustomFlowShift = false;
+	flowShift = 5.0f;
+	useHighNoiseOverrides = false;
+	useCustomHighNoiseEta = false;
+	highNoiseEta = 0.0f;
+	useCustomHighNoiseFlowShift = false;
+	highNoiseFlowShift = 5.0f;
 	styleStrength = 20;
 	normalizeInput = true;
 	width = 512;
@@ -405,14 +418,16 @@ void ofApp::setup() {
 	wType = SD_TYPE_F16;
 	schedule = SCHEDULER_COUNT;
 	rngType = STD_DEFAULT_RNG;
-	imageWidth = "512";
-	imageHeight = "512";
 	imageMode = "TextToImage";
 	imageModeEnum = ofxStableDiffusionImageMode::TextToImage;
 	selectionMode = "KeepOrder";
 	selectionModeEnum = ofxStableDiffusionImageSelectionMode::KeepOrder;
 	sampleMethod = "DPMPP2Mv2_SAMPLE_METHOD";
 	sampleMethodEnum = DPMPP2Mv2_SAMPLE_METHOD;
+	highNoiseSampleMethod = sampleMethod;
+	highNoiseSampleMethodEnum = sampleMethodEnum;
+	highNoiseSampleSteps = sampleSteps;
+	highNoiseCfgScale = cfgScale;
 	videoMode = "Standard";
 	interpolationMode = "Smooth";
 	promptIsEdited = true;
@@ -452,6 +467,8 @@ void ofApp::setup() {
 		progressSteps = steps;
 		progressTime = time;
 	});
+	stableDiffusion.setNativeLoggingEnabled(true);
+	stableDiffusion.setNativeLogLevel(SD_LOG_DEBUG);
 	configureExampleRanker();
 	setupHoloscanBridge();
 
@@ -769,24 +786,41 @@ void ofApp::draw() {
 		ImGui::SameLine(0, 5);
 		ImGui::Text("%s", stackedIdEmbedDir.empty() ? "No PhotoMaker model selected" : stackedIdEmbedDir.c_str());
 		ImGui::Dummy(ImVec2(0, 10));
-		const bool loadContextPressed = ImGui::Button("Load Context");
-		const bool loadContextClicked =
-			loadContextPressed && ImGui::IsItemClicked(ImGuiMouseButton_Left);
-		if (loadContextClicked) {
+		ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+		if (ImGui::Button("Load Context")) {
 			refreshModelContext();
 		}
+		ImGui::PopItemFlag();
 		ImGui::SameLine(0, 5);
-		const bool unloadContextPressed = ImGui::Button("Unload Context");
-		const bool unloadContextClicked =
-			unloadContextPressed && ImGui::IsItemClicked(ImGuiMouseButton_Left);
-		if (unloadContextClicked) {
+		ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+		if (ImGui::Button("Unload Context")) {
 			stableDiffusion.freeSdCtx();
 		}
+		ImGui::PopItemFlag();
 		ImGui::Dummy(ImVec2(0, 10));
 		if (stableDiffusion.getLastError().empty()) {
 			ImGui::Text("Status: %s", isBusy ? "Running" : "Idle");
 		} else {
 			ImGui::TextWrapped("Status: %s", stableDiffusion.getLastError().c_str());
+		}
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::BeginCombo("Native Logging", nativeLogLevelLabels[nativeLogLevelIndex], ImGuiComboFlags_NoArrowButton)) {
+			for (int n = 0; n < IM_ARRAYSIZE(nativeLogLevelLabels); ++n) {
+				const bool isSelected = (nativeLogLevelIndex == n);
+				if (ImGui::Selectable(nativeLogLevelLabels[n], isSelected)) {
+					nativeLogLevelIndex = n;
+					if (n == 4) {
+						stableDiffusion.setNativeLoggingEnabled(false);
+					} else {
+						stableDiffusion.setNativeLoggingEnabled(true);
+						stableDiffusion.setNativeLogLevel(static_cast<sd_log_level_t>(n));
+					}
+				}
+				if (isSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
 		}
 		if (progressSteps > 0 && isBusy) {
 			ImGui::Dummy(ImVec2(0, 10));
@@ -851,11 +885,6 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("Generate Video", &isImageToVideo);
 		if (ImGui::IsItemEdited()) {
-			if (isImageToVideo) {
-				applyRecommendedVideoParameters();
-			} else {
-				applyRecommendedImageParameters();
-			}
 			clampCurrentParametersToProfiles();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
@@ -904,6 +933,10 @@ void ofApp::draw() {
 		ImGui::Checkbox("CLIP On CPU", &keepClipOnCpu);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("VAE On CPU", &keepVaeOnCpu);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Checkbox("Flash Attention", &flashAttn);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Checkbox("Diffusion Flash Attention", &diffusionFlashAttn);
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("VAE Tiling", &vaeTiling)) {
 				if (!isBusy) {
@@ -966,12 +999,21 @@ void ofApp::draw() {
 			}
 		}
 		if (isImageToVideo) {
+			const auto videoCapabilities = stableDiffusion.getCapabilities();
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::SliderInt(
 				"Video Frames",
 				&videoFrames,
 				videoParameterProfile.minFrameCount,
 				videoParameterProfile.maxFrameCount);
+			if (((videoFrames - 1) % 4) != 0) {
+				const int normalizedFrameCount = ((videoFrames - 1) / 4) * 4 + 1;
+				ImGui::TextColored(
+					ImVec4(1.0f, 0.7f, 0.2f, 1.0f),
+					"Use 4n+1 frames (5, 9, 13, ...). %d would become %d upstream.",
+					videoFrames,
+					normalizedFrameCount);
+			}
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::SliderInt(
 				"FPS",
@@ -1001,34 +1043,47 @@ void ofApp::draw() {
 				ImGui::EndCombo();
 			}
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Checkbox("Prompt Morph", &enablePromptInterpolation);
-			if (enablePromptInterpolation) {
-				ImGui::Dummy(ImVec2(0, 10));
-				Funcs::MyInputTextMultiline(
-					"Prompt B",
-					&promptB,
-					ImVec2(512, 80),
-					ImGuiInputTextFlags_CallbackResize);
-				ImGui::Dummy(ImVec2(0, 10));
-				if (ImGui::BeginCombo("Interpolation", interpolationMode, ImGuiComboFlags_NoArrowButton)) {
-					for (int n = 0; n < IM_ARRAYSIZE(interpolationModeArray); n++) {
-						const bool is_selected = (interpolationMode == interpolationModeArray[n]);
-						if (ImGui::Selectable(interpolationModeArray[n], is_selected)) {
-							interpolationMode = interpolationModeArray[n];
-							interpolationModeEnum = static_cast<ofxStableDiffusionInterpolationMode>(n);
+			if (!videoCapabilities.videoAnimation) {
+				enablePromptInterpolation = false;
+				useSeedSequence = false;
+				ImGui::TextWrapped(
+					"Prompt morph and seed sequence are not supported for the current native video model in the addon wrapper.");
+			} else {
+				ImGui::Checkbox("Prompt Morph", &enablePromptInterpolation);
+				if (enablePromptInterpolation) {
+					ImGui::Dummy(ImVec2(0, 10));
+					Funcs::MyInputTextMultiline(
+						"Prompt B",
+						&promptB,
+						ImVec2(512, 80),
+						ImGuiInputTextFlags_CallbackResize);
+					ImGui::Dummy(ImVec2(0, 10));
+					if (ImGui::BeginCombo("Interpolation", interpolationMode, ImGuiComboFlags_NoArrowButton)) {
+						for (int n = 0; n < IM_ARRAYSIZE(interpolationModeArray); n++) {
+							const bool is_selected = (interpolationMode == interpolationModeArray[n]);
+							if (ImGui::Selectable(interpolationModeArray[n], is_selected)) {
+								interpolationMode = interpolationModeArray[n];
+								interpolationModeEnum = static_cast<ofxStableDiffusionInterpolationMode>(n);
+							}
+							if (is_selected) {
+								ImGui::SetItemDefaultFocus();
+							}
 						}
-						if (is_selected) {
-							ImGui::SetItemDefaultFocus();
-						}
+						ImGui::EndCombo();
 					}
-					ImGui::EndCombo();
+				}
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::Checkbox("Seed Sequence", &useSeedSequence);
+				if (useSeedSequence) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::InputInt("Seed Increment", &seedIncrement, 1, 10);
 				}
 			}
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Checkbox("Seed Sequence", &useSeedSequence);
-			if (useSeedSequence) {
+			ImGui::Checkbox("Custom Flow Shift", &useCustomFlowShift);
+			if (useCustomFlowShift) {
 				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::InputInt("Seed Increment", &seedIncrement, 1, 10);
+				ImGui::SliderFloat("Flow Shift", &flowShift, 0.0f, 10.0f);
 			}
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Checkbox("Use End Frame", &useEndFrame);
@@ -1083,34 +1138,20 @@ void ofApp::draw() {
 			isImageToVideo ? videoParameterProfile.minSampleSteps : imageParameterProfile.minSampleSteps,
 			isImageToVideo ? videoParameterProfile.maxSampleSteps : imageParameterProfile.maxSampleSteps);
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Width", imageWidth, ImGuiComboFlags_NoArrowButton)) {
-			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
-				bool is_selected = (imageWidth == imageSizeArray[n]);
-				if (ImGui::Selectable(imageSizeArray[n], is_selected))
-					imageWidth = imageSizeArray[n];
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-				if (width != atoi(imageWidth)) {
-					width = atoi(imageWidth);
-					allocate();
-				}
+		int nextWidth = width;
+		if (ImGui::InputInt("Width", &nextWidth, 64, 128)) {
+			if (nextWidth > 0 && nextWidth != width) {
+				width = nextWidth;
+				allocate();
 			}
-			ImGui::EndCombo();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Height", imageHeight, ImGuiComboFlags_NoArrowButton)) {
-			for (int n = 0; n < IM_ARRAYSIZE(imageSizeArray); n++) {
-				bool is_selected = (imageHeight == imageSizeArray[n]);
-				if (ImGui::Selectable(imageSizeArray[n], is_selected))
-					imageHeight = imageSizeArray[n];
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-				if (height != atoi(imageHeight)) {
-					height = atoi(imageHeight);
-					allocate();
-				}
+		int nextHeight = height;
+		if (ImGui::InputInt("Height", &nextHeight, 64, 128)) {
+			if (nextHeight > 0 && nextHeight != height) {
+				height = nextHeight;
+				allocate();
 			}
-			ImGui::EndCombo();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Sample Method", sampleMethod, ImGuiComboFlags_NoArrowButton)) {
@@ -1119,11 +1160,65 @@ void ofApp::draw() {
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
 					sampleMethod = sampleMethodArray[n];
 					sampleMethodEnum = (sample_method_t)n;
+					if (!useHighNoiseOverrides) {
+						highNoiseSampleMethod = sampleMethod;
+						highNoiseSampleMethodEnum = sampleMethodEnum;
+					}
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
 			ImGui::EndCombo();
+		}
+		if (isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("Custom Eta", &useCustomEta);
+			if (useCustomEta) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::SliderFloat("Eta", &eta, 0.0f, 1.0f);
+			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("High-Noise Overrides", &useHighNoiseOverrides);
+			if (useHighNoiseOverrides) {
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::SliderFloat(
+					"High-Noise CFG",
+					&highNoiseCfgScale,
+					videoParameterProfile.minCfgScale,
+					videoParameterProfile.maxCfgScale);
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::SliderInt(
+					"High-Noise Steps",
+					&highNoiseSampleSteps,
+					videoParameterProfile.minSampleSteps,
+					videoParameterProfile.maxSampleSteps);
+				ImGui::Dummy(ImVec2(0, 10));
+				if (ImGui::BeginCombo("High-Noise Sample Method", highNoiseSampleMethod, ImGuiComboFlags_NoArrowButton)) {
+					for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
+						const bool is_selected = (highNoiseSampleMethod == sampleMethodArray[n]);
+						if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
+							highNoiseSampleMethod = sampleMethodArray[n];
+							highNoiseSampleMethodEnum = (sample_method_t)n;
+						}
+						if (is_selected) {
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+					ImGui::EndCombo();
+				}
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::Checkbox("Custom High-Noise Eta", &useCustomHighNoiseEta);
+				if (useCustomHighNoiseEta) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("High-Noise Eta", &highNoiseEta, 0.0f, 1.0f);
+				}
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::Checkbox("Custom High-Noise Flow Shift", &useCustomHighNoiseFlowShift);
+				if (useCustomHighNoiseFlowShift) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("High-Noise Flow Shift", &highNoiseFlowShift, 0.0f, 10.0f);
+				}
+			}
 		}
 		if ((isImageToVideo && videoParameterProfile.maxStrength > videoParameterProfile.minStrength) ||
 			(!isImageToVideo && imageParameterProfile.supportsStrength)) {
@@ -1172,11 +1267,7 @@ void ofApp::draw() {
 	if (needsMaskImage && !maskReady) {
 		ImGui::TextWrapped("Inpainting needs a mask image. Enable Use Mask and load one before generating.");
 	}
-	const bool disableGenerate = isBusy || !modelReady || (needsInputImage && !hasInputImage) || !maskReady;
 	ImGui::Dummy(ImVec2(0, 10));
-	if (disableGenerate) {
-		ImGui::BeginDisabled();
-	}
 	if (ImGui::Button("Generate")) {
 		progressStep = 0;
 		progressSteps = 0;
@@ -1199,6 +1290,24 @@ void ofApp::draw() {
 			request.cfgScale = cfgScale;
 			request.sampleMethod = sampleMethodEnum;
 			request.sampleSteps = sampleSteps;
+			if (useCustomEta) {
+				request.eta = eta;
+			}
+			if (useCustomFlowShift) {
+				request.flowShift = flowShift;
+			}
+			request.useHighNoiseOverrides = useHighNoiseOverrides;
+			if (useHighNoiseOverrides) {
+				request.highNoiseCfgScale = highNoiseCfgScale;
+				request.highNoiseSampleMethod = highNoiseSampleMethodEnum;
+				request.highNoiseSampleSteps = highNoiseSampleSteps;
+				if (useCustomHighNoiseEta) {
+					request.highNoiseEta = highNoiseEta;
+				}
+				if (useCustomHighNoiseFlowShift) {
+					request.highNoiseFlowShift = highNoiseFlowShift;
+				}
+			}
 			request.strength = strength;
 			request.seed = seed;
 			request.vaceStrength = vaceStrength;
@@ -1234,6 +1343,9 @@ void ofApp::draw() {
 			request.height = height;
 			request.sampleMethod = sampleMethodEnum;
 			request.sampleSteps = sampleSteps;
+			if (useCustomFlowShift) {
+				request.flowShift = flowShift;
+			}
 			request.strength = strength;
 			request.seed = seed;
 			request.batchCount = batchCount;
@@ -1251,9 +1363,6 @@ void ofApp::draw() {
 			request.inputIdImagesPath = inputIdImagesPath;
 			stableDiffusion.generate(request);
 		}
-	}
-	if (disableGenerate) {
-		ImGui::EndDisabled();
 	}
 	if (totalVideoFrames > 0) {
 		ImGui::Dummy(ImVec2(0, 10));
@@ -1371,6 +1480,8 @@ void ofApp::applyRecommendedImageParameters() {
 void ofApp::applyRecommendedVideoParameters() {
 	videoParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveVideoProfile(
 		stableDiffusion.getContextSettings());
+	width = videoParameterProfile.defaultWidth;
+	height = videoParameterProfile.defaultHeight;
 	cfgScale = videoParameterProfile.defaultCfgScale;
 	sampleSteps = videoParameterProfile.defaultSampleSteps;
 	strength = videoParameterProfile.defaultStrength;
@@ -1378,6 +1489,7 @@ void ofApp::applyRecommendedVideoParameters() {
 	videoFrames = videoParameterProfile.defaultFrameCount;
 	videoFps = videoParameterProfile.defaultFps;
 	vaceStrength = videoParameterProfile.defaultVaceStrength;
+	allocate();
 }
 
 //--------------------------------------------------------------
@@ -1387,25 +1499,6 @@ void ofApp::clampCurrentParametersToProfiles() {
 		imageModeEnum);
 	videoParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveVideoProfile(
 		stableDiffusion.getContextSettings());
-
-	if (isImageToVideo) {
-		ofxStableDiffusionParameterTuningHelpers::clampVideoParametersToProfile(
-			videoParameterProfile,
-			cfgScale,
-			sampleSteps,
-			strength,
-			clipSkip,
-			vaceStrength,
-			videoFrames,
-			videoFps);
-	} else {
-		ofxStableDiffusionParameterTuningHelpers::clampImageParametersToProfile(
-			imageParameterProfile,
-			cfgScale,
-			sampleSteps,
-			strength,
-			clipSkip);
-	}
 }
 
 //--------------------------------------------------------------

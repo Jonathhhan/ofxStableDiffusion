@@ -183,6 +183,19 @@ inline bool familySupportsVideoEndFrame(ofxStableDiffusionModelFamily family) {
 	}
 }
 
+inline bool familySupportsWrapperVideoAnimation(ofxStableDiffusionModelFamily family) {
+	switch (family) {
+	case ofxStableDiffusionModelFamily::WAN:
+	case ofxStableDiffusionModelFamily::WANI2V:
+	case ofxStableDiffusionModelFamily::WANTI2V:
+	case ofxStableDiffusionModelFamily::WANFLF2V:
+	case ofxStableDiffusionModelFamily::WANVACE:
+		return false;
+	default:
+		return false;
+	}
+}
+
 inline bool familySupportsPhotoMaker(ofxStableDiffusionModelFamily family) {
 	return family == ofxStableDiffusionModelFamily::SDXL;
 }
@@ -239,9 +252,7 @@ inline ofxStableDiffusionCapabilities resolveCapabilities(
 	capabilities.videoRequiresInputImage =
 		familyRequiresInputImageForVideo(capabilities.modelFamily);
 	capabilities.videoEndFrame = familySupportsVideoEndFrame(capabilities.modelFamily);
-	// Prompt morphing and seed sequencing only require video generation support.
-	// End-frame compositing is a narrower capability that some video models do not expose.
-	capabilities.videoAnimation = capabilities.imageToVideo;
+	capabilities.videoAnimation = familySupportsWrapperVideoAnimation(capabilities.modelFamily);
 	capabilities.lora = imageGeneration || capabilities.imageToVideo;
 	capabilities.embeddings = imageGeneration;
 	capabilities.controlNet =

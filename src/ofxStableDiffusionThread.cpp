@@ -365,13 +365,21 @@ void stableDiffusionThread::threadedFunction() {
 					OwnedImage blendedInitImage;
 					const sd_image_t& frameInitImage =
 						resolveAnimatedBaseImage(videoTaskData, frameIndex, blendedInitImage);
+					const bool hasFrameInitImage = (frameInitImage.data != nullptr);
 
 					ImageTaskData frameTask;
-					frameTask.task = ofxStableDiffusionTask::ImageToImage;
+					frameTask.task =
+						hasFrameInitImage ?
+							ofxStableDiffusionTask::ImageToImage :
+							ofxStableDiffusionTask::TextToImage;
 					frameTask.contextSettings = videoTaskData.contextSettings;
 					frameTask.upscalerSettings = videoTaskData.upscalerSettings;
-					frameTask.request.mode = ofxStableDiffusionImageMode::ImageToImage;
-					frameTask.request.initImage = frameInitImage;
+					frameTask.request.mode =
+						hasFrameInitImage ?
+							ofxStableDiffusionImageMode::ImageToImage :
+							ofxStableDiffusionImageMode::TextToImage;
+					frameTask.request.initImage =
+						hasFrameInitImage ? frameInitImage : sd_image_t{0, 0, 0, nullptr};
 					frameTask.request.prompt =
 						ofxStableDiffusionGetFramePrompt(videoTaskData.request, frameIndex);
 					frameTask.request.negativePrompt =
@@ -397,7 +405,9 @@ void stableDiffusionThread::threadedFunction() {
 						frameTask.request.cfgScale,
 						frameTask.request.strength
 					});
-					frameTask.initImage.assign(frameInitImage);
+					if (hasFrameInitImage) {
+						frameTask.initImage.assign(frameInitImage);
+					}
 					frameTask.syncViews();
 
 					const std::string effectivePrompt =

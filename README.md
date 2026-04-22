@@ -277,6 +277,15 @@ There is already an addon-level bridge seam on the `ofxGgml` side through
 `ofxGgmlStableDiffusionAdapters.h`. Notes from comparing the staged public
 surfaces of both addons live here: [docs/OFXGGML_BRIDGE.md](docs/OFXGGML_BRIDGE.md)
 
+This addon also now exposes a small bridge helper header for wrapper-level
+integration work:
+
+- `src/bridges/ofxStableDiffusionGgmlBridge.h`
+
+It provides thin helpers such as waiting for idle and checking whether a
+context reload is actually needed, without reaching into low-level runtime
+replacement.
+
 ## Native Runtime
 
 The addon stages native artifacts into addon-local paths:
@@ -284,6 +293,9 @@ The addon stages native artifacts into addon-local paths:
 - `libs/stable-diffusion/include`
 - `libs/stable-diffusion/lib/vs`
 - `libs/stable-diffusion/lib/Linux64`
+- `libs/ggml/include`
+- `libs/ggml/lib/vs`
+- `libs/variants/<backend>/...`
 
 Rebuild helpers:
 
@@ -296,18 +308,28 @@ Rebuild helpers:
 
 More detail: [docs/NATIVE_BUILD.md](docs/NATIVE_BUILD.md)
 
-Backend flags now follow the same style as `ofxGgml`:
+Backend flags now follow the same style as `ofxGgml`, but the build selects one
+backend per build:
 
-- `--auto` / `-Auto`
-  Auto-detect supported GPU backends (default)
 - `--cpu`, `--cpu-only` / `-CpuOnly`
-  Force CPU-only native builds
+  Force CPU-only native builds (default)
 - `--gpu`, `--cuda` / `-Cuda`
   Enable CUDA explicitly
 - `--vulkan` / `-Vulkan`
   Enable Vulkan explicitly
 - `--metal` / `-Metal`
   Enable Metal explicitly where supported
+- `--all` / `-All`
+  Build every available backend variant and leave the canonical runtime on the
+  best one in this priority order: `cuda`, then `vulkan`, then `cpu-only`
+
+Each backend build is also snapshotted under `libs/variants/<backend>`, so you
+can switch the canonical addon runtime later without rebuilding everything.
+
+Variant selector helpers:
+
+- `scripts/select-stable-diffusion-backend.ps1 -Backend cuda`
+- `scripts/setup_windows.bat --skip-native --select-backend cuda`
 
 For Windows, `scripts/setup_windows.bat` and `scripts/setup_addon.ps1` now
 always refresh the vendored source from the latest upstream release-tag source
@@ -315,10 +337,6 @@ snapshot, then build the native runtime locally.
 
 - `--source-release-tag TAG`
   Override the upstream release tag used for the vendored source snapshot
-
-`--auto` remains the default setup behavior. The prebuilt-release path is
-explicit opt-in and is currently intended for Windows CPU/CUDA staging. Windows
-Vulkan still falls back to source builds.
 
 When an upstream Windows zip does not include `stable-diffusion.lib`, the addon
 setup script synthesizes the Visual Studio import library from the downloaded

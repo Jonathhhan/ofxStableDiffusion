@@ -6,7 +6,9 @@
 #include "ofxStableDiffusionRankingHelpers.h"
 #include "../video/ofxStableDiffusionVideoAnimation.h"
 #include "stable-diffusion.h"
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -58,6 +60,7 @@ struct ofxStableDiffusionContextSettings {
 	bool offloadParamsToCpu = false;
 	// Performance
 	bool flashAttn = false;
+	bool diffusionFlashAttn = false;
 	bool enableMmap = true;
 };
 
@@ -162,6 +165,7 @@ struct ofxStableDiffusionImageRequest {
 	int height = 512;
 	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
 	int sampleSteps = 20;
+	float flowShift = std::numeric_limits<float>::infinity();
 	float strength = 0.5f;
 	int64_t seed = -1;
 	int batchCount = 1;
@@ -190,6 +194,14 @@ struct ofxStableDiffusionVideoRequest {
 	float cfgScale = 7.0f;
 	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
 	int sampleSteps = 20;
+	float eta = std::numeric_limits<float>::infinity();
+	float flowShift = std::numeric_limits<float>::infinity();
+	bool useHighNoiseOverrides = false;
+	float highNoiseCfgScale = std::numeric_limits<float>::infinity();
+	sample_method_t highNoiseSampleMethod = SAMPLE_METHOD_COUNT;
+	int highNoiseSampleSteps = -1;
+	float highNoiseEta = std::numeric_limits<float>::infinity();
+	float highNoiseFlowShift = std::numeric_limits<float>::infinity();
 	float strength = 0.5f;
 	int64_t seed = -1;
 	// VACE control strength (0 = disabled, 1 = full)

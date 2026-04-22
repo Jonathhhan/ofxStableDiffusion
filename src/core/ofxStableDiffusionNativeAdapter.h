@@ -3,6 +3,7 @@
 #include "../ofxStableDiffusionThread.h"
 
 #include <string>
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -188,7 +189,7 @@ inline sd_ctx_params_t buildContextParams(
 	params.keep_control_net_on_cpu = settings.keepControlNetCpu;
 	params.keep_vae_on_cpu = settings.keepVaeOnCpu;
 	params.flash_attn = settings.flashAttn;
-	params.diffusion_flash_attn = settings.flashAttn;
+	params.diffusion_flash_attn = settings.diffusionFlashAttn;
 	return params;
 }
 
@@ -216,6 +217,9 @@ inline sd_img_gen_params_t buildImageParams(
 	params.sample_params.sample_method = sampleMethod;
 	params.sample_params.scheduler = resolveScheduler(sdCtx, sampleMethod, settings.schedule);
 	params.sample_params.sample_steps = request.sampleSteps;
+	if (std::isfinite(request.flowShift)) {
+		params.sample_params.flow_shift = request.flowShift;
+	}
 	params.sample_params.guidance.txt_cfg = request.cfgScale;
 	if (request.initImage.data != nullptr || !request.instruction.empty()) {
 		params.sample_params.guidance.img_cfg = request.cfgScale;
@@ -273,8 +277,35 @@ inline sd_vid_gen_params_t buildVideoParams(
 	params.sample_params.sample_method = sampleMethod;
 	params.sample_params.scheduler = scheduler;
 	params.sample_params.sample_steps = request.sampleSteps;
+	if (std::isfinite(request.eta)) {
+		params.sample_params.eta = request.eta;
+	}
+	if (std::isfinite(request.flowShift)) {
+		params.sample_params.flow_shift = request.flowShift;
+	}
 	params.sample_params.guidance.txt_cfg = request.cfgScale;
 	params.high_noise_sample_params = params.sample_params;
+	if (request.useHighNoiseOverrides) {
+		const sample_method_t highNoiseSampleMethod =
+			(request.highNoiseSampleMethod == SAMPLE_METHOD_COUNT)
+				? sampleMethod
+				: resolveSampleMethod(sdCtx, request.highNoiseSampleMethod);
+		params.high_noise_sample_params.sample_method = highNoiseSampleMethod;
+		params.high_noise_sample_params.scheduler =
+			resolveScheduler(sdCtx, highNoiseSampleMethod, settings.schedule);
+		if (request.highNoiseSampleSteps > 0) {
+			params.high_noise_sample_params.sample_steps = request.highNoiseSampleSteps;
+		}
+		if (std::isfinite(request.highNoiseEta)) {
+			params.high_noise_sample_params.eta = request.highNoiseEta;
+		}
+		if (std::isfinite(request.highNoiseFlowShift)) {
+			params.high_noise_sample_params.flow_shift = request.highNoiseFlowShift;
+		}
+		if (std::isfinite(request.highNoiseCfgScale)) {
+			params.high_noise_sample_params.guidance.txt_cfg = request.highNoiseCfgScale;
+		}
+	}
 	params.strength = request.strength;
 	params.seed = request.seed;
 	params.video_frames = request.frameCount;

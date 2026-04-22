@@ -3,6 +3,7 @@
 #include "core/ofxStableDiffusionMemoryHelpers.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <exception>
@@ -12,9 +13,17 @@
 namespace {
 
 namespace fs = std::filesystem;
+std::atomic<bool> g_sdLoggingEnabled{true};
+std::atomic<int> g_sdMinLogLevel{SD_LOG_DEBUG};
 
 void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	(void)data;
+	if (!g_sdLoggingEnabled.load()) {
+		return;
+	}
+	if (level < g_sdMinLogLevel.load()) {
+		return;
+	}
 	if (level <= SD_LOG_INFO) {
 		fputs(log, stdout);
 		fflush(stdout);
@@ -39,9 +48,6 @@ ValidationResult validateDimensions(int width, int height) {
 	}
 	if (width > 2048 || height > 2048) {
 		return {ofxStableDiffusionErrorCode::InvalidDimensions, "Width and height must not exceed 2048 pixels"};
-	}
-	if (width % 64 != 0 || height % 64 != 0) {
-		return {ofxStableDiffusionErrorCode::InvalidDimensions, "Width and height must both be multiples of 64"};
 	}
 	return {};
 }
@@ -110,6 +116,14 @@ ValidationResult validateVaceStrength(float vaceStrength) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "VACE strength must be between 0.0 and 1.0"};
 	}
 	return {};
+}
+
+bool isNativeWanVideoFamily(ofxStableDiffusionModelFamily family) {
+	return family == ofxStableDiffusionModelFamily::WAN ||
+		family == ofxStableDiffusionModelFamily::WANI2V ||
+		family == ofxStableDiffusionModelFamily::WANTI2V ||
+		family == ofxStableDiffusionModelFamily::WANFLF2V ||
+		family == ofxStableDiffusionModelFamily::WANVACE;
 }
 
 ValidationResult validateControlNets(
@@ -188,17 +202,28 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	return {};
 }
 
-ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoRequest& request) {
-	const ValidationResult dimResult = validateDimensions(request.width, request.height);
-	if (!dimResult.ok()) return dimResult;
+	ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoRequest& request) {
+		const ValidationResult dimResult = validateDimensions(request.width, request.height);
+		if (!dimResult.ok()) return dimResult;
 
-	if (request.frameCount <= 0 || request.frameCount > 100) {
-		return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100"};
-	}
+		if (request.frameCount <= 0 || request.frameCount > 100) {
+			return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100"};
+		}
+		if (((request.frameCount - 1) % 4) != 0) {
+			const int normalizedFrameCount = ((request.frameCount - 1) / 4) * 4 + 1;
+			return {
+				ofxStableDiffusionErrorCode::InvalidFrameCount,
+				"Frame count must currently be 4n+1 (5, 9, 13, ...). " +
+					ofToString(request.frameCount) +
+					" would otherwise be normalized to " +
+					ofToString(normalizedFrameCount) +
+					" by the current stable-diffusion.cpp video core."
+			};
+		}
 
-	if (request.fps <= 0 || request.fps > 120) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "FPS must be between 1 and 120"};
-	}
+		if (request.fps <= 0 || request.fps > 120) {
+			return {ofxStableDiffusionErrorCode::InvalidParameter, "FPS must be between 1 and 120"};
+		}
 
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
 	if (!clipResult.ok()) return clipResult;
@@ -403,6 +428,38 @@ ofxStableDiffusionContextSettings resolveContextModelPaths(
 	return resolvedSettings;
 }
 
+bool contextSettingsEquivalent(
+	const ofxStableDiffusionContextSettings& lhs,
+	const ofxStableDiffusionContextSettings& rhs) {
+	return lhs.modelPath == rhs.modelPath &&
+		lhs.diffusionModelPath == rhs.diffusionModelPath &&
+		lhs.clipLPath == rhs.clipLPath &&
+		lhs.clipGPath == rhs.clipGPath &&
+		lhs.t5xxlPath == rhs.t5xxlPath &&
+		lhs.vaePath == rhs.vaePath &&
+		lhs.taesdPath == rhs.taesdPath &&
+		lhs.controlNetPath == rhs.controlNetPath &&
+		lhs.loraModelDir == rhs.loraModelDir &&
+		lhs.embedDir == rhs.embedDir &&
+		lhs.stackedIdEmbedDir == rhs.stackedIdEmbedDir &&
+		lhs.vaeDecodeOnly == rhs.vaeDecodeOnly &&
+		lhs.vaeTiling == rhs.vaeTiling &&
+		lhs.freeParamsImmediately == rhs.freeParamsImmediately &&
+		lhs.nThreads == rhs.nThreads &&
+		lhs.weightType == rhs.weightType &&
+		lhs.rngType == rhs.rngType &&
+		lhs.schedule == rhs.schedule &&
+		lhs.prediction == rhs.prediction &&
+		lhs.loraApplyMode == rhs.loraApplyMode &&
+		lhs.keepClipOnCpu == rhs.keepClipOnCpu &&
+		lhs.keepControlNetCpu == rhs.keepControlNetCpu &&
+		lhs.keepVaeOnCpu == rhs.keepVaeOnCpu &&
+		lhs.offloadParamsToCpu == rhs.offloadParamsToCpu &&
+		lhs.flashAttn == rhs.flashAttn &&
+		lhs.diffusionFlashAttn == rhs.diffusionFlashAttn &&
+		lhs.enableMmap == rhs.enableMmap;
+}
+
 } // namespace
 
 ofxStableDiffusion::ofxStableDiffusion() {
@@ -523,6 +580,10 @@ bool ofxStableDiffusion::hasImageResult() const {
 bool ofxStableDiffusion::hasVideoResult() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	return lastResult.hasVideo();
+}
+
+bool ofxStableDiffusion::hasLoadedContext() const {
+	return thread.sdCtx != nullptr;
 }
 
 int ofxStableDiffusion::getOutputCount() const {
@@ -834,6 +895,22 @@ void ofxStableDiffusion::setProgressCallback(ofxSdProgressCallback cb) {
 	progressCallback = cb;
 }
 
+void ofxStableDiffusion::setNativeLoggingEnabled(bool enabled) {
+	g_sdLoggingEnabled.store(enabled);
+}
+
+bool ofxStableDiffusion::isNativeLoggingEnabled() const {
+	return g_sdLoggingEnabled.load();
+}
+
+void ofxStableDiffusion::setNativeLogLevel(sd_log_level_t level) {
+	g_sdMinLogLevel.store(static_cast<int>(level));
+}
+
+sd_log_level_t ofxStableDiffusion::getNativeLogLevel() const {
+	return static_cast<sd_log_level_t>(g_sdMinLogLevel.load());
+}
+
 //--------------------------------------------------------------
 void ofxStableDiffusion::newSdCtx(const ofxStableDiffusionContextSettings& settings) {
 	if (settings.nThreads == 0 || settings.nThreads < -1) {
@@ -1096,6 +1173,18 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 		setLastError(ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100");
 		return;
 	}
+	if (((videoFrames_ - 1) % 4) != 0) {
+		activeTask = ofxStableDiffusionTask::ImageToVideo;
+		const int normalizedFrameCount = ((videoFrames_ - 1) / 4) * 4 + 1;
+		setLastError(
+			ofxStableDiffusionErrorCode::InvalidFrameCount,
+			"Frame count must currently be 4n+1 (5, 9, 13, ...). " +
+				ofToString(videoFrames_) +
+				" would otherwise be normalized to " +
+				ofToString(normalizedFrameCount) +
+				" by the current stable-diffusion.cpp video core.");
+		return;
+	}
 
 	ofxStableDiffusionVideoRequest request;
 	{
@@ -1221,6 +1310,20 @@ bool ofxStableDiffusion::isGenerating() const {
 	return thread.isThreadRunning();
 }
 
+bool ofxStableDiffusion::isBusy() const {
+	return isGenerating() || isModelLoading;
+}
+
+bool ofxStableDiffusion::matchesContextSettings(
+	const ofxStableDiffusionContextSettings& settings) const {
+	const ofxStableDiffusionContextSettings resolvedSettings =
+		resolveContextModelPaths(settings);
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return contextSettingsEquivalent(
+		captureContextSettingsNoLock(),
+		resolvedSettings);
+}
+
 int64_t ofxStableDiffusion::getLastUsedSeed() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	return lastResult.actualSeedUsed;
@@ -1285,6 +1388,7 @@ ofxStableDiffusionContextSettings ofxStableDiffusion::captureContextSettingsNoLo
 	settings.keepVaeOnCpu = keepVaeOnCpu;
 	settings.offloadParamsToCpu = offloadParamsToCpu;
 	settings.flashAttn = flashAttn;
+	settings.diffusionFlashAttn = diffusionFlashAttn;
 	settings.enableMmap = enableMmap;
 	return settings;
 }
@@ -1322,6 +1426,7 @@ void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSet
 	keepVaeOnCpu = resolvedSettings.keepVaeOnCpu;
 	offloadParamsToCpu = resolvedSettings.offloadParamsToCpu;
 	flashAttn = resolvedSettings.flashAttn;
+	diffusionFlashAttn = resolvedSettings.diffusionFlashAttn;
 	enableMmap = resolvedSettings.enableMmap;
 }
 
@@ -1490,6 +1595,12 @@ bool ofxStableDiffusion::validateVideoRequestAndSetError(const ofxStableDiffusio
 		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Video generation requires an input image");
 		return false;
 	}
+	if (request.hasAnimation() && isNativeWanVideoFamily(capabilities.modelFamily)) {
+		setLastError(
+			ofxStableDiffusionErrorCode::InvalidParameter,
+			"Prompt morph / seed-sequence video animation is not supported yet for native Wan video models in the addon wrapper");
+		return false;
+	}
 	return true;
 }
 
@@ -1502,26 +1613,32 @@ void ofxStableDiffusion::clearOutputState() {
 }
 
 void ofxStableDiffusion::setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code) {
-	std::lock_guard<std::mutex> lock(stateMutex);
-	lastError = errorMessage;
-	lastErrorInfo.code = code;
-	lastErrorInfo.message = errorMessage;
-	lastErrorInfo.suggestion = ofxStableDiffusionErrorCodeSuggestion(code);
-	lastErrorInfo.timestampMicros = ofGetElapsedTimeMicros();
-	errorHistory.push_back(lastErrorInfo);
-	if (errorHistory.size() > maxErrorHistorySize) {
-		errorHistory.pop_front();
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		lastError = errorMessage;
+		lastErrorInfo.code = code;
+		lastErrorInfo.message = errorMessage;
+		lastErrorInfo.suggestion = ofxStableDiffusionErrorCodeSuggestion(code);
+		lastErrorInfo.timestampMicros = ofGetElapsedTimeMicros();
+		errorHistory.push_back(lastErrorInfo);
+		if (errorHistory.size() > maxErrorHistorySize) {
+			errorHistory.pop_front();
+		}
+
+		lastResult = {};
+		lastResult.success = false;
+		lastResult.task = activeTask;
+		lastResult.imageMode = imageMode;
+		lastResult.selectionMode = imageSelectionMode;
+		lastResult.error = errorMessage;
+		outputImageViews.clear();
+		outputImages = nullptr;
+		diffused = false;
 	}
 
-	lastResult = {};
-	lastResult.success = false;
-	lastResult.task = activeTask;
-	lastResult.imageMode = imageMode;
-	lastResult.selectionMode = imageSelectionMode;
-	lastResult.error = errorMessage;
-	outputImageViews.clear();
-	outputImages = nullptr;
-	diffused = false;
+	if (!errorMessage.empty()) {
+		ofLogError("ofxStableDiffusion") << errorMessage;
+	}
 }
 
 void ofxStableDiffusion::setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage) {

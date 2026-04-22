@@ -27,12 +27,14 @@ struct ofxStableDiffusionImageParameterProfile {
 
 struct ofxStableDiffusionVideoParameterProfile {
 	ofxStableDiffusionModelFamily modelFamily = ofxStableDiffusionModelFamily::Unknown;
+	int defaultWidth = 512;
+	int defaultHeight = 512;
 	float defaultCfgScale = 5.0f;
 	float minCfgScale = 1.0f;
-	float maxCfgScale = 8.0f;
+	float maxCfgScale = 12.0f;
 	int defaultSampleSteps = 28;
 	int minSampleSteps = 8;
-	int maxSampleSteps = 40;
+	int maxSampleSteps = 80;
 	float defaultStrength = 0.7f;
 	float minStrength = 0.2f;
 	float maxStrength = 0.95f;
@@ -44,10 +46,10 @@ struct ofxStableDiffusionVideoParameterProfile {
 	float maxVaceStrength = 1.0f;
 	int defaultFrameCount = 8;
 	int minFrameCount = 4;
-	int maxFrameCount = 24;
+	int maxFrameCount = 121;
 	int defaultFps = 8;
 	int minFps = 4;
-	int maxFps = 24;
+	int maxFps = 60;
 	bool supportsClipSkip = false;
 	bool supportsVaceStrength = false;
 	const char* summary = "";
@@ -66,6 +68,18 @@ inline bool isTurboLikeModel(const ofxStableDiffusionContextSettings& settings) 
 		descriptor.find("lightning") != std::string::npos ||
 		descriptor.find("hyper") != std::string::npos ||
 		descriptor.find("lcm") != std::string::npos;
+}
+
+inline bool isWan13BT2VModel(const ofxStableDiffusionContextSettings& settings) {
+	const std::string descriptor = ofxSdToLowerCopy(
+		settings.modelPath + " " +
+		settings.diffusionModelPath + " " +
+		settings.clipLPath + " " +
+		settings.clipGPath + " " +
+		settings.t5xxlPath);
+	return descriptor.find("wan") != std::string::npos &&
+		descriptor.find("t2v") != std::string::npos &&
+		descriptor.find("1.3b") != std::string::npos;
 }
 
 template <typename T>
@@ -213,9 +227,6 @@ inline ofxStableDiffusionImageParameterProfile resolveImageProfile(
 		break;
 	}
 
-	profile.defaultCfgScale = clampValue(profile.defaultCfgScale, profile.minCfgScale, profile.maxCfgScale);
-	profile.defaultSampleSteps = clampValue(profile.defaultSampleSteps, profile.minSampleSteps, profile.maxSampleSteps);
-	profile.defaultStrength = clampValue(profile.defaultStrength, profile.minStrength, profile.maxStrength);
 	return profile;
 }
 
@@ -226,12 +237,27 @@ inline ofxStableDiffusionVideoParameterProfile resolveVideoProfile(
 	profile.summary = "Balanced defaults for image-to-video generation.";
 
 	switch (profile.modelFamily) {
+	case ofxStableDiffusionModelFamily::WAN:
+		profile.defaultCfgScale = 6.0f;
+		profile.defaultSampleSteps = 40;
+		profile.defaultStrength = 0.7f;
+		profile.defaultFrameCount = 81;
+		profile.defaultFps = 16;
+		profile.maxCfgScale = 12.0f;
+		profile.maxSampleSteps = 80;
+		profile.maxFrameCount = 121;
+		profile.maxFps = 60;
+		profile.summary = "Wan T2V benefits from more steps and longer clips; wider ranges stay open for tuning.";
+		break;
 	case ofxStableDiffusionModelFamily::WANFLF2V:
 		profile.defaultCfgScale = 5.0f;
 		profile.defaultSampleSteps = 28;
 		profile.defaultStrength = 0.65f;
 		profile.defaultFrameCount = 10;
 		profile.defaultFps = 8;
+		profile.maxSampleSteps = 80;
+		profile.maxFrameCount = 121;
+		profile.maxFps = 60;
 		profile.summary = "FLF2V models respond well to moderate denoise and support end-frame morphing.";
 		break;
 	case ofxStableDiffusionModelFamily::WANTI2V:
@@ -240,6 +266,9 @@ inline ofxStableDiffusionVideoParameterProfile resolveVideoProfile(
 		profile.defaultStrength = 0.72f;
 		profile.defaultFrameCount = 8;
 		profile.defaultFps = 8;
+		profile.maxSampleSteps = 80;
+		profile.maxFrameCount = 121;
+		profile.maxFps = 60;
 		profile.summary = "TI2V models prefer a slightly firmer CFG and do not use end-frame morphing.";
 		break;
 	case ofxStableDiffusionModelFamily::WANVACE:
@@ -250,6 +279,9 @@ inline ofxStableDiffusionVideoParameterProfile resolveVideoProfile(
 		profile.defaultVaceStrength = 1.0f;
 		profile.defaultFrameCount = 8;
 		profile.defaultFps = 8;
+		profile.maxSampleSteps = 80;
+		profile.maxFrameCount = 121;
+		profile.maxFps = 60;
 		profile.summary = "VACE models expose an extra conditioning weight; start high and back it off only if motion feels too constrained.";
 		break;
 	case ofxStableDiffusionModelFamily::WANI2V:
@@ -258,6 +290,9 @@ inline ofxStableDiffusionVideoParameterProfile resolveVideoProfile(
 		profile.defaultStrength = 0.7f;
 		profile.defaultFrameCount = 8;
 		profile.defaultFps = 8;
+		profile.maxSampleSteps = 80;
+		profile.maxFrameCount = 121;
+		profile.maxFps = 60;
 		profile.summary = "Wan I2V models prefer moderate CFG and enough denoise strength to preserve motion.";
 		break;
 	case ofxStableDiffusionModelFamily::Unknown:
@@ -272,12 +307,12 @@ inline ofxStableDiffusionVideoParameterProfile resolveVideoProfile(
 		break;
 	}
 
-	profile.defaultCfgScale = clampValue(profile.defaultCfgScale, profile.minCfgScale, profile.maxCfgScale);
-	profile.defaultSampleSteps = clampValue(profile.defaultSampleSteps, profile.minSampleSteps, profile.maxSampleSteps);
-	profile.defaultStrength = clampValue(profile.defaultStrength, profile.minStrength, profile.maxStrength);
-	profile.defaultFrameCount = clampValue(profile.defaultFrameCount, profile.minFrameCount, profile.maxFrameCount);
-	profile.defaultFps = clampValue(profile.defaultFps, profile.minFps, profile.maxFps);
-	profile.defaultVaceStrength = clampValue(profile.defaultVaceStrength, profile.minVaceStrength, profile.maxVaceStrength);
+	if (isWan13BT2VModel(settings)) {
+		profile.defaultWidth = 832;
+		profile.defaultHeight = 448;
+		profile.summary = "Wan 1.3B T2V is tuned near 480p; 832x448 is the closest valid 64-aligned addon default.";
+	}
+
 	return profile;
 }
 

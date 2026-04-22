@@ -3,6 +3,9 @@ param(
     [string]$BuildDir = "",
     [string]$InstallIncludeDir = "",
     [string]$InstallLibDir = "",
+    [string]$InstallGgmlIncludeDir = "",
+    [string]$InstallGgmlLibDir = "",
+    [string]$VariantRootDir = "",
     [string]$ExampleBinDir = "",
     [string]$Configuration = "Release",
     [string]$SourceReleaseTag = "",
@@ -14,7 +17,8 @@ param(
     [Alias('Gpu')][switch]$Cuda,
     [switch]$Vulkan,
     [switch]$Metal,
-    [switch]$Auto,
+    [switch]$All,
+    [switch]$SkipSourceRefresh,
     [switch]$DryRun
 )
 
@@ -75,6 +79,67 @@ function Test-MetalAvailable {
         return $false
     }
     return [bool](Get-CommandPathOrNull 'xcrun')
+}
+
+function Invoke-SelfBuild {
+    param(
+        [string]$BackendName,
+        [string]$ScriptPath,
+        [string]$SourceDir,
+        [string]$BuildDir,
+        [string]$InstallIncludeDir,
+        [string]$InstallLibDir,
+        [string]$InstallGgmlIncludeDir,
+        [string]$InstallGgmlLibDir,
+        [string]$VariantRootDir,
+        [string]$ExampleBinDir,
+        [string]$Configuration,
+        [string]$SourceReleaseTag,
+        [string]$Generator,
+        [int]$Jobs,
+        [string]$GgmlReleaseTag,
+        [switch]$Clean,
+        [switch]$DryRun,
+        [switch]$SkipSourceRefresh
+    )
+
+    $invokeArgs = @{
+        SourceDir = $SourceDir
+        BuildDir = $BuildDir
+        InstallIncludeDir = $InstallIncludeDir
+        InstallLibDir = $InstallLibDir
+        InstallGgmlIncludeDir = $InstallGgmlIncludeDir
+        InstallGgmlLibDir = $InstallGgmlLibDir
+        VariantRootDir = $VariantRootDir
+        ExampleBinDir = $ExampleBinDir
+        Configuration = $Configuration
+        Generator = $Generator
+        Jobs = $Jobs
+        GgmlReleaseTag = $GgmlReleaseTag
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($SourceReleaseTag)) {
+        $invokeArgs.SourceReleaseTag = $SourceReleaseTag
+    }
+    if ($Clean) {
+        $invokeArgs.Clean = $true
+    }
+    if ($DryRun) {
+        $invokeArgs.DryRun = $true
+    }
+    if ($SkipSourceRefresh) {
+        $invokeArgs.SkipSourceRefresh = $true
+    }
+
+    switch ($BackendName) {
+        'cpu-only' { $invokeArgs.CpuOnly = $true }
+        'cuda' { $invokeArgs.Cuda = $true }
+        'vulkan' { $invokeArgs.Vulkan = $true }
+        'metal' { $invokeArgs.Metal = $true }
+        default { throw "Unknown backend '$BackendName'." }
+    }
+
+    & $ScriptPath @invokeArgs
 }
 
 function Get-ShortBuildDir {
@@ -372,6 +437,37 @@ if ([string]::IsNullOrWhiteSpace($InstallIncludeDir)) {
 if ([string]::IsNullOrWhiteSpace($InstallLibDir)) {
     $InstallLibDir = Join-Path $addonRoot 'libs\stable-diffusion\lib\vs'
 }
+
+function Copy-DirectoryContents {
+    param(
+        [string]$Source,
+        [string]$Destination
+    )
+
+    if (-not (Test-Path -LiteralPath $Source)) {
+        return
+    }
+
+    if ($DryRun) {
+        Write-Host "Copy contents $Source -> $Destination"
+        return
+    }
+
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    Get-ChildItem -LiteralPath $Source -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
+        }
+}
+if ([string]::IsNullOrWhiteSpace($InstallGgmlIncludeDir)) {
+    $InstallGgmlIncludeDir = Join-Path $addonRoot 'libs\ggml\include'
+}
+if ([string]::IsNullOrWhiteSpace($InstallGgmlLibDir)) {
+    $InstallGgmlLibDir = Join-Path $addonRoot 'libs\ggml\lib\vs'
+}
+if ([string]::IsNullOrWhiteSpace($VariantRootDir)) {
+    $VariantRootDir = Join-Path $addonRoot 'libs\variants'
+}
 if ([string]::IsNullOrWhiteSpace($ExampleBinDir)) {
     $ExampleBinDir = Join-Path $addonRoot 'ofxStableDiffusionExample\bin'
 }
@@ -379,22 +475,80 @@ if ($Jobs -le 0) {
     $Jobs = [Math]::Max(1, [Environment]::ProcessorCount)
 }
 
+$selectedBackendCount = 0
+if ($CpuOnly) { $selectedBackendCount++ }
+if ($Cuda) { $selectedBackendCount++ }
+if ($Vulkan) { $selectedBackendCount++ }
+if ($Metal) { $selectedBackendCount++ }
+if ($selectedBackendCount -gt 1) {
+    throw "Select only one backend flag: -CpuOnly, -Cuda, -Vulkan, or -Metal."
+}
+if ($All -and $selectedBackendCount -gt 0) {
+    throw "Do not combine -All with explicit backend flags."
+}
+
+if ($All) {
+    $scriptPath = $MyInvocation.MyCommand.Path
+    $allBackends = New-Object System.Collections.Generic.List[string]
+    $allBackends.Add('cpu-only')
+
+    if (Test-VulkanAvailable) {
+        $allBackends.Add('vulkan')
+    } else {
+        Write-Warning "Skipping Vulkan in -All mode because no Vulkan SDK/runtime was detected."
+    }
+
+    if (Test-CudaAvailable) {
+        $allBackends.Add('cuda')
+    } else {
+        Write-Warning "Skipping CUDA in -All mode because no CUDA toolkit/runtime was detected."
+    }
+
+    Write-Step "Building all available backend variants"
+    Write-Host ("    Order: {0}" -f ($allBackends -join ' -> '))
+    Write-Host "    Final canonical runtime priority: cuda > vulkan > cpu-only"
+
+    $firstBuild = $true
+    foreach ($backendName in $allBackends) {
+        Invoke-SelfBuild `
+            -BackendName $backendName `
+            -ScriptPath $scriptPath `
+            -SourceDir $SourceDir `
+            -BuildDir $BuildDir `
+            -InstallIncludeDir $InstallIncludeDir `
+            -InstallLibDir $InstallLibDir `
+            -InstallGgmlIncludeDir $InstallGgmlIncludeDir `
+            -InstallGgmlLibDir $InstallGgmlLibDir `
+            -VariantRootDir $VariantRootDir `
+            -ExampleBinDir $ExampleBinDir `
+            -Configuration $Configuration `
+            -SourceReleaseTag $SourceReleaseTag `
+            -Generator $Generator `
+            -Jobs $Jobs `
+            -GgmlReleaseTag $GgmlReleaseTag `
+            -Clean `
+            -DryRun:$DryRun `
+            -SkipSourceRefresh:$(-not $firstBuild)
+        $firstBuild = $false
+    }
+
+    return
+}
+
 $enableCuda = $false
 $enableVulkan = $false
 $enableMetal = $false
-$backendMode = "auto-detect"
+$backendMode = "cpu-only"
 
-if ($CpuOnly) {
-    $backendMode = "cpu-only"
-} elseif ($Cuda -or $Vulkan -or $Metal) {
-    $backendMode = "explicit"
-    $enableCuda = $Cuda
-    $enableVulkan = $Vulkan
-    $enableMetal = $Metal
-} else {
-    $enableCuda = Test-CudaAvailable
-    $enableVulkan = Test-VulkanAvailable
-    $enableMetal = Test-MetalAvailable
+if ($Cuda) {
+    $enableCuda = $true
+    $backendMode = "cuda"
+} elseif ($Vulkan) {
+    $enableVulkan = $true
+    $backendMode = "vulkan"
+} elseif ($Metal) {
+    $enableMetal = $true
+    $backendMode = "metal"
 }
 
 if ($buildDirWasImplicit) {
@@ -417,55 +571,60 @@ $downloadRoot = Join-Path $env:TEMP 'ofxsd-source-release'
 $cloneRoot = Join-Path $downloadRoot ('clone-' + $resolvedReleaseTag)
 $git = Require-GitPath
 
-Write-Step "Refreshing stable-diffusion source from upstream snapshot"
-Write-Host ("    Release tag: {0}" -f $resolvedReleaseTag)
-Write-Host ("    Destination: {0}" -f $SourceDir)
+if (-not $SkipSourceRefresh) {
+    Write-Step "Refreshing stable-diffusion source from upstream snapshot"
+    Write-Host ("    Release tag: {0}" -f $resolvedReleaseTag)
+    Write-Host ("    Destination: {0}" -f $SourceDir)
 
-if ($DryRun) {
-    Write-Host ("Clone https://github.com/leejet/stable-diffusion.cpp.git tag {0} with submodules" -f $resolvedReleaseTag)
-    Write-Host ("Clone to {0}" -f $cloneRoot)
-    Write-Host ("Replace contents of {0}" -f $SourceDir)
-} else {
-    New-Item -ItemType Directory -Force -Path $downloadRoot | Out-Null
-    if (Test-Path -LiteralPath $cloneRoot) {
-        Remove-Item -LiteralPath $cloneRoot -Recurse -Force
-    }
-
-    Invoke-External -FilePath $git -Arguments @(
-        'clone',
-        '--depth', '1',
-        '--branch', $resolvedReleaseTag,
-        '--recurse-submodules',
-        '--shallow-submodules',
-        'https://github.com/leejet/stable-diffusion.cpp.git',
-        $cloneRoot
-    )
-
-    $cmakeLists = Join-Path $cloneRoot 'CMakeLists.txt'
-    if (-not (Test-Path -LiteralPath $cmakeLists)) {
-        throw "The recursive clone for '$resolvedReleaseTag' did not contain a top-level CMakeLists.txt."
-    }
-
-    New-Item -ItemType Directory -Force -Path $SourceDir | Out-Null
-    Remove-DirectoryContents -LiteralPath $SourceDir
-
-    Get-ChildItem -LiteralPath $cloneRoot -Force |
-        ForEach-Object {
-            if ($_.Name -eq '.git') {
-                return
-            }
-            Copy-Item -LiteralPath $_.FullName -Destination $SourceDir -Recurse -Force
+    if ($DryRun) {
+        Write-Host ("Clone https://github.com/leejet/stable-diffusion.cpp.git tag {0} with submodules" -f $resolvedReleaseTag)
+        Write-Host ("Clone to {0}" -f $cloneRoot)
+        Write-Host ("Replace contents of {0}" -f $SourceDir)
+    } else {
+        New-Item -ItemType Directory -Force -Path $downloadRoot | Out-Null
+        if (Test-Path -LiteralPath $cloneRoot) {
+            Remove-Item -LiteralPath $cloneRoot -Recurse -Force
         }
 
-    $resolvedCommit = Get-GitHeadCommit -GitPath $git -RepositoryRoot $cloneRoot
-    Write-VendorPinFile `
-        -Path (Join-Path $SourceDir 'OFX_VENDOR_PIN.txt') `
-        -ReleaseMetadata $releaseMetadata `
-        -Repository 'https://github.com/leejet/stable-diffusion.cpp' `
-        -ResolvedCommit $resolvedCommit
-}
+        Invoke-External -FilePath $git -Arguments @(
+            'clone',
+            '--depth', '1',
+            '--branch', $resolvedReleaseTag,
+            '--recurse-submodules',
+            '--shallow-submodules',
+            'https://github.com/leejet/stable-diffusion.cpp.git',
+            $cloneRoot
+        )
 
-Refresh-GgmlVendorTree -GitPath $git -Tag $GgmlReleaseTag -TargetDir (Join-Path $SourceDir 'ggml') -DryRun:$DryRun
+        $cmakeLists = Join-Path $cloneRoot 'CMakeLists.txt'
+        if (-not (Test-Path -LiteralPath $cmakeLists)) {
+            throw "The recursive clone for '$resolvedReleaseTag' did not contain a top-level CMakeLists.txt."
+        }
+
+        New-Item -ItemType Directory -Force -Path $SourceDir | Out-Null
+        Remove-DirectoryContents -LiteralPath $SourceDir
+
+        Get-ChildItem -LiteralPath $cloneRoot -Force |
+            ForEach-Object {
+                if ($_.Name -eq '.git') {
+                    return
+                }
+                Copy-Item -LiteralPath $_.FullName -Destination $SourceDir -Recurse -Force
+            }
+
+        $resolvedCommit = Get-GitHeadCommit -GitPath $git -RepositoryRoot $cloneRoot
+        Write-VendorPinFile `
+            -Path (Join-Path $SourceDir 'OFX_VENDOR_PIN.txt') `
+            -ReleaseMetadata $releaseMetadata `
+            -Repository 'https://github.com/leejet/stable-diffusion.cpp' `
+            -ResolvedCommit $resolvedCommit
+    }
+
+    Refresh-GgmlVendorTree -GitPath $git -Tag $GgmlReleaseTag -TargetDir (Join-Path $SourceDir 'ggml') -DryRun:$DryRun
+} else {
+    Write-Step "Using existing vendored stable-diffusion source snapshot"
+    Write-Host ("    Source dir: {0}" -f $SourceDir)
+}
 
 if (-not (Test-Path -LiteralPath $SourceDir)) {
     throw @"
@@ -497,6 +656,9 @@ if (-not $DryRun) {
     New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallIncludeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallLibDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $InstallGgmlIncludeDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $InstallGgmlLibDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $VariantRootDir | Out-Null
     if ($ExampleBinDir) {
         New-Item -ItemType Directory -Force -Path $ExampleBinDir | Out-Null
     }
@@ -576,8 +738,15 @@ if ($DryRun) {
 }
 
 $headerPath = Find-FirstFile -Root $SourceDir -Names @('stable-diffusion.h')
+$ggmlIncludeSourceDir = Join-Path $SourceDir 'ggml\include'
 $dllPath = Find-FirstFile -Root $BuildDir -Names @('stable-diffusion.dll')
 $libPath = Find-FirstFile -Root $BuildDir -Names @('stable-diffusion.lib')
+$ggmlLibPath = Find-FirstFile -Root $BuildDir -Names @('ggml.lib')
+$ggmlBaseLibPath = Find-FirstFile -Root $BuildDir -Names @('ggml-base.lib')
+$ggmlCpuLibPath = Find-FirstFile -Root $BuildDir -Names @('ggml-cpu.lib')
+$ggmlCudaLibPath = Find-FirstFile -Root $BuildDir -Names @('ggml-cuda.lib')
+$ggmlVulkanLibPath = Find-FirstFile -Root $BuildDir -Names @('ggml-vulkan.lib')
+$ggmlMetalLibPath = Find-FirstFile -Root $BuildDir -Names @('ggml-metal.lib')
 $webpLibPath = Find-FirstFile -Root $BuildDir -Names @('webp.lib')
 $webpmuxLibPath = Find-FirstFile -Root $BuildDir -Names @('libwebpmux.lib', 'webpmux.lib')
 $webmLibPath = Find-FirstFile -Root $BuildDir -Names @('webm.lib', 'libwebm.lib')
@@ -614,12 +783,42 @@ if ($ExampleBinDir) {
     Copy-IfPresent -Path $dllPath -Destination $ExampleBinDir -AllowLockedDestination
 }
 
+Write-Step "Staging ggml artifacts into the addon"
+if (Test-Path -LiteralPath $ggmlIncludeSourceDir) {
+    Get-ChildItem -LiteralPath $ggmlIncludeSourceDir -File |
+        ForEach-Object {
+            Copy-IfPresent -Path $_.FullName -Destination $InstallGgmlIncludeDir
+        }
+} else {
+    Write-Warning "ggml headers were not found under $ggmlIncludeSourceDir. Separate ggml headers will not be staged."
+}
+Copy-IfPresent -Path $ggmlLibPath -Destination $InstallGgmlLibDir
+Copy-IfPresent -Path $ggmlBaseLibPath -Destination $InstallGgmlLibDir
+Copy-IfPresent -Path $ggmlCpuLibPath -Destination $InstallGgmlLibDir
+Copy-IfPresent -Path $ggmlCudaLibPath -Destination $InstallGgmlLibDir
+Copy-IfPresent -Path $ggmlVulkanLibPath -Destination $InstallGgmlLibDir
+Copy-IfPresent -Path $ggmlMetalLibPath -Destination $InstallGgmlLibDir
+
+$variantStableDiffusionIncludeDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\include"
+$variantStableDiffusionLibDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\lib\vs"
+$variantGgmlIncludeDir = Join-Path $VariantRootDir "$backendMode\ggml\include"
+$variantGgmlLibDir = Join-Path $VariantRootDir "$backendMode\ggml\lib\vs"
+
+Write-Step "Snapshotting backend variant artifacts"
+Copy-DirectoryContents -Source $InstallIncludeDir -Destination $variantStableDiffusionIncludeDir
+Copy-DirectoryContents -Source $InstallLibDir -Destination $variantStableDiffusionLibDir
+Copy-DirectoryContents -Source $InstallGgmlIncludeDir -Destination $variantGgmlIncludeDir
+Copy-DirectoryContents -Source $InstallGgmlLibDir -Destination $variantGgmlLibDir
+
 Write-Host ""
 Write-Host "stable-diffusion native build complete."
 Write-Host "  source:  $SourceDir"
 Write-Host "  build:   $BuildDir"
 Write-Host "  include: $InstallIncludeDir"
 Write-Host "  libs:    $InstallLibDir"
+Write-Host "  ggml include: $InstallGgmlIncludeDir"
+Write-Host "  ggml libs:    $InstallGgmlLibDir"
+Write-Host "  variant snapshot: $VariantRootDir\$backendMode"
 if ($ExampleBinDir) {
     Write-Host "  runtime: $ExampleBinDir"
 }

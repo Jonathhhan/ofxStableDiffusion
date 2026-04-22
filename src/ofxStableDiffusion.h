@@ -44,6 +44,7 @@ public:
 	ofxStableDiffusionVideoClip getVideoClip() const;
 	bool hasImageResult() const;
 	bool hasVideoResult() const;
+	bool hasLoadedContext() const;
 	int getOutputCount() const;
 	std::string getLastError() const;
 	ofxStableDiffusionErrorCode getLastErrorCode() const;
@@ -152,6 +153,10 @@ public:
 
 	/// Set an optional progress callback that fires on each diffusion step.
 	void setProgressCallback(ofxSdProgressCallback cb);
+	void setNativeLoggingEnabled(bool enabled);
+	bool isNativeLoggingEnabled() const;
+	void setNativeLogLevel(sd_log_level_t level);
+	sd_log_level_t getNativeLogLevel() const;
 
 	void newSdCtx(const ofxStableDiffusionContextSettings& settings);
 	void freeSdCtx();
@@ -244,6 +249,8 @@ public:
 
 	/// Returns true if generation is currently in progress.
 	bool isGenerating() const;
+	bool isBusy() const;
+	bool matchesContextSettings(const ofxStableDiffusionContextSettings& settings) const;
 
 	/// Returns the actual seed used in the last generation (auto-generated if seed was -1).
 	int64_t getLastUsedSeed() const;
@@ -298,6 +305,7 @@ public:
 	bool keepVaeOnCpu = false;
 	bool offloadParamsToCpu = false;
 	bool flashAttn = false;
+	bool diffusionFlashAttn = false;
 	bool enableMmap = true;
 	float styleStrength = 20.0f;
 	bool normalizeInput = true;
