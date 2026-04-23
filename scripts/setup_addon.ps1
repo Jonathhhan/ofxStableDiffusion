@@ -6,6 +6,7 @@ param(
     [switch]$Vulkan,
     [switch]$Metal,
     [switch]$All,
+    [switch]$BuildCli,
     [ValidateSet('cpu-only', 'cuda', 'vulkan', 'metal')]
     [string]$SelectBackend = "",
     [string]$GgmlReleaseTag = "",
@@ -53,6 +54,9 @@ if (-not $SkipNative) {
     }
     if ($All) {
         $nativeArgs.All = $true
+    }
+    if ($BuildCli) {
+        $nativeArgs.BuildCli = $true
     }
     if (-not [string]::IsNullOrWhiteSpace($GgmlReleaseTag)) {
         $nativeArgs.GgmlReleaseTag = $GgmlReleaseTag

@@ -4,6 +4,7 @@
 
 #include <string>
 #include <cmath>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -323,6 +324,63 @@ inline sd_vid_gen_params_t buildVideoParams(
 	params.loras = loraBuffer.empty() ? nullptr : loraBuffer.data();
 	params.lora_count = static_cast<uint32_t>(loraBuffer.size());
 	return params;
+}
+
+inline std::string formatImageRef(const char* label, const sd_image_t& image) {
+	std::ostringstream out;
+	out << label << "=";
+	if (image.data == nullptr) {
+		out << "none";
+	} else {
+		out << image.width << "x" << image.height << "x" << image.channel;
+	}
+	return out.str();
+}
+
+inline std::string formatScalarOrAuto(float value) {
+	if (!std::isfinite(value)) {
+		return "auto";
+	}
+	std::ostringstream out;
+	out << value;
+	return out.str();
+}
+
+inline std::string describeSampleParams(const sd_sample_params_t& params) {
+	std::ostringstream out;
+	out
+		<< "method=" << sd_sample_method_name(params.sample_method)
+		<< ", scheduler=" << sd_scheduler_name(params.scheduler)
+		<< ", steps=" << params.sample_steps
+		<< ", txt_cfg=" << params.guidance.txt_cfg
+		<< ", img_cfg=" << formatScalarOrAuto(params.guidance.img_cfg)
+		<< ", guidance=" << params.guidance.distilled_guidance
+		<< ", slg=" << params.guidance.slg.scale
+		<< ", eta=" << formatScalarOrAuto(params.eta)
+		<< ", flow_shift=" << formatScalarOrAuto(params.flow_shift);
+	return out.str();
+}
+
+inline std::string describeVideoParams(const sd_vid_gen_params_t& params) {
+	std::ostringstream out;
+	out
+		<< "prompt=" << (params.prompt ? params.prompt : "")
+		<< " | negative=" << (params.negative_prompt ? params.negative_prompt : "")
+		<< " | clip_skip=" << params.clip_skip
+		<< " | " << formatImageRef("init", params.init_image)
+		<< " | " << formatImageRef("end", params.end_image)
+		<< " | control_frames=" << params.control_frames_size
+		<< " | size=" << params.width << "x" << params.height
+		<< " | frames=" << params.video_frames
+		<< " | strength=" << params.strength
+		<< " | seed=" << params.seed
+		<< " | moe_boundary=" << params.moe_boundary
+		<< " | vace_strength=" << params.vace_strength
+		<< " | sample={" << describeSampleParams(params.sample_params) << "}"
+		<< " | high_noise={" << describeSampleParams(params.high_noise_sample_params) << "}"
+		<< " | cache_mode=" << static_cast<int>(params.cache.mode)
+		<< " | loras=" << params.lora_count;
+	return out.str();
 }
 
 }  // namespace ofxStableDiffusionNativeAdapter

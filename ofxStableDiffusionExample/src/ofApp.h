@@ -39,6 +39,8 @@ class ofApp : public ofBaseApp {
 		void setupHoloscanBridge();
 		void drawHoloscanBridgeSection();
 		ofxStableDiffusionContextSettings buildContextSettings() const;
+		ofxStableDiffusionVideoRequest buildVideoRequest() const;
+		std::string buildEquivalentSdCliCommand() const;
 		void refreshModelContext();
 		bool selectPath(
 			const std::string& dialogTitle,
@@ -189,4 +191,5 @@ class ofApp : public ofBaseApp {
 		std::string holoscanNegativePrompt;
 		std::string holoscanStatus;
 		int holoscanCompletedFrames = 0;
+		std::string equivalentSdCliCommand;
 };

@@ -507,6 +507,9 @@ void stableDiffusionThread::threadedFunction() {
 
 		sd_vid_gen_params_t params =
 			ofxStableDiffusionNativeAdapter::buildVideoParams(videoTaskData, sdCtx, loraBuffer);
+		ofLogNotice("ofxStableDiffusion")
+			<< "Wrapper video request: "
+			<< ofxStableDiffusionNativeAdapter::describeVideoParams(params);
 		int generatedFrameCount = 0;
 		sd_image_t* output = nullptr;
 		{

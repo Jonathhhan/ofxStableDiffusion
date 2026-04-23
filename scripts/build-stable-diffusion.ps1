@@ -7,6 +7,7 @@ param(
     [string]$InstallGgmlLibDir = "",
     [string]$VariantRootDir = "",
     [string]$ExampleBinDir = "",
+    [string]$InstallBinDir = "",
     [string]$Configuration = "Release",
     [string]$SourceReleaseTag = "",
     [string]$Generator = "",
@@ -18,12 +19,13 @@ param(
     [switch]$Vulkan,
     [switch]$Metal,
     [switch]$All,
+    [switch]$BuildCli,
     [switch]$SkipSourceRefresh,
     [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
-$DefaultSourceReleaseTag = "master-585-44cca3d"
+$DefaultSourceReleaseTag = "master-572-1b4e9be"
 
 function Write-Step {
     param([string]$Message)
@@ -93,12 +95,14 @@ function Invoke-SelfBuild {
         [string]$InstallGgmlLibDir,
         [string]$VariantRootDir,
         [string]$ExampleBinDir,
+        [string]$InstallBinDir,
         [string]$Configuration,
         [string]$SourceReleaseTag,
         [string]$Generator,
         [int]$Jobs,
         [string]$GgmlReleaseTag,
         [switch]$Clean,
+        [switch]$BuildCli,
         [switch]$DryRun,
         [switch]$SkipSourceRefresh
     )
@@ -112,6 +116,7 @@ function Invoke-SelfBuild {
         InstallGgmlLibDir = $InstallGgmlLibDir
         VariantRootDir = $VariantRootDir
         ExampleBinDir = $ExampleBinDir
+        InstallBinDir = $InstallBinDir
         Configuration = $Configuration
         Generator = $Generator
         Jobs = $Jobs
@@ -126,6 +131,9 @@ function Invoke-SelfBuild {
     }
     if ($DryRun) {
         $invokeArgs.DryRun = $true
+    }
+    if ($BuildCli) {
+        $invokeArgs.BuildCli = $true
     }
     if ($SkipSourceRefresh) {
         $invokeArgs.SkipSourceRefresh = $true
@@ -471,6 +479,9 @@ if ([string]::IsNullOrWhiteSpace($VariantRootDir)) {
 if ([string]::IsNullOrWhiteSpace($ExampleBinDir)) {
     $ExampleBinDir = Join-Path $addonRoot 'ofxStableDiffusionExample\bin'
 }
+if ([string]::IsNullOrWhiteSpace($InstallBinDir)) {
+    $InstallBinDir = Join-Path $addonRoot 'libs\stable-diffusion\bin\vs'
+}
 if ($Jobs -le 0) {
     $Jobs = [Math]::Max(1, [Environment]::ProcessorCount)
 }
@@ -521,12 +532,14 @@ if ($All) {
             -InstallGgmlLibDir $InstallGgmlLibDir `
             -VariantRootDir $VariantRootDir `
             -ExampleBinDir $ExampleBinDir `
+            -InstallBinDir $InstallBinDir `
             -Configuration $Configuration `
             -SourceReleaseTag $SourceReleaseTag `
             -Generator $Generator `
             -Jobs $Jobs `
             -GgmlReleaseTag $GgmlReleaseTag `
             -Clean `
+            -BuildCli:$BuildCli `
             -DryRun:$DryRun `
             -SkipSourceRefresh:$(-not $firstBuild)
         $firstBuild = $false
@@ -656,6 +669,7 @@ if (-not $DryRun) {
     New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallIncludeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallLibDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $InstallBinDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallGgmlIncludeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallGgmlLibDir | Out-Null
     New-Item -ItemType Directory -Force -Path $VariantRootDir | Out-Null
@@ -682,7 +696,7 @@ $configureArgs = @(
     '-B', $BuildDir,
     "-DCMAKE_BUILD_TYPE=$Configuration",
     '-DSD_BUILD_SHARED_LIBS=ON',
-    '-DSD_BUILD_EXAMPLES=OFF'
+    ('-DSD_BUILD_EXAMPLES=' + ($(if ($BuildCli) { 'ON' } else { 'OFF' })))
 )
 
 if ($vendoredCommit -or $vendoredTargetCommit) {
@@ -750,6 +764,7 @@ $ggmlMetalLibPath = Find-FirstFile -Root $BuildDir -Names @('ggml-metal.lib')
 $webpLibPath = Find-FirstFile -Root $BuildDir -Names @('webp.lib')
 $webpmuxLibPath = Find-FirstFile -Root $BuildDir -Names @('libwebpmux.lib', 'webpmux.lib')
 $webmLibPath = Find-FirstFile -Root $BuildDir -Names @('webm.lib', 'libwebm.lib')
+$sdCliPath = Find-FirstFile -Root $BuildDir -Names @('sd-cli.exe')
 
 if (-not $headerPath) {
     throw "Build completed, but stable-diffusion.h was not found under $SourceDir."
@@ -759,6 +774,9 @@ if (-not $dllPath) {
 }
 if (-not $libPath) {
     throw "Build completed, but stable-diffusion.lib was not found under $BuildDir."
+}
+if ($BuildCli -and -not $sdCliPath) {
+    throw "Build completed, but sd-cli.exe was not found under $BuildDir even though -BuildCli was requested."
 }
 
 $optionalSupportLibs = @(
@@ -776,6 +794,7 @@ Write-Step "Staging stable-diffusion artifacts into the addon"
 Copy-IfPresent -Path $headerPath -Destination $InstallIncludeDir
 Copy-IfPresent -Path $dllPath -Destination $InstallLibDir
 Copy-IfPresent -Path $libPath -Destination $InstallLibDir
+Copy-IfPresent -Path $sdCliPath -Destination $InstallBinDir
 Copy-IfPresent -Path $webpLibPath -Destination $InstallLibDir
 Copy-IfPresent -Path $webpmuxLibPath -Destination $InstallLibDir
 Copy-IfPresent -Path $webmLibPath -Destination $InstallLibDir
@@ -801,12 +820,14 @@ Copy-IfPresent -Path $ggmlMetalLibPath -Destination $InstallGgmlLibDir
 
 $variantStableDiffusionIncludeDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\include"
 $variantStableDiffusionLibDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\lib\vs"
+$variantStableDiffusionBinDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\bin\vs"
 $variantGgmlIncludeDir = Join-Path $VariantRootDir "$backendMode\ggml\include"
 $variantGgmlLibDir = Join-Path $VariantRootDir "$backendMode\ggml\lib\vs"
 
 Write-Step "Snapshotting backend variant artifacts"
 Copy-DirectoryContents -Source $InstallIncludeDir -Destination $variantStableDiffusionIncludeDir
 Copy-DirectoryContents -Source $InstallLibDir -Destination $variantStableDiffusionLibDir
+Copy-DirectoryContents -Source $InstallBinDir -Destination $variantStableDiffusionBinDir
 Copy-DirectoryContents -Source $InstallGgmlIncludeDir -Destination $variantGgmlIncludeDir
 Copy-DirectoryContents -Source $InstallGgmlLibDir -Destination $variantGgmlLibDir
 
@@ -816,6 +837,7 @@ Write-Host "  source:  $SourceDir"
 Write-Host "  build:   $BuildDir"
 Write-Host "  include: $InstallIncludeDir"
 Write-Host "  libs:    $InstallLibDir"
+Write-Host "  bins:    $InstallBinDir"
 Write-Host "  ggml include: $InstallGgmlIncludeDir"
 Write-Host "  ggml libs:    $InstallGgmlLibDir"
 Write-Host "  variant snapshot: $VariantRootDir\$backendMode"

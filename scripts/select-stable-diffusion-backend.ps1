@@ -5,6 +5,7 @@ param(
     [string]$VariantRootDir = "",
     [string]$InstallIncludeDir = "",
     [string]$InstallLibDir = "",
+    [string]$InstallBinDir = "",
     [string]$InstallGgmlIncludeDir = "",
     [string]$InstallGgmlLibDir = "",
     [string]$ExampleBinDir = ""
@@ -59,6 +60,9 @@ if ([string]::IsNullOrWhiteSpace($InstallIncludeDir)) {
 if ([string]::IsNullOrWhiteSpace($InstallLibDir)) {
     $InstallLibDir = Join-Path $addonRoot 'libs\stable-diffusion\lib\vs'
 }
+if ([string]::IsNullOrWhiteSpace($InstallBinDir)) {
+    $InstallBinDir = Join-Path $addonRoot 'libs\stable-diffusion\bin\vs'
+}
 if ([string]::IsNullOrWhiteSpace($InstallGgmlIncludeDir)) {
     $InstallGgmlIncludeDir = Join-Path $addonRoot 'libs\ggml\include'
 }
@@ -71,6 +75,7 @@ if ([string]::IsNullOrWhiteSpace($ExampleBinDir)) {
 
 $variantStableDiffusionIncludeDir = Join-Path $VariantRootDir "$Backend\stable-diffusion\include"
 $variantStableDiffusionLibDir = Join-Path $VariantRootDir "$Backend\stable-diffusion\lib\vs"
+$variantStableDiffusionBinDir = Join-Path $VariantRootDir "$Backend\stable-diffusion\bin\vs"
 $variantGgmlIncludeDir = Join-Path $VariantRootDir "$Backend\ggml\include"
 $variantGgmlLibDir = Join-Path $VariantRootDir "$Backend\ggml\lib\vs"
 
@@ -87,16 +92,21 @@ Write-Host "    Variant root: $VariantRootDir"
 
 New-Item -ItemType Directory -Force -Path $InstallIncludeDir | Out-Null
 New-Item -ItemType Directory -Force -Path $InstallLibDir | Out-Null
+New-Item -ItemType Directory -Force -Path $InstallBinDir | Out-Null
 New-Item -ItemType Directory -Force -Path $InstallGgmlIncludeDir | Out-Null
 New-Item -ItemType Directory -Force -Path $InstallGgmlLibDir | Out-Null
 
 Remove-DirectoryContents -LiteralPath $InstallIncludeDir
 Remove-DirectoryContents -LiteralPath $InstallLibDir
+Remove-DirectoryContents -LiteralPath $InstallBinDir
 Remove-DirectoryContents -LiteralPath $InstallGgmlIncludeDir
 Remove-DirectoryContents -LiteralPath $InstallGgmlLibDir
 
 Copy-DirectoryContents -Source $variantStableDiffusionIncludeDir -Destination $InstallIncludeDir
 Copy-DirectoryContents -Source $variantStableDiffusionLibDir -Destination $InstallLibDir
+if (Test-Path -LiteralPath $variantStableDiffusionBinDir) {
+    Copy-DirectoryContents -Source $variantStableDiffusionBinDir -Destination $InstallBinDir
+}
 
 if (Test-Path -LiteralPath $variantGgmlIncludeDir) {
     Copy-DirectoryContents -Source $variantGgmlIncludeDir -Destination $InstallGgmlIncludeDir
@@ -118,5 +128,6 @@ Write-Host ""
 Write-Host "Selected backend variant: $Backend"
 Write-Host "  stable-diffusion include: $InstallIncludeDir"
 Write-Host "  stable-diffusion libs:    $InstallLibDir"
+Write-Host "  stable-diffusion bins:    $InstallBinDir"
 Write-Host "  ggml include:             $InstallGgmlIncludeDir"
 Write-Host "  ggml libs:                $InstallGgmlLibDir"

@@ -15,6 +15,7 @@ REM   --gpu, --cuda         Enable CUDA backend
 REM   --vulkan              Enable Vulkan backend
 REM   --metal               Enable Metal backend where supported
 REM   --all                 Build every available backend variant and leave the best one active
+REM   --build-cli           Also build and stage sd-cli.exe for native testing
 REM   --select-backend NAME Select an already staged backend variant ^(cpu-only, cuda, vulkan, metal^)
 REM   --ggml-release-tag TAG         Override the upstream ggml release tag used for source builds (default: latest release)
 REM   --skip-native         Skip native stable-diffusion build
@@ -31,6 +32,7 @@ set "CUDA_FLAG="
 set "VULKAN_FLAG="
 set "METAL_FLAG="
 set "ALL_FLAG="
+set "BUILD_CLI_FLAG="
 set "SELECT_BACKEND_FLAG="
 set "GGML_RELEASE_TAG_FLAG="
 set "SKIP_NATIVE_FLAG="
@@ -95,6 +97,11 @@ if /i "%~1"=="--all" (
     shift
     goto parse_args
 )
+if /i "%~1"=="--build-cli" (
+    set "BUILD_CLI_FLAG=-BuildCli"
+    shift
+    goto parse_args
+)
 if /i "%~1"=="--select-backend" (
     if "%~2"=="" (
         echo Error: --select-backend requires a value.
@@ -152,6 +159,7 @@ echo   --gpu, --cuda         Enable CUDA backend
 echo   --vulkan              Enable Vulkan backend
 echo   --metal               Enable Metal backend where supported
 echo   --all                 Build every available backend variant and leave the best one active
+echo   --build-cli           Also build and stage sd-cli.exe for native testing
 echo   --select-backend NAME Select an already staged backend variant ^(cpu-only, cuda, vulkan, metal^)
 echo   --ggml-release-tag TAG         Override the upstream ggml release tag used for source builds ^(default: latest release^)
 echo   --skip-native         Skip native stable-diffusion build
@@ -162,7 +170,7 @@ exit /b 0
 
 :done_args
 
-set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %METAL_FLAG% %ALL_FLAG% %SELECT_BACKEND_FLAG% %GGML_RELEASE_TAG_FLAG% %SKIP_NATIVE_FLAG% %CLEAN_FLAG%"
+set "PS_ARGS=-Configuration Release -Jobs %JOBS% %CPU_FLAG% %CUDA_FLAG% %VULKAN_FLAG% %METAL_FLAG% %ALL_FLAG% %BUILD_CLI_FLAG% %SELECT_BACKEND_FLAG% %GGML_RELEASE_TAG_FLAG% %SKIP_NATIVE_FLAG% %CLEAN_FLAG%"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" %PS_ARGS%
 set "EXIT_CODE=%ERRORLEVEL%"
 endlocal & exit /b %EXIT_CODE%

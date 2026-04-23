@@ -21,6 +21,49 @@ bool containsKeyword(const std::string& haystack, const std::string& needle) {
 	return haystack.find(needle) != std::string::npos;
 }
 
+std::string quoteCliArg(const std::string& value) {
+	std::string escaped = "\"";
+	for (char c : value) {
+		if (c == '"') {
+			escaped += "\\\"";
+		} else {
+			escaped += c;
+		}
+	}
+	escaped += "\"";
+	return escaped;
+}
+
+std::string formatCliFloat(float value) {
+	std::ostringstream stream;
+	stream.setf(std::ios::fixed);
+	stream.precision(3);
+	stream << value;
+	std::string formatted = stream.str();
+	while (!formatted.empty() && formatted.back() == '0') {
+		formatted.pop_back();
+	}
+	if (!formatted.empty() && formatted.back() == '.') {
+		formatted.pop_back();
+	}
+	return formatted.empty() ? "0" : formatted;
+}
+
+const char* sampleMethodToCliName(sample_method_t method) {
+	switch (method) {
+	case EULER_A_SAMPLE_METHOD: return "euler_a";
+	case EULER_SAMPLE_METHOD: return "euler";
+	case HEUN_SAMPLE_METHOD: return "heun";
+	case DPM2_SAMPLE_METHOD: return "dpm2";
+	case DPMPP2S_A_SAMPLE_METHOD: return "dpm++2s_a";
+	case DPMPP2M_SAMPLE_METHOD: return "dpm++2m";
+	case DPMPP2Mv2_SAMPLE_METHOD: return "dpm++2mv2";
+	case LCM_SAMPLE_METHOD: return "lcm";
+	default:
+		return "euler";
+	}
+}
+
 bool loadImageFile(
 	const std::string& path,
 	int width,
@@ -342,6 +385,135 @@ ofxStableDiffusionContextSettings ofApp::buildContextSettings() const {
 }
 
 //--------------------------------------------------------------
+ofxStableDiffusionVideoRequest ofApp::buildVideoRequest() const {
+	ofxStableDiffusionVideoRequest request;
+	request.initImage = inputImage;
+	request.endImage = (useEndFrame && endInputImage.data != nullptr) ? endInputImage : sd_image_t{0, 0, 0, nullptr};
+	request.prompt = prompt;
+	request.negativePrompt = negativePrompt;
+	request.clipSkip = clipSkip;
+	request.width = width;
+	request.height = height;
+	request.frameCount = videoFrames;
+	request.fps = videoFps;
+	request.cfgScale = cfgScale;
+	request.sampleMethod = sampleMethodEnum;
+	request.sampleSteps = sampleSteps;
+	if (useCustomEta) {
+		request.eta = eta;
+	}
+	if (useCustomFlowShift) {
+		request.flowShift = flowShift;
+	}
+	request.useHighNoiseOverrides = false;
+	if (request.useHighNoiseOverrides) {
+		request.highNoiseCfgScale = highNoiseCfgScale;
+		request.highNoiseSampleMethod = highNoiseSampleMethodEnum;
+		request.highNoiseSampleSteps = highNoiseSampleSteps;
+		if (useCustomHighNoiseEta) {
+			request.highNoiseEta = highNoiseEta;
+		}
+		if (useCustomHighNoiseFlowShift) {
+			request.highNoiseFlowShift = highNoiseFlowShift;
+		}
+	}
+	request.strength = strength;
+	request.seed = seed;
+	request.vaceStrength = vaceStrength;
+	request.mode = static_cast<ofxStableDiffusionVideoMode>(
+		std::distance(std::begin(videoModeArray),
+			std::find(std::begin(videoModeArray), std::end(videoModeArray), videoMode)));
+	request.loras = loras;
+	if (enablePromptInterpolation && !promptB.empty() && videoFrames > 1) {
+		request.animationSettings.enablePromptInterpolation = true;
+		request.animationSettings.promptInterpolationMode = interpolationModeEnum;
+		request.animationSettings.promptKeyframes = {
+			{0, prompt},
+			{videoFrames - 1, promptB}
+		};
+	}
+	if (useSeedSequence) {
+		request.animationSettings.useSeedSequence = true;
+		request.animationSettings.seedIncrement = seedIncrement;
+	}
+	return request;
+}
+
+//--------------------------------------------------------------
+std::string ofApp::buildEquivalentSdCliCommand() const {
+	std::ostringstream command;
+	command << "sd-cli.exe";
+	if (isImageToVideo) {
+		command << " -M vid_gen";
+		if (!modelPath.empty()) {
+			command << " --model " << quoteCliArg(modelPath);
+		}
+		if (!diffusionModelPath.empty()) {
+			command << " --diffusion-model " << quoteCliArg(diffusionModelPath);
+		}
+		if (!vaePath.empty()) {
+			command << " --vae " << quoteCliArg(vaePath);
+		}
+		if (!t5xxlPath.empty()) {
+			command << " --t5xxl " << quoteCliArg(t5xxlPath);
+		}
+		if (!clipLPath.empty()) {
+			command << " --clip_l " << quoteCliArg(clipLPath);
+		}
+		if (!clipGPath.empty()) {
+			command << " --clip_g " << quoteCliArg(clipGPath);
+		}
+		command << " -p " << quoteCliArg(prompt);
+		if (!negativePrompt.empty()) {
+			command << " -n " << quoteCliArg(negativePrompt);
+		}
+		command << " --cfg-scale " << formatCliFloat(cfgScale);
+		command << " --sampling-method " << sampleMethodToCliName(sampleMethodEnum);
+		command << " --steps " << sampleSteps;
+		command << " -W " << width;
+		command << " -H " << height;
+		command << " --video-frames " << videoFrames;
+		if (useCustomEta) {
+			command << " --eta " << formatCliFloat(eta);
+		}
+		if (useCustomFlowShift) {
+			command << " --flow-shift " << formatCliFloat(flowShift);
+		}
+		if (seed >= 0) {
+			command << " --seed " << seed;
+		}
+		if (diffusionFlashAttn) {
+			command << " --diffusion-fa";
+		}
+		if (flashAttn) {
+			command << " --flash-attn";
+		}
+		if (offloadParamsToCpu) {
+			command << " --offload-to-cpu";
+		}
+		if (keepVaeOnCpu) {
+			command << " --vae-on-cpu";
+		}
+		if (keepClipOnCpu) {
+			command << " --clip-on-cpu";
+		}
+		if (vaeTiling) {
+			command << " --vae-tiling";
+		}
+		if (inputImage.data != nullptr) {
+			command << " --init-img <loaded input image path not tracked by example>";
+		}
+		if (useEndFrame && endInputImage.data != nullptr) {
+			command << " --end-img <loaded end frame path not tracked by example>";
+		}
+		return command.str();
+	}
+
+	command << " [image-mode export not implemented yet]";
+	return command.str();
+}
+
+//--------------------------------------------------------------
 void ofApp::refreshModelContext() {
 	modelName = ofFilePath::getFileName(modelPath.empty() ? diffusionModelPath : modelPath);
 	stableDiffusion.newSdCtx(buildContextSettings());
@@ -497,9 +669,25 @@ void ofApp::update() {
 	if (stableDiffusion.isDiffused()) {
 		outputImages = stableDiffusion.returnImages();
 		if (isImageToVideo) {
+			const auto videoClip = stableDiffusion.getVideoClip();
 			totalVideoFrames = stableDiffusion.getOutputCount();
 			for (int i = 0; i < totalVideoFrames; i++) {
-				textureVector[i].loadData(outputImages[i].data, width, height, GL_RGB);
+				if (i >= static_cast<int>(videoClip.frames.size()) || !videoClip.frames[static_cast<std::size_t>(i)].isAllocated()) {
+					continue;
+				}
+				const auto& framePixels = videoClip.frames[static_cast<std::size_t>(i)].pixels;
+				const int frameWidth = framePixels.getWidth();
+				const int frameHeight = framePixels.getHeight();
+				const int frameChannels = framePixels.getNumChannels();
+				if (frameWidth <= 0 || frameHeight <= 0 || frameChannels <= 0) {
+					continue;
+				}
+				if (!textureVector[i].isAllocated() ||
+					textureVector[i].getWidth() != frameWidth ||
+					textureVector[i].getHeight() != frameHeight) {
+					textureVector[i].allocate(frameWidth, frameHeight, frameChannels == 4 ? GL_RGBA : GL_RGB);
+				}
+				textureVector[i].loadData(framePixels);
 			}
 			previousSelectedImage = 0;
 			currentFrame = 0;
@@ -620,8 +808,15 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Indent(-10);
 		if (ImGui::Button("Save")) {
-			textureVector[selectedImage].readToPixels(pixels);
-			ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+			const auto& result = stableDiffusion.getLastResult();
+			if (isImageToVideo && selectedImage >= 0 && selectedImage < static_cast<int>(result.video.frames.size())) {
+				ofSaveImage(
+					result.video.frames[static_cast<std::size_t>(selectedImage)].pixels,
+					ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+			} else {
+				textureVector[selectedImage].readToPixels(pixels);
+				ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+			}
 		}
 		ImGui::TreePop();
 	}
@@ -1000,6 +1195,10 @@ void ofApp::draw() {
 		}
 		if (isImageToVideo) {
 			const auto videoCapabilities = stableDiffusion.getCapabilities();
+			const bool highNoiseOverridesAvailable = false;
+			if (!highNoiseOverridesAvailable) {
+				useHighNoiseOverrides = false;
+			}
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::SliderInt(
 				"Video Frames",
@@ -1177,48 +1376,6 @@ void ofApp::draw() {
 				ImGui::Dummy(ImVec2(0, 10));
 				ImGui::SliderFloat("Eta", &eta, 0.0f, 1.0f);
 			}
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Checkbox("High-Noise Overrides", &useHighNoiseOverrides);
-			if (useHighNoiseOverrides) {
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::SliderFloat(
-					"High-Noise CFG",
-					&highNoiseCfgScale,
-					videoParameterProfile.minCfgScale,
-					videoParameterProfile.maxCfgScale);
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::SliderInt(
-					"High-Noise Steps",
-					&highNoiseSampleSteps,
-					videoParameterProfile.minSampleSteps,
-					videoParameterProfile.maxSampleSteps);
-				ImGui::Dummy(ImVec2(0, 10));
-				if (ImGui::BeginCombo("High-Noise Sample Method", highNoiseSampleMethod, ImGuiComboFlags_NoArrowButton)) {
-					for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
-						const bool is_selected = (highNoiseSampleMethod == sampleMethodArray[n]);
-						if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
-							highNoiseSampleMethod = sampleMethodArray[n];
-							highNoiseSampleMethodEnum = (sample_method_t)n;
-						}
-						if (is_selected) {
-							ImGui::SetItemDefaultFocus();
-						}
-					}
-					ImGui::EndCombo();
-				}
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::Checkbox("Custom High-Noise Eta", &useCustomHighNoiseEta);
-				if (useCustomHighNoiseEta) {
-					ImGui::Dummy(ImVec2(0, 10));
-					ImGui::SliderFloat("High-Noise Eta", &highNoiseEta, 0.0f, 1.0f);
-				}
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::Checkbox("Custom High-Noise Flow Shift", &useCustomHighNoiseFlowShift);
-				if (useCustomHighNoiseFlowShift) {
-					ImGui::Dummy(ImVec2(0, 10));
-					ImGui::SliderFloat("High-Noise Flow Shift", &highNoiseFlowShift, 0.0f, 10.0f);
-				}
-			}
 		}
 		if ((isImageToVideo && videoParameterProfile.maxStrength > videoParameterProfile.minStrength) ||
 			(!isImageToVideo && imageParameterProfile.supportsStrength)) {
@@ -1277,56 +1434,7 @@ void ofApp::draw() {
 		if (isImageToVideo) {
 			isPlaying = false;
 			totalVideoFrames = 0;
-			ofxStableDiffusionVideoRequest request;
-			request.initImage = inputImage;
-			request.endImage = (useEndFrame && endInputImage.data != nullptr) ? endInputImage : sd_image_t{0, 0, 0, nullptr};
-			request.prompt = prompt;
-			request.negativePrompt = negativePrompt;
-			request.clipSkip = clipSkip;
-			request.width = width;
-			request.height = height;
-			request.frameCount = videoFrames;
-			request.fps = videoFps;
-			request.cfgScale = cfgScale;
-			request.sampleMethod = sampleMethodEnum;
-			request.sampleSteps = sampleSteps;
-			if (useCustomEta) {
-				request.eta = eta;
-			}
-			if (useCustomFlowShift) {
-				request.flowShift = flowShift;
-			}
-			request.useHighNoiseOverrides = useHighNoiseOverrides;
-			if (useHighNoiseOverrides) {
-				request.highNoiseCfgScale = highNoiseCfgScale;
-				request.highNoiseSampleMethod = highNoiseSampleMethodEnum;
-				request.highNoiseSampleSteps = highNoiseSampleSteps;
-				if (useCustomHighNoiseEta) {
-					request.highNoiseEta = highNoiseEta;
-				}
-				if (useCustomHighNoiseFlowShift) {
-					request.highNoiseFlowShift = highNoiseFlowShift;
-				}
-			}
-			request.strength = strength;
-			request.seed = seed;
-			request.vaceStrength = vaceStrength;
-			request.mode = static_cast<ofxStableDiffusionVideoMode>(
-				std::distance(std::begin(videoModeArray),
-					std::find(std::begin(videoModeArray), std::end(videoModeArray), videoMode)));
-			request.loras = loras;
-			if (enablePromptInterpolation && !promptB.empty() && videoFrames > 1) {
-				request.animationSettings.enablePromptInterpolation = true;
-				request.animationSettings.promptInterpolationMode = interpolationModeEnum;
-				request.animationSettings.promptKeyframes = {
-					{0, prompt},
-					{videoFrames - 1, promptB}
-				};
-			}
-			if (useSeedSequence) {
-				request.animationSettings.useSeedSequence = true;
-				request.animationSettings.seedIncrement = seedIncrement;
-			}
+			ofxStableDiffusionVideoRequest request = buildVideoRequest();
 			stableDiffusion.generateVideo(request);
 		}
 		else {
@@ -1362,6 +1470,17 @@ void ofApp::draw() {
 			request.normalizeInput = normalizeInput;
 			request.inputIdImagesPath = inputIdImagesPath;
 			stableDiffusion.generate(request);
+		}
+	}
+	if (isImageToVideo) {
+		ImGui::SameLine(0, 10);
+		if (ImGui::Button("Print Equivalent sd-cli")) {
+			equivalentSdCliCommand = buildEquivalentSdCliCommand();
+			ofLogNotice("ofApp") << "Equivalent sd-cli: " << equivalentSdCliCommand;
+		}
+		if (!equivalentSdCliCommand.empty()) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::TextWrapped("%s", equivalentSdCliCommand.c_str());
 		}
 	}
 	if (totalVideoFrames > 0) {
@@ -1489,6 +1608,25 @@ void ofApp::applyRecommendedVideoParameters() {
 	videoFrames = videoParameterProfile.defaultFrameCount;
 	videoFps = videoParameterProfile.defaultFps;
 	vaceStrength = videoParameterProfile.defaultVaceStrength;
+	switch (videoParameterProfile.modelFamily) {
+	case ofxStableDiffusionModelFamily::WAN:
+	case ofxStableDiffusionModelFamily::WANI2V:
+	case ofxStableDiffusionModelFamily::WANTI2V:
+	case ofxStableDiffusionModelFamily::WANFLF2V:
+	case ofxStableDiffusionModelFamily::WANVACE:
+		sampleMethod = "EULER_SAMPLE_METHOD";
+		sampleMethodEnum = EULER_SAMPLE_METHOD;
+		highNoiseSampleMethod = sampleMethod;
+		highNoiseSampleMethodEnum = sampleMethodEnum;
+		useCustomFlowShift = true;
+		flowShift = 3.0f;
+		if (!useHighNoiseOverrides) {
+			useCustomHighNoiseFlowShift = false;
+		}
+		break;
+	default:
+		break;
+	}
 	allocate();
 }
 

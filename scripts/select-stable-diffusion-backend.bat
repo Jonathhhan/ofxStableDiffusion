@@ -76,6 +76,16 @@ if /i "%~1"=="--install-lib-dir" (
     shift
     goto parse_args
 )
+if /i "%~1"=="--install-bin-dir" (
+    if "%~2"=="" (
+        echo Error: --install-bin-dir requires a value.
+        exit /b 1
+    )
+    set "PS_ARGS=!PS_ARGS! -InstallBinDir ""%~2"""
+    shift
+    shift
+    goto parse_args
+)
 if /i "%~1"=="--install-ggml-include-dir" (
     if "%~2"=="" (
         echo Error: --install-ggml-include-dir requires a value.
@@ -126,6 +136,7 @@ echo   --backend NAME            Explicit backend name ^(cpu-only, cuda, vulkan,
 echo   --variant-root-dir DIR    Override the variant snapshot root
 echo   --install-include-dir DIR Override staged stable-diffusion include dir
 echo   --install-lib-dir DIR     Override staged stable-diffusion lib dir
+echo   --install-bin-dir DIR     Override staged stable-diffusion bin dir
 echo   --install-ggml-include-dir DIR Override staged ggml include dir
 echo   --install-ggml-lib-dir DIR Override staged ggml lib dir
 echo   --example-bin-dir DIR     Override example runtime staging dir
