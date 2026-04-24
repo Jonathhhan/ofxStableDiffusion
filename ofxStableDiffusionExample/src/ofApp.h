@@ -36,6 +36,8 @@ class ofApp : public ofBaseApp {
 			ofPixels& targetPixels,
 			sd_image_t& targetSdImage,
 			std::string& targetName);
+		bool loadVideoControlFramesFromFolder(const std::string& folderPath);
+		void clearVideoControlFrames();
 		void setupHoloscanBridge();
 		void drawHoloscanBridgeSection();
 		ofxStableDiffusionContextSettings buildContextSettings() const;
@@ -57,10 +59,12 @@ class ofApp : public ofBaseApp {
 		ofImage endFrameImage;
 		ofImage maskGuideImage;
 		ofImage controlGuideImage;
+		std::vector<ofImage> videoControlFrameImages;
 		ofPixels pixels;
 		ofPixels endFramePixels;
 		ofPixels maskGuidePixels;
 		ofPixels controlGuidePixels;
+		std::vector<ofPixels> videoControlFramePixels;
 		std::string prompt;
 		std::string promptB;
 		std::string instruction;
@@ -69,8 +73,14 @@ class ofApp : public ofBaseApp {
 		int width;
 		int height;
 		float cfgScale;
+		bool useCustomImageCfgScale;
+		bool useCustomVideoCfgScale;
+		bool useCustomGuidance;
+		float guidance;
 		int batchCount;
 		float strength;
+		bool useCustomImageStrength;
+		bool useCustomVideoStrength;
 		int seed;
 		int clipSkip;
 		int previewSize;
@@ -83,8 +93,8 @@ class ofApp : public ofBaseApp {
 		const char* sampleMethodArray[8] = {"EULER_A_SAMPLE_METHOD", "EULER_SAMPLE_METHOD", "HEUN_SAMPLE_METHOD", "DPM2_SAMPLE_METHOD", "DPMPP2S_A_SAMPLE_METHOD", "DPMPP2M_SAMPLE_METHOD", "DPMPP2Mv2_SAMPLE_METHOD", "LCM_SAMPLE_METHOD"};
 		const char* sampleMethod;
 		const char* highNoiseSampleMethod;
-		const char* videoModeArray[4] = {"Standard", "Loop", "PingPong", "Boomerang"};
-		const char* videoMode;
+		const char* videoCacheModeArray[7] = {"disabled", "easycache", "ucache", "dbcache", "taylorseer", "cache-dit", "spectrum"};
+		const char* videoCacheMode = "disabled";
 		const char* interpolationModeArray[5] = {"Linear", "Smooth", "EaseIn", "EaseOut", "EaseInOut"};
 		const char* interpolationMode;
 		std::string modelPath;
@@ -104,6 +114,8 @@ class ofApp : public ofBaseApp {
 		std::vector<ofxStableDiffusionLora> loras;
 		sample_method_t sampleMethodEnum;
 		int sampleSteps;
+		bool useCustomImageSampleSteps;
+		bool useCustomVideoSampleSteps;
 		bool promptIsEdited;
 		bool vaeDecodeOnly;
 		bool vaeTiling;
@@ -123,9 +135,13 @@ class ofApp : public ofBaseApp {
 		bool useCustomFlowShift;
 		float flowShift;
 		bool useHighNoiseOverrides;
+		bool useCustomHighNoiseCfgScale;
+		bool useCustomHighNoiseGuidance;
 		sample_method_t highNoiseSampleMethodEnum;
 		int highNoiseSampleSteps;
+		bool useCustomHighNoiseSampleSteps;
 		float highNoiseCfgScale;
+		float highNoiseGuidance;
 		bool useCustomHighNoiseEta;
 		float highNoiseEta;
 		bool useCustomHighNoiseFlowShift;
@@ -154,6 +170,12 @@ class ofApp : public ofBaseApp {
 		int videoFrames;
 		int videoFps;
 		float vaceStrength;
+		bool useCustomVideoVaceStrength;
+		float videoMoeBoundary = 0.875f;
+		bool useCustomVideoMoeBoundary;
+		float videoCacheThreshold = 0.25f;
+		float videoCacheStartPercent = 0.2f;
+		float videoCacheEndPercent = 1.0f;
 		bool isPlaying;
 		int currentFrame;
 		int totalVideoFrames;
@@ -168,6 +190,8 @@ class ofApp : public ofBaseApp {
 		std::string endImageName;
 		std::string maskImageName;
 		std::string controlGuideName;
+		std::string defaultVideoControlFramesPath;
+		std::string videoControlFramesPath;
 		ofxImGui::Gui gui;
 		ofxStableDiffusion stableDiffusion;
 		bool enablePromptInterpolation = false;
@@ -175,14 +199,17 @@ class ofApp : public ofBaseApp {
 		bool useEndFrame = false;
 		bool useMaskGuide = false;
 		bool useControlGuide = false;
+		bool useVideoControlFrames = false;
 		int nativeLogLevelIndex = 0;
 		int seedIncrement = 1;
+		int videoControlPreviewIndex = 0;
 		ofxStableDiffusionInterpolationMode interpolationModeEnum =
 			ofxStableDiffusionInterpolationMode::Smooth;
 		ofxStableDiffusionImageParameterProfile imageParameterProfile;
 		ofxStableDiffusionVideoParameterProfile videoParameterProfile;
 		sd_image_t endInputImage = {0, 0, 0, nullptr};
 		sd_image_t maskGuideInput = {0, 0, 0, nullptr};
+		std::vector<sd_image_t> videoControlFrames;
 		ofxStableDiffusionHoloscanBridge holoscanBridge;
 		bool holoscanBridgeEnabled = false;
 		bool holoscanBridgeRunning = false;

@@ -401,8 +401,8 @@ sd_ctx_t* ofxStableDiffusionModelManager::loadModelContext(const ofxStableDiffus
 	ctxParams.free_params_immediately = false;
 	ctxParams.n_threads = -1;  // auto
 	ctxParams.wtype = modelInfo.weightType;
-	ctxParams.rng_type = STD_DEFAULT_RNG;
-	ctxParams.sampler_rng_type = STD_DEFAULT_RNG;
+	ctxParams.rng_type = CUDA_RNG;
+	ctxParams.sampler_rng_type = RNG_TYPE_COUNT;
 
 	// Load model using stable-diffusion.cpp API
 	sd_ctx_t* ctx = new_sd_ctx(&ctxParams);

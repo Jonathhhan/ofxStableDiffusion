@@ -14,6 +14,68 @@ inline const char* emptyToNull(const std::string& value) {
 	return value.empty() ? nullptr : value.c_str();
 }
 
+inline std::string quoteCliArg(const std::string& value) {
+	std::string escaped = "\"";
+	for (char c : value) {
+		if (c == '"') {
+			escaped += "\\\"";
+		} else {
+			escaped += c;
+		}
+	}
+	escaped += "\"";
+	return escaped;
+}
+
+inline std::string formatCliFloat(float value) {
+	std::ostringstream stream;
+	stream.setf(std::ios::fixed);
+	stream.precision(3);
+	stream << value;
+	std::string formatted = stream.str();
+	while (!formatted.empty() && formatted.back() == '0') {
+		formatted.pop_back();
+	}
+	if (!formatted.empty() && formatted.back() == '.') {
+		formatted.pop_back();
+	}
+	return formatted.empty() ? "0" : formatted;
+}
+
+inline const char* sampleMethodToCliName(sample_method_t method) {
+	switch (method) {
+	case EULER_A_SAMPLE_METHOD: return "euler_a";
+	case EULER_SAMPLE_METHOD: return "euler";
+	case HEUN_SAMPLE_METHOD: return "heun";
+	case DPM2_SAMPLE_METHOD: return "dpm2";
+	case DPMPP2S_A_SAMPLE_METHOD: return "dpm++2s_a";
+	case DPMPP2M_SAMPLE_METHOD: return "dpm++2m";
+	case DPMPP2Mv2_SAMPLE_METHOD: return "dpm++2mv2";
+	case LCM_SAMPLE_METHOD: return "lcm";
+	default:
+		return "euler";
+	}
+}
+
+inline const char* schedulerToCliName(scheduler_t scheduler) {
+	switch (scheduler) {
+	case DISCRETE_SCHEDULER: return "discrete";
+	case KARRAS_SCHEDULER: return "karras";
+	case EXPONENTIAL_SCHEDULER: return "exponential";
+	case AYS_SCHEDULER: return "ays";
+	case GITS_SCHEDULER: return "gits";
+	case SGM_UNIFORM_SCHEDULER: return "sgm_uniform";
+	case SIMPLE_SCHEDULER: return "simple";
+	case SMOOTHSTEP_SCHEDULER: return "smoothstep";
+	case KL_OPTIMAL_SCHEDULER: return "kl_optimal";
+	case LCM_SCHEDULER: return "lcm";
+	case BONG_TANGENT_SCHEDULER: return "bong_tangent";
+	case SCHEDULER_COUNT:
+	default:
+		return "discrete";
+	}
+}
+
 inline sample_method_t resolveSampleMethod(sd_ctx_t* sdCtx, sample_method_t requested) {
 	if (requested == SAMPLE_METHOD_COUNT) {
 		return sd_get_default_sample_method(sdCtx);
@@ -181,7 +243,7 @@ inline sd_ctx_params_t buildContextParams(
 	params.n_threads = settings.nThreads;
 	params.wtype = settings.weightType;
 	params.rng_type = settings.rngType;
-	params.sampler_rng_type = settings.rngType;
+	params.sampler_rng_type = RNG_TYPE_COUNT;
 	params.prediction = settings.prediction;
 	params.lora_apply_mode = settings.loraApplyMode;
 	params.offload_params_to_cpu = settings.offloadParamsToCpu;
@@ -217,15 +279,22 @@ inline sd_img_gen_params_t buildImageParams(
 	params.height = request.height;
 	params.sample_params.sample_method = sampleMethod;
 	params.sample_params.scheduler = resolveScheduler(sdCtx, sampleMethod, settings.schedule);
-	params.sample_params.sample_steps = request.sampleSteps;
+	if (request.sampleSteps > 0) {
+		params.sample_params.sample_steps = request.sampleSteps;
+	}
 	if (std::isfinite(request.flowShift)) {
 		params.sample_params.flow_shift = request.flowShift;
 	}
-	params.sample_params.guidance.txt_cfg = request.cfgScale;
-	if (request.initImage.data != nullptr || !request.instruction.empty()) {
+	if (std::isfinite(request.cfgScale)) {
+		params.sample_params.guidance.txt_cfg = request.cfgScale;
+	}
+	if (std::isfinite(request.cfgScale) &&
+		(request.initImage.data != nullptr || !request.instruction.empty())) {
 		params.sample_params.guidance.img_cfg = request.cfgScale;
 	}
-	params.strength = request.strength;
+	if (std::isfinite(request.strength)) {
+		params.strength = request.strength;
+	}
 	params.seed = request.seed;
 	params.batch_count = request.batchCount;
 	params.control_image = request.controlCond ? *request.controlCond : sd_image_t{0, 0, 0, nullptr};
@@ -273,19 +342,28 @@ inline sd_vid_gen_params_t buildVideoParams(
 	params.clip_skip = request.clipSkip;
 	params.init_image = request.initImage;
 	params.end_image = request.endImage;
+	params.control_frames =
+		request.controlFrames.empty() ? nullptr : const_cast<sd_image_t*>(request.controlFrames.data());
+	params.control_frames_size = static_cast<int>(request.controlFrames.size());
 	params.width = request.width;
 	params.height = request.height;
 	params.sample_params.sample_method = sampleMethod;
 	params.sample_params.scheduler = scheduler;
-	params.sample_params.sample_steps = request.sampleSteps;
+	if (request.sampleSteps > 0) {
+		params.sample_params.sample_steps = request.sampleSteps;
+	}
 	if (std::isfinite(request.eta)) {
 		params.sample_params.eta = request.eta;
 	}
 	if (std::isfinite(request.flowShift)) {
 		params.sample_params.flow_shift = request.flowShift;
 	}
-	params.sample_params.guidance.txt_cfg = request.cfgScale;
-	params.high_noise_sample_params = params.sample_params;
+	if (std::isfinite(request.cfgScale)) {
+		params.sample_params.guidance.txt_cfg = request.cfgScale;
+	}
+	if (std::isfinite(request.guidance)) {
+		params.sample_params.guidance.distilled_guidance = request.guidance;
+	}
 	if (request.useHighNoiseOverrides) {
 		const sample_method_t highNoiseSampleMethod =
 			(request.highNoiseSampleMethod == SAMPLE_METHOD_COUNT)
@@ -306,12 +384,23 @@ inline sd_vid_gen_params_t buildVideoParams(
 		if (std::isfinite(request.highNoiseCfgScale)) {
 			params.high_noise_sample_params.guidance.txt_cfg = request.highNoiseCfgScale;
 		}
+		if (std::isfinite(request.highNoiseGuidance)) {
+			params.high_noise_sample_params.guidance.distilled_guidance = request.highNoiseGuidance;
+		}
 	}
-	params.strength = request.strength;
+	if (std::isfinite(request.moeBoundary)) {
+		params.moe_boundary = request.moeBoundary;
+	}
+	if (std::isfinite(request.strength)) {
+		params.strength = request.strength;
+	}
 	params.seed = request.seed;
 	params.video_frames = request.frameCount;
-	params.vace_strength = request.vaceStrength;
+	if (std::isfinite(request.vaceStrength)) {
+		params.vace_strength = request.vaceStrength;
+	}
 	params.vae_tiling_params = makeTilingParams(settings.vaeTiling);
+	params.cache = request.cache;
 
 	loraBuffer.clear();
 	loraBuffer.reserve(request.loras.size());
@@ -361,6 +450,25 @@ inline std::string describeSampleParams(const sd_sample_params_t& params) {
 	return out.str();
 }
 
+inline std::string describeHighNoiseSampleParams(const sd_sample_params_t& params) {
+	if (params.sample_steps > 0) {
+		return describeSampleParams(params);
+	}
+	if (params.sample_steps < 0) {
+		std::ostringstream out;
+		out << "enabled(auto";
+		if (params.sample_method != SAMPLE_METHOD_COUNT) {
+			out << ", method=" << sd_sample_method_name(params.sample_method);
+		}
+		if (params.scheduler != SCHEDULER_COUNT) {
+			out << ", scheduler=" << sd_scheduler_name(params.scheduler);
+		}
+		out << ")";
+		return out.str();
+	}
+	return "disabled";
+}
+
 inline std::string describeVideoParams(const sd_vid_gen_params_t& params) {
 	std::ostringstream out;
 	out
@@ -377,10 +485,99 @@ inline std::string describeVideoParams(const sd_vid_gen_params_t& params) {
 		<< " | moe_boundary=" << params.moe_boundary
 		<< " | vace_strength=" << params.vace_strength
 		<< " | sample={" << describeSampleParams(params.sample_params) << "}"
-		<< " | high_noise={" << describeSampleParams(params.high_noise_sample_params) << "}"
+		<< " | high_noise={" << describeHighNoiseSampleParams(params.high_noise_sample_params) << "}"
 		<< " | cache_mode=" << static_cast<int>(params.cache.mode)
 		<< " | loras=" << params.lora_count;
 	return out.str();
+}
+
+inline std::string buildResolvedVideoCliCommand(
+	const sd_vid_gen_params_t& params,
+	const ofxStableDiffusionContextSettings& settings) {
+	std::ostringstream command;
+	command << "sd-cli.exe -M vid_gen";
+	if (!settings.modelPath.empty()) {
+		command << " --model " << quoteCliArg(settings.modelPath);
+	}
+	if (!settings.diffusionModelPath.empty()) {
+		command << " --diffusion-model " << quoteCliArg(settings.diffusionModelPath);
+	}
+	if (!settings.vaePath.empty()) {
+		command << " --vae " << quoteCliArg(settings.vaePath);
+	}
+	if (!settings.t5xxlPath.empty()) {
+		command << " --t5xxl " << quoteCliArg(settings.t5xxlPath);
+	}
+	if (!settings.clipLPath.empty()) {
+		command << " --clip_l " << quoteCliArg(settings.clipLPath);
+	}
+	if (!settings.clipGPath.empty()) {
+		command << " --clip_g " << quoteCliArg(settings.clipGPath);
+	}
+	if (settings.rngType != CUDA_RNG) {
+		command << " --rng " << sd_rng_type_name(settings.rngType);
+	}
+	command << " -p " << quoteCliArg(params.prompt ? params.prompt : "");
+	if (params.negative_prompt && params.negative_prompt[0] != '\0') {
+		command << " -n " << quoteCliArg(params.negative_prompt);
+	}
+	if (params.clip_skip != -1) {
+		command << " --clip-skip " << params.clip_skip;
+	}
+	command << " --cfg-scale " << formatCliFloat(params.sample_params.guidance.txt_cfg);
+	command << " --guidance " << formatCliFloat(params.sample_params.guidance.distilled_guidance);
+	command << " --sampling-method " << sampleMethodToCliName(params.sample_params.sample_method);
+	command << " --scheduler " << schedulerToCliName(params.sample_params.scheduler);
+	command << " --steps " << params.sample_params.sample_steps;
+	command << " -W " << params.width;
+	command << " -H " << params.height;
+	command << " --video-frames " << params.video_frames;
+	if (std::isfinite(params.sample_params.eta)) {
+		command << " --eta " << formatCliFloat(params.sample_params.eta);
+	}
+	if (std::isfinite(params.sample_params.flow_shift)) {
+		command << " --flow-shift " << formatCliFloat(params.sample_params.flow_shift);
+	}
+	if (params.seed >= 0) {
+		command << " --seed " << params.seed;
+	}
+	command << " --moe-boundary " << formatCliFloat(params.moe_boundary);
+	if (params.high_noise_sample_params.sample_steps > 0) {
+		command << " --high-noise-sampling-method " << sampleMethodToCliName(params.high_noise_sample_params.sample_method);
+		command << " --high-noise-steps " << params.high_noise_sample_params.sample_steps;
+		command << " --high-noise-cfg-scale " << formatCliFloat(params.high_noise_sample_params.guidance.txt_cfg);
+	}
+	if (settings.diffusionFlashAttn) {
+		command << " --diffusion-fa";
+	}
+	if (settings.flashAttn) {
+		command << " --flash-attn";
+	}
+	if (settings.offloadParamsToCpu) {
+		command << " --offload-to-cpu";
+	}
+	if (settings.keepVaeOnCpu) {
+		command << " --vae-on-cpu";
+	}
+	if (settings.keepClipOnCpu) {
+		command << " --clip-on-cpu";
+	}
+	if (settings.vaeTiling) {
+		command << " --vae-tiling";
+	}
+	if (params.init_image.data != nullptr) {
+		command << " --init-img <loaded input image path not tracked by addon core>";
+	}
+	if (params.end_image.data != nullptr) {
+		command << " --end-img <loaded end frame path not tracked by addon core>";
+	}
+	if (params.control_frames_size > 0) {
+		command << " --control-video <loaded control frame folder not tracked by addon core>";
+	}
+	if (params.lora_count > 0 && !settings.loraModelDir.empty()) {
+		command << " --lora-model-dir " << quoteCliArg(settings.loraModelDir);
+	}
+	return command.str();
 }
 
 }  // namespace ofxStableDiffusionNativeAdapter

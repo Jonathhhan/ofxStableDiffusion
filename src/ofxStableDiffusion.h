@@ -49,6 +49,16 @@ public:
 	std::string getLastError() const;
 	ofxStableDiffusionErrorCode getLastErrorCode() const;
 	ofxStableDiffusionError getLastErrorInfo() const;
+	std::string getLastResolvedVideoRequestSummary() const;
+	std::string getLastResolvedVideoCliCommand() const;
+	sample_method_t getResolvedSampleMethod(sample_method_t requested = SAMPLE_METHOD_COUNT) const;
+	scheduler_t getResolvedScheduler(
+		sample_method_t requestedSampleMethod = SAMPLE_METHOD_COUNT,
+		scheduler_t requestedSchedule = SCHEDULER_COUNT) const;
+	std::string getResolvedSampleMethodName(sample_method_t requested = SAMPLE_METHOD_COUNT) const;
+	std::string getResolvedSchedulerName(
+		sample_method_t requestedSampleMethod = SAMPLE_METHOD_COUNT,
+		scheduler_t requestedSchedule = SCHEDULER_COUNT) const;
 	std::vector<ofxStableDiffusionError> getErrorHistory() const;
 	void clearErrorHistory();
 	int getVideoFrameIndexForTime(float seconds) const;
@@ -313,7 +323,7 @@ public:
 	int esrganMultiplier = 4;
 	sd_type_t wType = SD_TYPE_COUNT;
 	scheduler_t schedule = SCHEDULER_COUNT;
-	rng_type_t rngType = STD_DEFAULT_RNG;
+	rng_type_t rngType = CUDA_RNG;
 	prediction_t prediction = EPS_PRED;
 	lora_apply_mode_t loraApplyMode = LORA_APPLY_AUTO;
 	std::string controlImagePath;
@@ -349,6 +359,8 @@ private:
 	ofxStableDiffusionUpscalerSettings captureUpscalerSettingsNoLock() const;
 	void setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::Unknown);
 	void setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage);
+	void setLastResolvedVideoRequestSummary(const std::string& summary);
+	void setLastResolvedVideoCliCommand(const std::string& command);
 	void clearLastError();
 	void captureImageResults(
 		sd_image_t* images,
@@ -384,6 +396,8 @@ private:
 	std::vector<sd_image_t> outputImageViews;
 	std::string lastError;
 	ofxStableDiffusionError lastErrorInfo;
+	std::string lastResolvedVideoRequestSummary;
+	std::string lastResolvedVideoCliCommand;
 	std::deque<ofxStableDiffusionError> errorHistory;
 	static constexpr std::size_t maxErrorHistorySize = 10;
 	std::deque<int64_t> seedHistory;

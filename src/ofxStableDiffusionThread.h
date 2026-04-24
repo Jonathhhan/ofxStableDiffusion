@@ -73,6 +73,8 @@ public:
 		ofxStableDiffusionVideoRequest request;
 		OwnedImage initImage;
 		OwnedImage endImage;
+		std::vector<OwnedImage> controlFrames;
+		std::vector<sd_image_t> controlFrameViews;
 		std::function<void(int step, int steps, float time)> progressCallback;
 		bool animationProgressEnabled = false;
 		int animationFrameIndex = 0;
@@ -82,6 +84,14 @@ public:
 		void syncViews() {
 			request.initImage = initImage.image;
 			request.endImage = endImage.image;
+			controlFrameViews.clear();
+			controlFrameViews.reserve(controlFrames.size());
+			for (auto& frame : controlFrames) {
+				if (frame.isAllocated()) {
+					controlFrameViews.push_back(frame.image);
+				}
+			}
+			request.controlFrames = controlFrameViews;
 		}
 	};
 

@@ -103,3 +103,27 @@ This keeps the addon safer across upstream `ggml` changes, backend toggles, and
 ABI differences.
 
 More detail: [OFXGGML_BRIDGE.md](OFXGGML_BRIDGE.md)
+
+## `sd-cli` Parity Policy
+
+When wrapper behavior and `sd-cli` behavior disagree, treat `sd-cli` as the
+reference path.
+
+Simple rule:
+
+- help if it helps
+- don't "help" by changing behavior away from the working backend path
+
+Rules for addon-side defaults and UI wiring:
+
+- Prefer backend defaults over addon-side guesses.
+- Only pass values the user explicitly set, or values that `sd-cli` also sets
+  explicitly.
+- Leave native settings unset when `sd-cli` leaves them unset, so the backend
+  can resolve the model default.
+- Treat every addon-side explicit default as suspicious until it is verified
+  against `sd-cli`.
+- Do not silently change prompts or inject tuning values in the wrapper/UI.
+
+This policy exists because addon-side "helpful" overrides can make generation
+worse, break parity, and waste debugging time.

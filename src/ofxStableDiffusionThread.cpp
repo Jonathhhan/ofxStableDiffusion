@@ -10,6 +10,7 @@
 #include <exception>
 #include <filesystem>
 #include <mutex>
+#include <ctime>
 #include <vector>
 
 namespace {
@@ -168,6 +169,17 @@ sd_image_t* makeOwnedImageArray(const std::vector<stableDiffusionThread::OwnedIm
 	}
 
 	return output;
+}
+
+int64_t resolveNativeGenerationSeed(int64_t seed) {
+	if (seed >= 0) {
+		return seed;
+	}
+
+	// Match the backend's one-time auto-seed resolution so the addon can
+	// report and reproduce the exact seed handed to native generation.
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));
+	return static_cast<int64_t>(std::rand());
 }
 
 } // namespace
@@ -507,9 +519,18 @@ void stableDiffusionThread::threadedFunction() {
 
 		sd_vid_gen_params_t params =
 			ofxStableDiffusionNativeAdapter::buildVideoParams(videoTaskData, sdCtx, loraBuffer);
+		params.seed = resolveNativeGenerationSeed(params.seed);
+		const std::string resolvedVideoSummary =
+			ofxStableDiffusionNativeAdapter::describeVideoParams(params);
+		const std::string resolvedVideoCliCommand =
+			ofxStableDiffusionNativeAdapter::buildResolvedVideoCliCommand(
+				params,
+				videoTaskData.contextSettings);
+		sd->setLastResolvedVideoRequestSummary(resolvedVideoSummary);
+		sd->setLastResolvedVideoCliCommand(resolvedVideoCliCommand);
 		ofLogNotice("ofxStableDiffusion")
 			<< "Wrapper video request: "
-			<< ofxStableDiffusionNativeAdapter::describeVideoParams(params);
+			<< resolvedVideoSummary;
 		int generatedFrameCount = 0;
 		sd_image_t* output = nullptr;
 		{
@@ -564,6 +585,7 @@ void stableDiffusionThread::threadedFunction() {
 			loraBuffer,
 			pmPixels,
 			pmImageViews);
+	params.seed = resolveNativeGenerationSeed(params.seed);
 	sd_image_t* output = nullptr;
 	{
 		ProgressCallbackGuard progressGuard(

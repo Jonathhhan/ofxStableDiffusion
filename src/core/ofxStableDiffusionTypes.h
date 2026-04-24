@@ -12,6 +12,20 @@
 #include <string>
 #include <vector>
 
+inline const char* ofxStableDiffusionCacheModeName(sd_cache_mode_t mode) {
+	switch (mode) {
+	case SD_CACHE_DISABLED: return "disabled";
+	case SD_CACHE_EASYCACHE: return "easycache";
+	case SD_CACHE_UCACHE: return "ucache";
+	case SD_CACHE_DBCACHE: return "dbcache";
+	case SD_CACHE_TAYLORSEER: return "taylorseer";
+	case SD_CACHE_CACHE_DIT: return "cache-dit";
+	case SD_CACHE_SPECTRUM: return "spectrum";
+	default:
+		return "disabled";
+	}
+}
+
 struct ofxStableDiffusionError {
 	ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::None;
 	std::string message;
@@ -45,13 +59,13 @@ struct ofxStableDiffusionContextSettings {
 	// Context flags
 	bool vaeDecodeOnly = false;
 	bool vaeTiling = false;
-	bool freeParamsImmediately = false;
+	bool freeParamsImmediately = true;
 	int nThreads = -1;
 	sd_type_t weightType = SD_TYPE_F16;
-	rng_type_t rngType = STD_DEFAULT_RNG;
+	rng_type_t rngType = CUDA_RNG;
 	scheduler_t schedule = SCHEDULER_COUNT;
 	// Model behaviour
-	prediction_t prediction = EPS_PRED;
+	prediction_t prediction = PREDICTION_COUNT;
 	lora_apply_mode_t loraApplyMode = LORA_APPLY_AUTO;
 	// CPU offload
 	bool keepClipOnCpu = false;
@@ -160,13 +174,13 @@ struct ofxStableDiffusionImageRequest {
 	std::string instruction;
 	std::string negativePrompt;
 	int clipSkip = -1;
-	float cfgScale = 7.0f;
+	float cfgScale = std::numeric_limits<float>::infinity();
 	int width = 512;
 	int height = 512;
-	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
-	int sampleSteps = 20;
+	sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;
+	int sampleSteps = -1;
 	float flowShift = std::numeric_limits<float>::infinity();
-	float strength = 0.5f;
+	float strength = std::numeric_limits<float>::infinity();
 	int64_t seed = -1;
 	int batchCount = 1;
 	// Legacy single ControlNet (deprecated, use controlNets vector instead)
@@ -184,6 +198,8 @@ struct ofxStableDiffusionVideoRequest {
 	sd_image_t initImage{0, 0, 0, nullptr};
 	// Optional end frame for video morphing (leave zeroed to disable)
 	sd_image_t endImage{0, 0, 0, nullptr};
+	// Optional per-frame controls for native VACE / guided video generation.
+	std::vector<sd_image_t> controlFrames;
 	std::string prompt;
 	std::string negativePrompt;
 	int clipSkip = -1;
@@ -191,29 +207,41 @@ struct ofxStableDiffusionVideoRequest {
 	int height = 1024;
 	int frameCount = 6;
 	int fps = 6;
-	float cfgScale = 7.0f;
-	sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
-	int sampleSteps = 20;
+	float cfgScale = std::numeric_limits<float>::infinity();
+	float guidance = std::numeric_limits<float>::infinity();
+	sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;
+	int sampleSteps = -1;
 	float eta = std::numeric_limits<float>::infinity();
 	float flowShift = std::numeric_limits<float>::infinity();
 	bool useHighNoiseOverrides = false;
 	float highNoiseCfgScale = std::numeric_limits<float>::infinity();
+	float highNoiseGuidance = std::numeric_limits<float>::infinity();
 	sample_method_t highNoiseSampleMethod = SAMPLE_METHOD_COUNT;
 	int highNoiseSampleSteps = -1;
 	float highNoiseEta = std::numeric_limits<float>::infinity();
 	float highNoiseFlowShift = std::numeric_limits<float>::infinity();
-	float strength = 0.5f;
+	float moeBoundary = std::numeric_limits<float>::infinity();
+	float strength = std::numeric_limits<float>::infinity();
 	int64_t seed = -1;
 	// VACE control strength (0 = disabled, 1 = full)
-	float vaceStrength = 1.0f;
+	float vaceStrength = std::numeric_limits<float>::infinity();
 	ofxStableDiffusionVideoMode mode = ofxStableDiffusionVideoMode::Standard;
+	sd_cache_params_t cache{};
 	std::vector<ofxStableDiffusionLora> loras;
 	ofxStableDiffusionVideoAnimationSettings animationSettings;
+
+	ofxStableDiffusionVideoRequest() {
+		sd_cache_params_init(&cache);
+	}
 
 	bool hasAnimation() const {
 		return animationSettings.enablePromptInterpolation ||
 			animationSettings.enableParameterAnimation ||
 			animationSettings.useSeedSequence;
+	}
+
+	bool hasControlFrames() const {
+		return !controlFrames.empty();
 	}
 };
 

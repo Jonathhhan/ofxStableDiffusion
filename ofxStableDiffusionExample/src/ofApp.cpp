@@ -8,7 +8,6 @@
 namespace {
 
 const char* nativeLogLevelLabels[5] = {"Debug", "Info", "Warn", "Error", "Off"};
-
 std::string lowerCopy(const std::string& value) {
 	std::string lowered = value;
 	std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
@@ -19,6 +18,20 @@ std::string lowerCopy(const std::string& value) {
 
 bool containsKeyword(const std::string& haystack, const std::string& needle) {
 	return haystack.find(needle) != std::string::npos;
+}
+
+std::vector<int> buildVideoFrameOptions(int minFrameCount, int maxFrameCount) {
+	std::vector<int> options;
+	if (maxFrameCount < 5) {
+		return options;
+	}
+
+	const int start = std::max(minFrameCount, 5);
+	const int firstValid = ((start - 1 + 3) / 4) * 4 + 1;
+	for (int frameCount = firstValid; frameCount <= maxFrameCount; frameCount += 4) {
+		options.push_back(frameCount);
+	}
+	return options;
 }
 
 std::string quoteCliArg(const std::string& value) {
@@ -64,6 +77,60 @@ const char* sampleMethodToCliName(sample_method_t method) {
 	}
 }
 
+const char* schedulerToCliName(scheduler_t scheduler) {
+	switch (scheduler) {
+	case DISCRETE_SCHEDULER: return "discrete";
+	case KARRAS_SCHEDULER: return "karras";
+	case EXPONENTIAL_SCHEDULER: return "exponential";
+	case AYS_SCHEDULER: return "ays";
+	case GITS_SCHEDULER: return "gits";
+	case SGM_UNIFORM_SCHEDULER: return "sgm_uniform";
+	case SIMPLE_SCHEDULER: return "simple";
+	case SMOOTHSTEP_SCHEDULER: return "smoothstep";
+	case KL_OPTIMAL_SCHEDULER: return "kl_optimal";
+	case LCM_SCHEDULER: return "lcm";
+	case BONG_TANGENT_SCHEDULER: return "bong_tangent";
+	case SCHEDULER_COUNT:
+	default:
+		return "MODEL_DEFAULT";
+	}
+}
+
+const rng_type_t rngTypeOptions[3] = {
+	STD_DEFAULT_RNG,
+	CUDA_RNG,
+	CPU_RNG
+};
+
+sd_cache_mode_t cacheModeFromLabel(const std::string& label) {
+	if (label == "easycache") return SD_CACHE_EASYCACHE;
+	if (label == "ucache") return SD_CACHE_UCACHE;
+	if (label == "dbcache") return SD_CACHE_DBCACHE;
+	if (label == "taylorseer") return SD_CACHE_TAYLORSEER;
+	if (label == "cache-dit") return SD_CACHE_CACHE_DIT;
+	if (label == "spectrum") return SD_CACHE_SPECTRUM;
+	return SD_CACHE_DISABLED;
+}
+
+bool cacheModeUsesThresholdWindow(sd_cache_mode_t mode) {
+	return mode == SD_CACHE_EASYCACHE || mode == SD_CACHE_UCACHE;
+}
+
+std::string defaultControlFramesReadmeText() {
+	return
+		"Default control-frame folder for ofxStableDiffusion native video diffusion.\n"
+		"\n"
+		"Put an ordered image sequence here, for example:\n"
+		"  control_0000.png\n"
+		"  control_0001.png\n"
+		"  control_0002.png\n"
+		"\n"
+		"Supported formats: png, jpg, jpeg, bmp, webp\n"
+		"\n"
+		"The example app sorts filenames and uses them as per-frame native control inputs.\n"
+		"You can also fill this folder from the GUI with the current generated video clip.\n";
+}
+
 bool loadImageFile(
 	const std::string& path,
 	int width,
@@ -73,7 +140,11 @@ bool loadImageFile(
 	sd_image_t& targetSdImage) {
 	ofFile file(path);
 	const std::string extension = ofToUpper(file.getExtension());
-	if (extension != "JPG" && extension != "JPEG" && extension != "PNG") {
+	if (extension != "JPG" &&
+		extension != "JPEG" &&
+		extension != "PNG" &&
+		extension != "BMP" &&
+		extension != "WEBP") {
 		return false;
 	}
 
@@ -233,6 +304,65 @@ bool ofApp::loadImageIntoSlot(
 	return true;
 }
 
+bool ofApp::loadVideoControlFramesFromFolder(const std::string& folderPath) {
+	ofDirectory dir(folderPath);
+	if (!dir.exists()) {
+		return false;
+	}
+
+	dir.allowExt("png");
+	dir.allowExt("jpg");
+	dir.allowExt("jpeg");
+	dir.allowExt("bmp");
+	dir.allowExt("webp");
+	dir.listDir();
+	dir.sort();
+
+	std::vector<ofImage> loadedImages;
+	std::vector<ofPixels> loadedPixels;
+	std::vector<sd_image_t> loadedFrames;
+	loadedImages.reserve(dir.size());
+	loadedPixels.reserve(dir.size());
+	loadedFrames.reserve(dir.size());
+
+	for (std::size_t i = 0; i < dir.size(); ++i) {
+		const ofFile& file = dir.getFile(static_cast<int>(i));
+		if (!file.isFile()) {
+			continue;
+		}
+
+		ofImage frameImage;
+		ofPixels framePixels;
+		sd_image_t frameView{0, 0, 0, nullptr};
+		if (!loadImageFile(file.getAbsolutePath(), width, height, frameImage, framePixels, frameView)) {
+			continue;
+		}
+
+		loadedImages.push_back(std::move(frameImage));
+		loadedPixels.push_back(std::move(framePixels));
+		loadedFrames.push_back(frameView);
+	}
+
+	if (loadedFrames.empty()) {
+		return false;
+	}
+
+	videoControlFrameImages = std::move(loadedImages);
+	videoControlFramePixels = std::move(loadedPixels);
+	videoControlFrames = std::move(loadedFrames);
+	videoControlFramesPath = folderPath;
+	videoControlPreviewIndex = 0;
+	return true;
+}
+
+void ofApp::clearVideoControlFrames() {
+	videoControlFrameImages.clear();
+	videoControlFramePixels.clear();
+	videoControlFrames.clear();
+	videoControlFramesPath = defaultVideoControlFramesPath;
+	videoControlPreviewIndex = 0;
+}
+
 std::vector<std::pair<std::string, std::string>> ofApp::listLoraFiles() const {
 	std::vector<std::pair<std::string, std::string>> out;
 	if (loraModelDir.empty()) return out;
@@ -387,8 +517,18 @@ ofxStableDiffusionContextSettings ofApp::buildContextSettings() const {
 //--------------------------------------------------------------
 ofxStableDiffusionVideoRequest ofApp::buildVideoRequest() const {
 	ofxStableDiffusionVideoRequest request;
-	request.initImage = inputImage;
-	request.endImage = (useEndFrame && endInputImage.data != nullptr) ? endInputImage : sd_image_t{0, 0, 0, nullptr};
+	const ofxStableDiffusionCapabilities capabilities = stableDiffusion.getCapabilities();
+	request.initImage =
+		(capabilities.videoRequiresInputImage && inputImage.data != nullptr) ?
+			inputImage :
+			sd_image_t{0, 0, 0, nullptr};
+	request.endImage =
+		(capabilities.videoEndFrame && useEndFrame && endInputImage.data != nullptr) ?
+			endInputImage :
+			sd_image_t{0, 0, 0, nullptr};
+	if (useVideoControlFrames && !videoControlFrames.empty()) {
+		request.controlFrames = videoControlFrames;
+	}
 	request.prompt = prompt;
 	request.negativePrompt = negativePrompt;
 	request.clipSkip = clipSkip;
@@ -397,32 +537,34 @@ ofxStableDiffusionVideoRequest ofApp::buildVideoRequest() const {
 	request.frameCount = videoFrames;
 	request.fps = videoFps;
 	request.cfgScale = cfgScale;
+	request.guidance = guidance;
 	request.sampleMethod = sampleMethodEnum;
 	request.sampleSteps = sampleSteps;
-	if (useCustomEta) {
-		request.eta = eta;
-	}
-	if (useCustomFlowShift) {
-		request.flowShift = flowShift;
-	}
-	request.useHighNoiseOverrides = false;
+	request.eta = eta;
+	request.flowShift = flowShift;
+	request.useHighNoiseOverrides = useHighNoiseOverrides;
 	if (request.useHighNoiseOverrides) {
 		request.highNoiseCfgScale = highNoiseCfgScale;
+		request.highNoiseGuidance = highNoiseGuidance;
 		request.highNoiseSampleMethod = highNoiseSampleMethodEnum;
 		request.highNoiseSampleSteps = highNoiseSampleSteps;
-		if (useCustomHighNoiseEta) {
-			request.highNoiseEta = highNoiseEta;
-		}
-		if (useCustomHighNoiseFlowShift) {
-			request.highNoiseFlowShift = highNoiseFlowShift;
-		}
+		request.highNoiseEta = highNoiseEta;
+		request.highNoiseFlowShift = highNoiseFlowShift;
 	}
 	request.strength = strength;
 	request.seed = seed;
+	request.moeBoundary = videoMoeBoundary;
 	request.vaceStrength = vaceStrength;
-	request.mode = static_cast<ofxStableDiffusionVideoMode>(
-		std::distance(std::begin(videoModeArray),
-			std::find(std::begin(videoModeArray), std::end(videoModeArray), videoMode)));
+	request.cache.mode = cacheModeFromLabel(videoCacheMode);
+	if (cacheModeUsesThresholdWindow(request.cache.mode)) {
+		request.cache.reuse_threshold = videoCacheThreshold;
+		request.cache.start_percent = std::clamp(videoCacheStartPercent, 0.0f, 0.99f);
+		request.cache.end_percent = std::clamp(
+			std::max(videoCacheEndPercent, request.cache.start_percent + 0.01f),
+			0.01f,
+			1.0f);
+	}
+	request.mode = ofxStableDiffusionVideoMode::Standard;
 	request.loras = loras;
 	if (enablePromptInterpolation && !promptB.empty() && videoFrames > 1) {
 		request.animationSettings.enablePromptInterpolation = true;
@@ -444,6 +586,13 @@ std::string ofApp::buildEquivalentSdCliCommand() const {
 	std::ostringstream command;
 	command << "sd-cli.exe";
 	if (isImageToVideo) {
+		const std::string resolvedVideoCliCommand =
+			stableDiffusion.getLastResolvedVideoCliCommand();
+		if (!resolvedVideoCliCommand.empty()) {
+			return resolvedVideoCliCommand;
+		}
+		const ofxStableDiffusionVideoRequest request = buildVideoRequest();
+		const bool usesModelDefaultSampleMethod = (request.sampleMethod == SAMPLE_METHOD_COUNT);
 		command << " -M vid_gen";
 		if (!modelPath.empty()) {
 			command << " --model " << quoteCliArg(modelPath);
@@ -463,24 +612,50 @@ std::string ofApp::buildEquivalentSdCliCommand() const {
 		if (!clipGPath.empty()) {
 			command << " --clip_g " << quoteCliArg(clipGPath);
 		}
+		if (rngType != CUDA_RNG) {
+			command << " --rng " << sd_rng_type_name(rngType);
+		}
 		command << " -p " << quoteCliArg(prompt);
 		if (!negativePrompt.empty()) {
 			command << " -n " << quoteCliArg(negativePrompt);
 		}
-		command << " --cfg-scale " << formatCliFloat(cfgScale);
-		command << " --sampling-method " << sampleMethodToCliName(sampleMethodEnum);
-		command << " --steps " << sampleSteps;
+		command << " --cfg-scale " << formatCliFloat(request.cfgScale);
+		command << " --guidance " << formatCliFloat(request.guidance);
+		if (schedule != SCHEDULER_COUNT) {
+			command << " --scheduler " << schedulerToCliName(schedule);
+		}
+		if (!usesModelDefaultSampleMethod) {
+			command << " --sampling-method " << sampleMethodToCliName(request.sampleMethod);
+		}
+		command << " --steps " << request.sampleSteps;
+		if (request.useHighNoiseOverrides) {
+			command << " --high-noise-steps " << request.highNoiseSampleSteps;
+			command << " --high-noise-cfg-scale " << formatCliFloat(request.highNoiseCfgScale);
+			command << " --high-noise-guidance " << formatCliFloat(request.highNoiseGuidance);
+		}
 		command << " -W " << width;
 		command << " -H " << height;
 		command << " --video-frames " << videoFrames;
-		if (useCustomEta) {
+		if (std::isfinite(request.eta)) {
 			command << " --eta " << formatCliFloat(eta);
 		}
-		if (useCustomFlowShift) {
+		if (std::isfinite(request.flowShift)) {
 			command << " --flow-shift " << formatCliFloat(flowShift);
 		}
 		if (seed >= 0) {
 			command << " --seed " << seed;
+		}
+		command << " --moe-boundary " << formatCliFloat(request.moeBoundary);
+		if (cacheModeFromLabel(videoCacheMode) != SD_CACHE_DISABLED) {
+			command << " --cache-mode " << videoCacheMode;
+			if (cacheModeUsesThresholdWindow(cacheModeFromLabel(videoCacheMode))) {
+				command
+					<< " --cache-option "
+					<< quoteCliArg(
+						"threshold=" + formatCliFloat(videoCacheThreshold) +
+						",start=" + formatCliFloat(videoCacheStartPercent) +
+						",end=" + formatCliFloat(videoCacheEndPercent));
+			}
 		}
 		if (diffusionFlashAttn) {
 			command << " --diffusion-fa";
@@ -500,11 +675,14 @@ std::string ofApp::buildEquivalentSdCliCommand() const {
 		if (vaeTiling) {
 			command << " --vae-tiling";
 		}
-		if (inputImage.data != nullptr) {
+		if (request.initImage.data != nullptr) {
 			command << " --init-img <loaded input image path not tracked by example>";
 		}
-		if (useEndFrame && endInputImage.data != nullptr) {
+		if (request.endImage.data != nullptr) {
 			command << " --end-img <loaded end frame path not tracked by example>";
+		}
+		if (!request.controlFrames.empty() && !videoControlFramesPath.empty()) {
+			command << " --control-video " << quoteCliArg(videoControlFramesPath);
 		}
 		return command.str();
 	}
@@ -540,7 +718,6 @@ void ofApp::setup() {
 	ofSetEscapeQuitsApp(false);
 	ofSetWindowPosition((ofGetScreenWidth() - ofGetWindowWidth()) / 2, (ofGetScreenHeight() - ofGetWindowHeight()) / 2);
 	ofDisableArbTex();
-	printf("%s", stableDiffusion.getSystemInfo());
 	modelPath = "";
 	modelName = "";
 	diffusionModelPath = "";
@@ -570,7 +747,15 @@ void ofApp::setup() {
 	eta = 0.0f;
 	useCustomFlowShift = false;
 	flowShift = 5.0f;
+	useCustomImageCfgScale = false;
+	useCustomVideoCfgScale = false;
+	useCustomGuidance = false;
+	guidance = 3.5f;
 	useHighNoiseOverrides = false;
+	useCustomHighNoiseCfgScale = false;
+	useCustomHighNoiseGuidance = false;
+	useCustomHighNoiseSampleSteps = false;
+	highNoiseGuidance = 3.5f;
 	useCustomHighNoiseEta = false;
 	highNoiseEta = 0.0f;
 	useCustomHighNoiseFlowShift = false;
@@ -581,26 +766,30 @@ void ofApp::setup() {
 	height = 512;
 	cfgScale = 1.0;
 	sampleSteps = 5;
+	useCustomImageSampleSteps = false;
+	useCustomVideoSampleSteps = false;
 	clipSkip = -1;
 	previewSize = batchCount = 4;
 	selectedImage = 0;
 	strength = 0.5;
+	useCustomImageStrength = false;
+	useCustomVideoStrength = false;
 	controlStrength = 0.9;
 	seed = -1;
 	wType = SD_TYPE_F16;
 	schedule = SCHEDULER_COUNT;
-	rngType = STD_DEFAULT_RNG;
+	rngType = CUDA_RNG;
 	imageMode = "TextToImage";
 	imageModeEnum = ofxStableDiffusionImageMode::TextToImage;
 	selectionMode = "KeepOrder";
 	selectionModeEnum = ofxStableDiffusionImageSelectionMode::KeepOrder;
-	sampleMethod = "DPMPP2Mv2_SAMPLE_METHOD";
-	sampleMethodEnum = DPMPP2Mv2_SAMPLE_METHOD;
+	sampleMethod = "MODEL_DEFAULT";
+	sampleMethodEnum = SAMPLE_METHOD_COUNT;
 	highNoiseSampleMethod = sampleMethod;
 	highNoiseSampleMethodEnum = sampleMethodEnum;
 	highNoiseSampleSteps = sampleSteps;
 	highNoiseCfgScale = cfgScale;
-	videoMode = "Standard";
+	videoCacheMode = "disabled";
 	interpolationMode = "Smooth";
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
@@ -609,10 +798,30 @@ void ofApp::setup() {
 	isImageToVideo = false;
 	videoFrames = 6;
 	videoFps = 6;
+	videoMoeBoundary = 0.875f;
+	useCustomVideoMoeBoundary = false;
+	videoCacheThreshold = 0.25f;
+	videoCacheStartPercent = 0.2f;
+	videoCacheEndPercent = 1.0f;
 	vaceStrength = 1.0f;
+	useCustomVideoVaceStrength = false;
 	enablePromptInterpolation = false;
 	useSeedSequence = false;
 	useEndFrame = false;
+	useVideoControlFrames = false;
+	defaultVideoControlFramesPath = ofToDataPath("control_frames", true);
+	ofDirectory defaultControlFrameDirectory(defaultVideoControlFramesPath);
+	defaultControlFrameDirectory.create(true);
+	const std::string defaultControlReadmePath =
+		ofFilePath::join(defaultVideoControlFramesPath, "README.txt");
+	if (!ofFile::doesFileExist(defaultControlReadmePath)) {
+		ofBuffer readmeBuffer;
+		readmeBuffer.set(defaultControlFramesReadmeText());
+		ofBufferToFile(defaultControlReadmePath, readmeBuffer);
+	}
+	videoControlFramesPath = defaultVideoControlFramesPath;
+	loadVideoControlFramesFromFolder(defaultVideoControlFramesPath);
+	videoControlPreviewIndex = 0;
 	seedIncrement = 1;
 	isPlaying = false;
 	currentFrame = 0;
@@ -623,7 +832,7 @@ void ofApp::setup() {
 	isESRGAN = false;
 	vaeDecodeOnly = false;
 	vaeTiling = false;
-	freeParamsImmediately = false;
+	freeParamsImmediately = true;
 	nThreads = 8;
 	esrganMultiplier = 4;
 	for (int i = 0; i < maxPreviewTextures; i++) {
@@ -646,8 +855,6 @@ void ofApp::setup() {
 
 	// Initial embedding enumeration (best-effort).
 	auto embeds = stableDiffusion.listEmbeddings();
-	ofLogNotice("ofApp") << "Found " << embeds.size() << " embeddings in " << embedDir;
-	ofLogNotice("ofApp") << "Keys: 'e' reload embeddings, 'E' list embeddings, 'l' list LoRAs, 'a' apply all LoRAs (strength 1.0), 'u' unload LoRAs";
 }
 
 //--------------------------------------------------------------
@@ -999,7 +1206,7 @@ void ofApp::draw() {
 			ImGui::TextWrapped("Status: %s", stableDiffusion.getLastError().c_str());
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Native Logging", nativeLogLevelLabels[nativeLogLevelIndex], ImGuiComboFlags_NoArrowButton)) {
+		if (ImGui::BeginCombo("Logging", nativeLogLevelLabels[nativeLogLevelIndex], ImGuiComboFlags_NoArrowButton)) {
 			for (int n = 0; n < IM_ARRAYSIZE(nativeLogLevelLabels); ++n) {
 				const bool isSelected = (nativeLogLevelIndex == n);
 				if (ImGui::Selectable(nativeLogLevelLabels[n], isSelected)) {
@@ -1010,6 +1217,19 @@ void ofApp::draw() {
 						stableDiffusion.setNativeLoggingEnabled(true);
 						stableDiffusion.setNativeLogLevel(static_cast<sd_log_level_t>(n));
 					}
+				}
+				if (isSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::Dummy(ImVec2(0, 10));
+		if (ImGui::BeginCombo("RNG", sd_rng_type_name(rngType), ImGuiComboFlags_NoArrowButton)) {
+			for (rng_type_t option : rngTypeOptions) {
+				const bool isSelected = (rngType == option);
+				if (ImGui::Selectable(sd_rng_type_name(option), isSelected)) {
+					rngType = option;
 				}
 				if (isSelected) {
 					ImGui::SetItemDefaultFocus();
@@ -1080,6 +1300,11 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("Generate Video", &isImageToVideo);
 		if (ImGui::IsItemEdited()) {
+			if (isImageToVideo) {
+				applyRecommendedVideoParameters();
+			} else {
+				applyRecommendedImageParameters();
+			}
 			clampCurrentParametersToProfiles();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
@@ -1128,6 +1353,7 @@ void ofApp::draw() {
 		ImGui::Checkbox("CLIP On CPU", &keepClipOnCpu);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("VAE On CPU", &keepVaeOnCpu);
+		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("Flash Attention", &flashAttn);
 		ImGui::Dummy(ImVec2(0, 10));
@@ -1195,30 +1421,51 @@ void ofApp::draw() {
 		}
 		if (isImageToVideo) {
 			const auto videoCapabilities = stableDiffusion.getCapabilities();
-			const bool highNoiseOverridesAvailable = false;
+			const bool highNoiseOverridesAvailable =
+				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WAN ||
+				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WANI2V ||
+				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WANTI2V ||
+				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WANFLF2V ||
+				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WANVACE;
 			if (!highNoiseOverridesAvailable) {
 				useHighNoiseOverrides = false;
+				useCustomHighNoiseCfgScale = false;
+				useCustomHighNoiseGuidance = false;
+				useCustomHighNoiseSampleSteps = false;
 			}
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderInt(
-				"Video Frames",
-				&videoFrames,
+			const std::vector<int> videoFrameOptions = buildVideoFrameOptions(
 				videoParameterProfile.minFrameCount,
 				videoParameterProfile.maxFrameCount);
-			if (((videoFrames - 1) % 4) != 0) {
-				const int normalizedFrameCount = ((videoFrames - 1) / 4) * 4 + 1;
-				ImGui::TextColored(
-					ImVec4(1.0f, 0.7f, 0.2f, 1.0f),
-					"Use 4n+1 frames (5, 9, 13, ...). %d would become %d upstream.",
-					videoFrames,
-					normalizedFrameCount);
+			if (!videoFrameOptions.empty()) {
+				auto nearestIt = std::lower_bound(
+					videoFrameOptions.begin(),
+					videoFrameOptions.end(),
+					videoFrames);
+				if (nearestIt == videoFrameOptions.end()) {
+					nearestIt = std::prev(videoFrameOptions.end());
+				}
+				int currentFrameOptionIndex =
+					static_cast<int>(std::distance(videoFrameOptions.begin(), nearestIt));
+				videoFrames = videoFrameOptions[static_cast<std::size_t>(currentFrameOptionIndex)];
+				if (ImGui::SliderInt(
+						"Video Frames##Discrete",
+						&currentFrameOptionIndex,
+						0,
+						static_cast<int>(videoFrameOptions.size()) - 1,
+						"")) {
+					videoFrames =
+						videoFrameOptions[static_cast<std::size_t>(currentFrameOptionIndex)];
+				}
+				ImGui::SameLine();
+				ImGui::Text("%d", videoFrames);
+			} else {
+				ImGui::SliderInt(
+					"Video Frames",
+					&videoFrames,
+					videoParameterProfile.minFrameCount,
+					videoParameterProfile.maxFrameCount);
 			}
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::SliderInt(
-				"FPS",
-				&videoFps,
-				videoParameterProfile.minFps,
-				videoParameterProfile.maxFps);
 			if (videoParameterProfile.supportsVaceStrength) {
 				ImGui::Dummy(ImVec2(0, 10));
 				ImGui::SliderFloat(
@@ -1228,31 +1475,17 @@ void ofApp::draw() {
 					videoParameterProfile.maxVaceStrength);
 			}
 			ImGui::Dummy(ImVec2(0, 10));
-			if (ImGui::BeginCombo("Video Mode", videoMode, ImGuiComboFlags_NoArrowButton)) {
-				for (int n = 0; n < IM_ARRAYSIZE(videoModeArray); n++) {
-					const bool is_selected = (videoMode == videoModeArray[n]);
-					if (ImGui::Selectable(videoModeArray[n], is_selected)) {
-						videoMode = videoModeArray[n];
-						stableDiffusion.setVideoGenerationMode(static_cast<ofxStableDiffusionVideoMode>(n));
-					}
-					if (is_selected) {
-						ImGui::SetItemDefaultFocus();
-					}
-				}
-				ImGui::EndCombo();
-			}
-			ImGui::Dummy(ImVec2(0, 10));
 			if (!videoCapabilities.videoAnimation) {
 				enablePromptInterpolation = false;
 				useSeedSequence = false;
 				ImGui::TextWrapped(
-					"Prompt morph and seed sequence are not supported for the current native video model in the addon wrapper.");
+					"Native video diffusion is active for this model. Wrapper image-sequence animation helpers stay disabled here so the request remains on the real video path.");
 			} else {
-				ImGui::Checkbox("Prompt Morph", &enablePromptInterpolation);
+				ImGui::Checkbox("Image-Sequence Prompt Morph", &enablePromptInterpolation);
 				if (enablePromptInterpolation) {
 					ImGui::Dummy(ImVec2(0, 10));
 					Funcs::MyInputTextMultiline(
-						"Prompt B",
+						"Sequence Prompt B",
 						&promptB,
 						ImVec2(512, 80),
 						ImGuiInputTextFlags_CallbackResize);
@@ -1272,17 +1505,93 @@ void ofApp::draw() {
 					}
 				}
 				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::Checkbox("Seed Sequence", &useSeedSequence);
+				ImGui::Checkbox("Image-Sequence Seed Sweep", &useSeedSequence);
 				if (useSeedSequence) {
 					ImGui::Dummy(ImVec2(0, 10));
 					ImGui::InputInt("Seed Increment", &seedIncrement, 1, 10);
 				}
 			}
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Checkbox("Custom Flow Shift", &useCustomFlowShift);
-			if (useCustomFlowShift) {
+			ImGui::SliderFloat("MoE Boundary", &videoMoeBoundary, 0.0f, 1.0f);
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::BeginCombo("Video Cache", videoCacheMode, ImGuiComboFlags_NoArrowButton)) {
+				for (int n = 0; n < IM_ARRAYSIZE(videoCacheModeArray); n++) {
+					const bool is_selected = (videoCacheMode == videoCacheModeArray[n]);
+					if (ImGui::Selectable(videoCacheModeArray[n], is_selected)) {
+						videoCacheMode = videoCacheModeArray[n];
+					}
+					if (is_selected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+			const sd_cache_mode_t selectedCacheMode = cacheModeFromLabel(videoCacheMode);
+			if (selectedCacheMode != SD_CACHE_DISABLED) {
+				if (cacheModeUsesThresholdWindow(selectedCacheMode)) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("Cache Threshold", &videoCacheThreshold, 0.0f, 3.0f);
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("Cache Start", &videoCacheStartPercent, 0.0f, 0.95f);
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("Cache End", &videoCacheEndPercent, 0.05f, 1.0f);
+				}
+			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderFloat("Flow Shift", &flowShift, 0.0f, 10.0f);
+			if (highNoiseOverridesAvailable) {
 				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::SliderFloat("Flow Shift", &flowShift, 0.0f, 10.0f);
+				ImGui::Checkbox("Use High-Noise Overrides", &useHighNoiseOverrides);
+				if (useHighNoiseOverrides) {
+					ImGui::Dummy(ImVec2(0, 10));
+					const std::string resolvedHighNoiseSampleLabel =
+						stableDiffusion.getResolvedSampleMethodName(highNoiseSampleMethodEnum);
+					const std::string highNoiseDefaultOptionLabel =
+						"Backend default: " +
+						stableDiffusion.getResolvedSampleMethodName(SAMPLE_METHOD_COUNT);
+					if (ImGui::BeginCombo(
+							"High-Noise Sample",
+							resolvedHighNoiseSampleLabel.c_str(),
+							ImGuiComboFlags_NoArrowButton)) {
+						const bool is_default_selected = (highNoiseSampleMethodEnum == SAMPLE_METHOD_COUNT);
+						if (ImGui::Selectable(highNoiseDefaultOptionLabel.c_str(), is_default_selected)) {
+							highNoiseSampleMethod = "MODEL_DEFAULT";
+							highNoiseSampleMethodEnum = SAMPLE_METHOD_COUNT;
+						}
+						if (is_default_selected) {
+							ImGui::SetItemDefaultFocus();
+						}
+						for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
+							const bool is_selected = (highNoiseSampleMethod == sampleMethodArray[n]);
+							if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
+								highNoiseSampleMethod = sampleMethodArray[n];
+								highNoiseSampleMethodEnum = static_cast<sample_method_t>(n);
+							}
+							if (is_selected) {
+								ImGui::SetItemDefaultFocus();
+							}
+						}
+						ImGui::EndCombo();
+					}
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderInt(
+						"High-Noise Steps",
+						&highNoiseSampleSteps,
+						videoParameterProfile.minSampleSteps,
+						videoParameterProfile.maxSampleSteps);
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat(
+						"High-Noise CFG",
+						&highNoiseCfgScale,
+						videoParameterProfile.minCfgScale,
+						videoParameterProfile.maxCfgScale);
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("High-Noise Guidance", &highNoiseGuidance, 0.0f, 10.0f);
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("High-Noise Eta", &highNoiseEta, 0.0f, 1.0f);
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::SliderFloat("High-Noise Flow Shift", &highNoiseFlowShift, 0.0f, 12.0f);
+				}
 			}
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Checkbox("Use End Frame", &useEndFrame);
@@ -1313,6 +1622,78 @@ void ofApp::draw() {
 						ImVec2(128, 128));
 				}
 			}
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::Checkbox("Use Video Control Frames", &useVideoControlFrames);
+			if (useVideoControlFrames) {
+				ImGui::Dummy(ImVec2(0, 10));
+				if (ImGui::Button("Use Default Folder")) {
+					if (!loadVideoControlFramesFromFolder(defaultVideoControlFramesPath)) {
+						clearVideoControlFrames();
+					}
+				}
+				ImGui::SameLine(0, 10);
+				if (ImGui::Button("Fill Default Folder From Current Video")) {
+					const auto clip = stableDiffusion.getVideoClip();
+					if (!clip.empty()) {
+						stableDiffusion.saveVideoFramesWithMetadata(
+							defaultVideoControlFramesPath,
+							"control",
+							"metadata.json");
+						loadVideoControlFramesFromFolder(defaultVideoControlFramesPath);
+						useVideoControlFrames = true;
+					}
+				}
+				ImGui::SameLine(0, 10);
+				if (ImGui::Button("Load Control Frame Folder")) {
+					std::string selectedFolder;
+					if (selectPath("Load Control Frame Folder", selectedFolder, true)) {
+						if (!loadVideoControlFramesFromFolder(selectedFolder)) {
+							videoControlFramesPath = selectedFolder;
+						}
+					}
+				}
+				ImGui::SameLine(0, 10);
+				if (ImGui::Button("Clear Control Frames")) {
+					clearVideoControlFrames();
+				}
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::TextWrapped(
+					"%s",
+					videoControlFramesPath.empty()
+						? "No control-frame folder loaded"
+						: videoControlFramesPath.c_str());
+				if (!defaultVideoControlFramesPath.empty()) {
+					ImGui::Dummy(ImVec2(0, 6));
+					ImGui::TextWrapped("Default control-frame folder: %s", defaultVideoControlFramesPath.c_str());
+				}
+				ImGui::Dummy(ImVec2(0, 10));
+				ImGui::Text("Loaded Control Frames: %d", static_cast<int>(videoControlFrames.size()));
+				if (!videoControlFrames.empty() && static_cast<int>(videoControlFrames.size()) != videoFrames) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::TextWrapped(
+						"The native backend will use up to the smaller of frame count and loaded control frames. Current request: %d frames, %d controls.",
+						videoFrames,
+						static_cast<int>(videoControlFrames.size()));
+				}
+				if (!videoControlFrameImages.empty()) {
+					videoControlPreviewIndex = std::clamp(
+						videoControlPreviewIndex,
+						0,
+						static_cast<int>(videoControlFrameImages.size()) - 1);
+					ImGui::Dummy(ImVec2(0, 10));
+					if (videoControlFrameImages.size() > 1) {
+						ImGui::SliderInt(
+							"Control Preview",
+							&videoControlPreviewIndex,
+							0,
+							static_cast<int>(videoControlFrameImages.size()) - 1);
+					}
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::Image(
+						(ImTextureID)(uintptr_t)videoControlFrameImages[static_cast<std::size_t>(videoControlPreviewIndex)].getTexture().getTextureData().textureID,
+						ImVec2(128, 128));
+				}
+			}
 		}
 		if (isImageToVideo ? videoParameterProfile.supportsClipSkip : imageParameterProfile.supportsClipSkip) {
 			ImGui::Dummy(ImVec2(0, 10));
@@ -1330,6 +1711,10 @@ void ofApp::draw() {
 			&cfgScale,
 			isImageToVideo ? videoParameterProfile.minCfgScale : imageParameterProfile.minCfgScale,
 			isImageToVideo ? videoParameterProfile.maxCfgScale : imageParameterProfile.maxCfgScale);
+		if (isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderFloat("Guidance", &guidance, 0.0f, 10.0f);
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderInt(
 			"Sample Steps",
@@ -1353,7 +1738,26 @@ void ofApp::draw() {
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Sample Method", sampleMethod, ImGuiComboFlags_NoArrowButton)) {
+		const std::string resolvedSampleMethodLabel =
+			stableDiffusion.getResolvedSampleMethodName(sampleMethodEnum);
+		const std::string sampleMethodDefaultOptionLabel =
+			"Backend default: " +
+			stableDiffusion.getResolvedSampleMethodName(SAMPLE_METHOD_COUNT);
+		if (ImGui::BeginCombo(
+				"Sample Method",
+				resolvedSampleMethodLabel.c_str(),
+				ImGuiComboFlags_NoArrowButton)) {
+			const bool is_default_selected = (sampleMethodEnum == SAMPLE_METHOD_COUNT);
+			if (ImGui::Selectable(sampleMethodDefaultOptionLabel.c_str(), is_default_selected)) {
+				sampleMethod = "MODEL_DEFAULT";
+				sampleMethodEnum = SAMPLE_METHOD_COUNT;
+				if (!useHighNoiseOverrides) {
+					highNoiseSampleMethod = sampleMethod;
+					highNoiseSampleMethodEnum = sampleMethodEnum;
+				}
+			}
+			if (is_default_selected)
+				ImGui::SetItemDefaultFocus();
 			for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
 				bool is_selected = (sampleMethod == sampleMethodArray[n]);
 				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
@@ -1370,12 +1774,51 @@ void ofApp::draw() {
 			ImGui::EndCombo();
 		}
 		if (isImageToVideo) {
+			static const scheduler_t schedulerOptions[] = {
+				DISCRETE_SCHEDULER,
+				KARRAS_SCHEDULER,
+				EXPONENTIAL_SCHEDULER,
+				AYS_SCHEDULER,
+				GITS_SCHEDULER,
+				SGM_UNIFORM_SCHEDULER,
+				SIMPLE_SCHEDULER,
+				SMOOTHSTEP_SCHEDULER,
+				KL_OPTIMAL_SCHEDULER,
+				LCM_SCHEDULER,
+				BONG_TANGENT_SCHEDULER
+			};
 			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Checkbox("Custom Eta", &useCustomEta);
-			if (useCustomEta) {
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::SliderFloat("Eta", &eta, 0.0f, 1.0f);
+			const std::string resolvedSchedulerLabel =
+				stableDiffusion.getResolvedSchedulerName(sampleMethodEnum, schedule);
+			const std::string schedulerDefaultOptionLabel =
+				"Backend default: " +
+				stableDiffusion.getResolvedSchedulerName(sampleMethodEnum, SCHEDULER_COUNT);
+			if (ImGui::BeginCombo(
+					"Scheduler",
+					resolvedSchedulerLabel.c_str(),
+					ImGuiComboFlags_NoArrowButton)) {
+				const bool is_default_scheduler = (schedule == SCHEDULER_COUNT);
+				if (ImGui::Selectable(schedulerDefaultOptionLabel.c_str(), is_default_scheduler)) {
+					schedule = SCHEDULER_COUNT;
+				}
+				if (is_default_scheduler) {
+					ImGui::SetItemDefaultFocus();
+				}
+				for (scheduler_t option : schedulerOptions) {
+					const bool is_selected = (schedule == option);
+					if (ImGui::Selectable(schedulerToCliName(option), is_selected)) {
+						schedule = option;
+					}
+					if (is_selected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
 			}
+		}
+		if (isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderFloat("Eta", &eta, 0.0f, 1.0f);
 		}
 		if ((isImageToVideo && videoParameterProfile.maxStrength > videoParameterProfile.minStrength) ||
 			(!isImageToVideo && imageParameterProfile.supportsStrength)) {
@@ -1419,7 +1862,11 @@ void ofApp::draw() {
 	if (needsInputImage && !hasInputImage) {
 		ImGui::TextWrapped("Load an input image for the selected mode.");
 	} else if (isImageToVideo && !capabilitiesForGenerate.videoRequiresInputImage) {
-		ImGui::TextWrapped("Current model supports text-to-video, so an input image is optional.");
+		if (hasInputImage || (useEndFrame && endInputImage.data != nullptr)) {
+			ImGui::TextWrapped("Current model is text-to-video. Loaded input or end images are ignored unless you switch to a Wan image-to-video family model.");
+		} else {
+			ImGui::TextWrapped("Current model supports text-to-video, so an input image is optional.");
+		}
 	}
 	if (needsMaskImage && !maskReady) {
 		ImGui::TextWrapped("Inpainting needs a mask image. Enable Use Mask and load one before generating.");
@@ -1451,10 +1898,10 @@ void ofApp::draw() {
 			request.height = height;
 			request.sampleMethod = sampleMethodEnum;
 			request.sampleSteps = sampleSteps;
-			if (useCustomFlowShift) {
-				request.flowShift = flowShift;
-			}
-			request.strength = strength;
+			request.strength =
+				imageParameterProfile.supportsStrength ?
+					strength :
+					std::numeric_limits<float>::infinity();
 			request.seed = seed;
 			request.batchCount = batchCount;
 			request.maskImage =
@@ -1504,6 +1951,15 @@ void ofApp::draw() {
 				ofGetTimestampString("output/ofxStableDiffusion-video-%Y-%m-%d-%H-%M-%S"),
 				"frame",
 				"metadata.json");
+		}
+		ImGui::SameLine(0, 10);
+		if (ImGui::Button("Save Video")) {
+			const std::string path = ofGetTimestampString("output/ofxStableDiffusion-video-%Y-%m-%d-%H-%M-%S.avi");
+			if (stableDiffusion.saveVideoWebm(path)) {
+				ofLogNotice("ofApp") << "Saved result video to '" << path << "'";
+			} else {
+				ofLogError("ofApp") << "Failed to save result video to '" << path << "'";
+			}
 		}
 		const auto clip = stableDiffusion.getVideoClip();
 		if (currentFrame >= 0 && currentFrame < static_cast<int>(clip.frames.size())) {
@@ -1587,9 +2043,15 @@ void ofApp::applyRecommendedImageParameters() {
 	imageParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
 		stableDiffusion.getContextSettings(),
 		imageModeEnum);
+	freeParamsImmediately = true;
 	cfgScale = imageParameterProfile.defaultCfgScale;
 	sampleSteps = imageParameterProfile.defaultSampleSteps;
 	clipSkip = imageParameterProfile.defaultClipSkip;
+	sampleMethod = "MODEL_DEFAULT";
+	sampleMethodEnum = SAMPLE_METHOD_COUNT;
+	useCustomImageCfgScale = false;
+	useCustomImageSampleSteps = false;
+	useCustomImageStrength = false;
 	if (imageParameterProfile.supportsStrength) {
 		strength = imageParameterProfile.defaultStrength;
 	}
@@ -1599,6 +2061,7 @@ void ofApp::applyRecommendedImageParameters() {
 void ofApp::applyRecommendedVideoParameters() {
 	videoParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveVideoProfile(
 		stableDiffusion.getContextSettings());
+	freeParamsImmediately = true;
 	width = videoParameterProfile.defaultWidth;
 	height = videoParameterProfile.defaultHeight;
 	cfgScale = videoParameterProfile.defaultCfgScale;
@@ -1608,23 +2071,60 @@ void ofApp::applyRecommendedVideoParameters() {
 	videoFrames = videoParameterProfile.defaultFrameCount;
 	videoFps = videoParameterProfile.defaultFps;
 	vaceStrength = videoParameterProfile.defaultVaceStrength;
+	useCustomVideoCfgScale = false;
+	useCustomVideoSampleSteps = false;
+	useCustomVideoStrength = false;
+	useCustomVideoMoeBoundary = false;
+	useCustomVideoVaceStrength = false;
+	schedule = SCHEDULER_COUNT;
+	useCustomGuidance = false;
+	useCustomHighNoiseCfgScale = false;
+	useCustomHighNoiseGuidance = false;
+	useCustomHighNoiseSampleSteps = false;
 	switch (videoParameterProfile.modelFamily) {
 	case ofxStableDiffusionModelFamily::WAN:
 	case ofxStableDiffusionModelFamily::WANI2V:
 	case ofxStableDiffusionModelFamily::WANTI2V:
 	case ofxStableDiffusionModelFamily::WANFLF2V:
-	case ofxStableDiffusionModelFamily::WANVACE:
-		sampleMethod = "EULER_SAMPLE_METHOD";
-		sampleMethodEnum = EULER_SAMPLE_METHOD;
+		diffusionFlashAttn = true;
+		vaeTiling = false;
+		sampleMethod = "MODEL_DEFAULT";
+		sampleMethodEnum = SAMPLE_METHOD_COUNT;
 		highNoiseSampleMethod = sampleMethod;
 		highNoiseSampleMethodEnum = sampleMethodEnum;
+		useHighNoiseOverrides = false;
+		highNoiseSampleSteps = sampleSteps;
+		highNoiseCfgScale = cfgScale;
+		useCustomVideoCfgScale = true;
+		cfgScale = 6.0f;
 		useCustomFlowShift = true;
 		flowShift = 3.0f;
-		if (!useHighNoiseOverrides) {
-			useCustomHighNoiseFlowShift = false;
-		}
+		useCustomHighNoiseEta = false;
+		highNoiseEta = 0.0f;
+		useCustomHighNoiseFlowShift = false;
+		highNoiseFlowShift = 8.0f;
+		break;
+	case ofxStableDiffusionModelFamily::WANVACE:
+		diffusionFlashAttn = true;
+		vaeTiling = false;
+		sampleMethod = "MODEL_DEFAULT";
+		sampleMethodEnum = SAMPLE_METHOD_COUNT;
+		highNoiseSampleMethod = sampleMethod;
+		highNoiseSampleMethodEnum = sampleMethodEnum;
+		useHighNoiseOverrides = false;
+		highNoiseSampleSteps = sampleSteps;
+		highNoiseCfgScale = cfgScale;
+		useCustomVideoCfgScale = true;
+		cfgScale = 6.0f;
+		useCustomFlowShift = false;
+		flowShift = 5.0f;
+		useCustomHighNoiseEta = false;
+		highNoiseEta = 0.0f;
+		useCustomHighNoiseFlowShift = false;
+		highNoiseFlowShift = 8.0f;
 		break;
 	default:
+		useHighNoiseOverrides = false;
 		break;
 	}
 	allocate();

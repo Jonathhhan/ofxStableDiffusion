@@ -33,7 +33,7 @@ struct ofxStableDiffusionVideoParameterProfile {
 	float minCfgScale = 1.0f;
 	float maxCfgScale = 12.0f;
 	int defaultSampleSteps = 28;
-	int minSampleSteps = 8;
+	int minSampleSteps = 1;
 	int maxSampleSteps = 80;
 	float defaultStrength = 0.7f;
 	float minStrength = 0.2f;
@@ -309,8 +309,12 @@ inline ofxStableDiffusionVideoParameterProfile resolveVideoProfile(
 
 	if (isWan13BT2VModel(settings)) {
 		profile.defaultWidth = 832;
-		profile.defaultHeight = 448;
-		profile.summary = "Wan 1.3B T2V is tuned near 480p; 832x448 is the closest valid 64-aligned addon default.";
+		profile.defaultHeight = 480;
+		profile.defaultSampleSteps = 20;
+		profile.defaultStrength = 0.75f;
+		profile.defaultFrameCount = 33;
+		profile.defaultFps = 16;
+		profile.summary = "Wan 1.3B T2V matches the upstream 480p recipe best at 832x480 with 33 frames, 20 steps, and 0.75 strength.";
 	}
 
 	return profile;

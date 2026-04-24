@@ -1,11 +1,13 @@
 #include "ofxStableDiffusion.h"
 #include "core/ofxStableDiffusionCapabilityHelpers.h"
 #include "core/ofxStableDiffusionMemoryHelpers.h"
+#include "core/ofxStableDiffusionNativeAdapter.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <mutex>
@@ -15,6 +17,15 @@ namespace {
 namespace fs = std::filesystem;
 std::atomic<bool> g_sdLoggingEnabled{true};
 std::atomic<int> g_sdMinLogLevel{SD_LOG_DEBUG};
+std::atomic<bool> g_sdProgressPrefixNeeded{true};
+
+bool isProgressLikeSdLog(const char* log) {
+	if (log == nullptr) {
+		return false;
+	}
+	return std::strchr(log, '\r') != nullptr ||
+		   (log[0] == ' ' && log[1] == ' ' && log[2] == '|');
+}
 
 void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	(void)data;
@@ -24,12 +35,46 @@ void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	if (level < g_sdMinLogLevel.load()) {
 		return;
 	}
-	if (level <= SD_LOG_INFO) {
-		fputs(log, stdout);
-		fflush(stdout);
-	} else {
-		fputs(log, stderr);
-		fflush(stderr);
+	if (log == nullptr || log[0] == '\0') {
+		return;
+	}
+	if (isProgressLikeSdLog(log)) {
+		FILE* stream = (level <= SD_LOG_INFO) ? stdout : stderr;
+		if (g_sdProgressPrefixNeeded.exchange(false)) {
+			fputs("[notice ] ", stream);
+		}
+		fputs(log, stream);
+		if (std::strchr(log, '\n') != nullptr) {
+			g_sdProgressPrefixNeeded.store(true);
+		}
+		fflush(stream);
+		return;
+	}
+
+	g_sdProgressPrefixNeeded.store(true);
+
+	std::string message(log);
+	while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+		message.pop_back();
+	}
+	if (message.empty()) {
+		return;
+	}
+
+	switch (level) {
+	case SD_LOG_DEBUG:
+		ofLogVerbose("stable-diffusion") << message;
+		break;
+	case SD_LOG_INFO:
+		ofLogNotice("stable-diffusion") << message;
+		break;
+	case SD_LOG_WARN:
+		ofLogWarning("stable-diffusion") << message;
+		break;
+	case SD_LOG_ERROR:
+	default:
+		ofLogError("stable-diffusion") << message;
+		break;
 	}
 }
 
@@ -118,6 +163,16 @@ ValidationResult validateVaceStrength(float vaceStrength) {
 	return {};
 }
 
+ValidationResult validateUnitInterval(float value, const std::string& label) {
+	if (value < 0.0f || value > 1.0f) {
+		return {
+			ofxStableDiffusionErrorCode::InvalidParameter,
+			label + " must be between 0.0 and 1.0"
+		};
+	}
+	return {};
+}
+
 bool isNativeWanVideoFamily(ofxStableDiffusionModelFamily family) {
 	return family == ofxStableDiffusionModelFamily::WAN ||
 		family == ofxStableDiffusionModelFamily::WANI2V ||
@@ -174,14 +229,20 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	const ValidationResult batchResult = validateBatchCount(request.batchCount);
 	if (!batchResult.ok()) return batchResult;
 
-	const ValidationResult stepsResult = validateSampleSteps(request.sampleSteps);
-	if (!stepsResult.ok()) return stepsResult;
+	if (request.sampleSteps > 0) {
+		const ValidationResult stepsResult = validateSampleSteps(request.sampleSteps);
+		if (!stepsResult.ok()) return stepsResult;
+	}
 
-	const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
-	if (!cfgResult.ok()) return cfgResult;
+	if (std::isfinite(request.cfgScale)) {
+		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
+		if (!cfgResult.ok()) return cfgResult;
+	}
 
-	const ValidationResult strengthResult = validateStrength(request.strength);
-	if (!strengthResult.ok()) return strengthResult;
+	if (std::isfinite(request.strength)) {
+		const ValidationResult strengthResult = validateStrength(request.strength);
+		if (!strengthResult.ok()) return strengthResult;
+	}
 
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
 	if (!clipResult.ok()) return clipResult;
@@ -228,19 +289,64 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
 	if (!clipResult.ok()) return clipResult;
 
-	const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
-	if (!cfgResult.ok()) return cfgResult;
+	if (std::isfinite(request.cfgScale)) {
+		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
+		if (!cfgResult.ok()) return cfgResult;
+	}
 
-	const ValidationResult stepsResult = validateSampleSteps(request.sampleSteps);
-	if (!stepsResult.ok()) return stepsResult;
+	if (request.sampleSteps > 0) {
+		const ValidationResult stepsResult = validateSampleSteps(request.sampleSteps);
+		if (!stepsResult.ok()) return stepsResult;
+	}
 
-	const ValidationResult strengthResult = validateStrength(request.strength);
-	if (!strengthResult.ok()) return strengthResult;
+	if (std::isfinite(request.strength)) {
+		const ValidationResult strengthResult = validateStrength(request.strength);
+		if (!strengthResult.ok()) return strengthResult;
+	}
 
 	const ValidationResult seedResult = validateSeed(request.seed);
 	if (!seedResult.ok()) return seedResult;
 
-	return validateVaceStrength(request.vaceStrength);
+	for (std::size_t i = 0; i < request.controlFrames.size(); ++i) {
+		const auto& frame = request.controlFrames[i];
+		if (frame.data == nullptr || frame.width == 0 || frame.height == 0 || frame.channel == 0) {
+			return {
+				ofxStableDiffusionErrorCode::InvalidParameter,
+				"Control frame " + ofToString(static_cast<int>(i)) + " is not allocated"
+			};
+		}
+	}
+
+	if (request.cache.mode == SD_CACHE_EASYCACHE || request.cache.mode == SD_CACHE_UCACHE) {
+		if (request.cache.reuse_threshold < 0.0f) {
+			return {
+				ofxStableDiffusionErrorCode::InvalidParameter,
+				"Video cache reuse threshold must be non-negative"
+			};
+		}
+		if (request.cache.start_percent < 0.0f ||
+			request.cache.start_percent >= 1.0f ||
+			request.cache.end_percent <= 0.0f ||
+			request.cache.end_percent > 1.0f ||
+			request.cache.start_percent >= request.cache.end_percent) {
+			return {
+				ofxStableDiffusionErrorCode::InvalidParameter,
+				"Video cache start/end percents must satisfy 0.0 <= start < end <= 1.0"
+			};
+		}
+	}
+
+	if (std::isfinite(request.moeBoundary)) {
+		const ValidationResult moeBoundaryResult =
+			validateUnitInterval(request.moeBoundary, "MoE boundary");
+		if (!moeBoundaryResult.ok()) return moeBoundaryResult;
+	}
+
+	if (std::isfinite(request.vaceStrength)) {
+		return validateVaceStrength(request.vaceStrength);
+	}
+
+	return {};
 }
 
 ValidationResult validateUpscalerSettings(const ofxStableDiffusionUpscalerSettings& settings) {
@@ -607,6 +713,57 @@ ofxStableDiffusionErrorCode ofxStableDiffusion::getLastErrorCode() const {
 ofxStableDiffusionError ofxStableDiffusion::getLastErrorInfo() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	return lastErrorInfo;
+}
+
+std::string ofxStableDiffusion::getLastResolvedVideoRequestSummary() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return lastResolvedVideoRequestSummary;
+}
+
+std::string ofxStableDiffusion::getLastResolvedVideoCliCommand() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return lastResolvedVideoCliCommand;
+}
+
+sample_method_t ofxStableDiffusion::getResolvedSampleMethod(sample_method_t requested) const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (thread.sdCtx == nullptr) {
+		return requested;
+	}
+	return ofxStableDiffusionNativeAdapter::resolveSampleMethod(thread.sdCtx, requested);
+}
+
+scheduler_t ofxStableDiffusion::getResolvedScheduler(
+	sample_method_t requestedSampleMethod,
+	scheduler_t requestedSchedule) const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (thread.sdCtx == nullptr) {
+		return requestedSchedule;
+	}
+	const sample_method_t resolvedSampleMethod =
+		ofxStableDiffusionNativeAdapter::resolveSampleMethod(thread.sdCtx, requestedSampleMethod);
+	return ofxStableDiffusionNativeAdapter::resolveScheduler(
+		thread.sdCtx,
+		resolvedSampleMethod,
+		requestedSchedule);
+}
+
+std::string ofxStableDiffusion::getResolvedSampleMethodName(sample_method_t requested) const {
+	const sample_method_t resolved = getResolvedSampleMethod(requested);
+	if (resolved == SAMPLE_METHOD_COUNT) {
+		return "MODEL_DEFAULT";
+	}
+	return sd_sample_method_name(resolved);
+}
+
+std::string ofxStableDiffusion::getResolvedSchedulerName(
+	sample_method_t requestedSampleMethod,
+	scheduler_t requestedSchedule) const {
+	const scheduler_t resolved = getResolvedScheduler(requestedSampleMethod, requestedSchedule);
+	if (resolved == SCHEDULER_COUNT) {
+		return "MODEL_DEFAULT";
+	}
+	return sd_scheduler_name(resolved);
 }
 
 std::vector<ofxStableDiffusionError> ofxStableDiffusion::getErrorHistory() const {
@@ -1521,6 +1678,14 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 		inputImage = loadedInputImage.image;
 		taskData.initImage.assign(inputImage);
 		taskData.endImage.assign(request.endImage);
+		taskData.controlFrames.clear();
+		taskData.controlFrames.reserve(request.controlFrames.size());
+		for (const auto& frame : request.controlFrames) {
+			stableDiffusionThread::OwnedImage ownedFrame;
+			if (ownedFrame.assign(frame)) {
+				taskData.controlFrames.push_back(std::move(ownedFrame));
+			}
+		}
 		taskData.syncViews();
 		taskData.progressCallback = progressCallback;
 
@@ -1598,7 +1763,7 @@ bool ofxStableDiffusion::validateVideoRequestAndSetError(const ofxStableDiffusio
 	if (request.hasAnimation() && isNativeWanVideoFamily(capabilities.modelFamily)) {
 		setLastError(
 			ofxStableDiffusionErrorCode::InvalidParameter,
-			"Prompt morph / seed-sequence video animation is not supported yet for native Wan video models in the addon wrapper");
+			"Wrapper image-sequence animation is not supported for native Wan video models. Use native video diffusion settings instead.");
 		return false;
 	}
 	return true;
@@ -1610,6 +1775,8 @@ void ofxStableDiffusion::clearOutputState() {
 	outputImageViews.clear();
 	lastResult = {};
 	diffused = false;
+	lastResolvedVideoRequestSummary.clear();
+	lastResolvedVideoCliCommand.clear();
 }
 
 void ofxStableDiffusion::setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code) {
@@ -1643,6 +1810,16 @@ void ofxStableDiffusion::setLastError(const std::string& errorMessage, ofxStable
 
 void ofxStableDiffusion::setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage) {
 	setLastError(errorMessage, code);
+}
+
+void ofxStableDiffusion::setLastResolvedVideoRequestSummary(const std::string& summary) {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	lastResolvedVideoRequestSummary = summary;
+}
+
+void ofxStableDiffusion::setLastResolvedVideoCliCommand(const std::string& command) {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	lastResolvedVideoCliCommand = command;
 }
 
 void ofxStableDiffusion::clearLastError() {
