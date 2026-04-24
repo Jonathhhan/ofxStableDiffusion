@@ -769,7 +769,7 @@ void ofApp::setup() {
 	isInstructImage = false;
 	isImageToVideo = false;
 	videoFrames = 6;
-	videoFps = 6;
+	videoFps = videoParameterProfile.defaultFps;
 	videoMoeBoundary = 0.875f;
 	videoCacheThreshold = 0.25f;
 	videoCacheStartPercent = 0.2f;
@@ -2072,7 +2072,7 @@ void ofApp::applyRecommendedVideoParameters() {
 	strength = std::clamp(0.75f, videoParameterProfile.minStrength, videoParameterProfile.maxStrength);
 	clipSkip = videoParameterProfile.supportsClipSkip ? -1 : videoParameterProfile.defaultClipSkip;
 	videoFrames = 6;
-	videoFps = 6;
+	videoFps = videoParameterProfile.defaultFps;
 	vaceStrength = videoParameterProfile.supportsVaceStrength ?
 		std::clamp(1.0f, videoParameterProfile.minVaceStrength, videoParameterProfile.maxVaceStrength) :
 		1.0f;
