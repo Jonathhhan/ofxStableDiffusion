@@ -30,6 +30,10 @@ class ofApp : public ofBaseApp {
 		void clampCurrentParametersToProfiles();
 		void configureExampleRanker();
 		bool usesInputImageMode() const;
+		void syncAutomaticMediaMode(const ofxStableDiffusionCapabilities& capabilities);
+		bool videoModeSupportsTextAndImage() const;
+		bool currentVideoModeUsesInputImage() const;
+		bool currentVideoModeRequiresInputImage() const;
 		bool loadImageIntoSlot(
 			const std::string& dialogTitle,
 			ofImage& targetImage,
@@ -73,14 +77,9 @@ class ofApp : public ofBaseApp {
 		int width;
 		int height;
 		float cfgScale;
-		bool useCustomImageCfgScale;
-		bool useCustomVideoCfgScale;
-		bool useCustomGuidance;
 		float guidance;
 		int batchCount;
 		float strength;
-		bool useCustomImageStrength;
-		bool useCustomVideoStrength;
 		int seed;
 		int clipSkip;
 		int previewSize;
@@ -114,8 +113,6 @@ class ofApp : public ofBaseApp {
 		std::vector<ofxStableDiffusionLora> loras;
 		sample_method_t sampleMethodEnum;
 		int sampleSteps;
-		bool useCustomImageSampleSteps;
-		bool useCustomVideoSampleSteps;
 		bool promptIsEdited;
 		bool vaeDecodeOnly;
 		bool vaeTiling;
@@ -130,21 +127,14 @@ class ofApp : public ofBaseApp {
 		bool keepVaeOnCpu;
 		bool flashAttn;
 		bool diffusionFlashAttn;
-		bool useCustomEta;
 		float eta;
-		bool useCustomFlowShift;
 		float flowShift;
 		bool useHighNoiseOverrides;
-		bool useCustomHighNoiseCfgScale;
-		bool useCustomHighNoiseGuidance;
 		sample_method_t highNoiseSampleMethodEnum;
 		int highNoiseSampleSteps;
-		bool useCustomHighNoiseSampleSteps;
 		float highNoiseCfgScale;
 		float highNoiseGuidance;
-		bool useCustomHighNoiseEta;
 		float highNoiseEta;
-		bool useCustomHighNoiseFlowShift;
 		float highNoiseFlowShift;
 		float styleStrength;
 		bool normalizeInput;
@@ -167,12 +157,11 @@ class ofApp : public ofBaseApp {
 		bool isTextToImage;
 		bool isInstructImage;
 		bool isImageToVideo;
+		bool videoUseInputImage = false;
 		int videoFrames;
 		int videoFps;
 		float vaceStrength;
-		bool useCustomVideoVaceStrength;
 		float videoMoeBoundary = 0.875f;
-		bool useCustomVideoMoeBoundary;
 		float videoCacheThreshold = 0.25f;
 		float videoCacheStartPercent = 0.2f;
 		float videoCacheEndPercent = 1.0f;

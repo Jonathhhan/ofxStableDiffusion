@@ -20,20 +20,6 @@ bool containsKeyword(const std::string& haystack, const std::string& needle) {
 	return haystack.find(needle) != std::string::npos;
 }
 
-std::vector<int> buildVideoFrameOptions(int minFrameCount, int maxFrameCount) {
-	std::vector<int> options;
-	if (maxFrameCount < 5) {
-		return options;
-	}
-
-	const int start = std::max(minFrameCount, 5);
-	const int firstValid = ((start - 1 + 3) / 4) * 4 + 1;
-	for (int frameCount = firstValid; frameCount <= maxFrameCount; frameCount += 4) {
-		options.push_back(frameCount);
-	}
-	return options;
-}
-
 std::string quoteCliArg(const std::string& value) {
 	std::string escaped = "\"";
 	for (char c : value) {
@@ -519,11 +505,11 @@ ofxStableDiffusionVideoRequest ofApp::buildVideoRequest() const {
 	ofxStableDiffusionVideoRequest request;
 	const ofxStableDiffusionCapabilities capabilities = stableDiffusion.getCapabilities();
 	request.initImage =
-		(capabilities.videoRequiresInputImage && inputImage.data != nullptr) ?
+		(currentVideoModeUsesInputImage() && inputImage.data != nullptr) ?
 			inputImage :
 			sd_image_t{0, 0, 0, nullptr};
 	request.endImage =
-		(capabilities.videoEndFrame && useEndFrame && endInputImage.data != nullptr) ?
+		(currentVideoModeUsesInputImage() && capabilities.videoEndFrame && useEndFrame && endInputImage.data != nullptr) ?
 			endInputImage :
 			sd_image_t{0, 0, 0, nullptr};
 	if (useVideoControlFrames && !videoControlFrames.empty()) {
@@ -743,37 +729,25 @@ void ofApp::setup() {
 	offloadParamsToCpu = false;
 	flashAttn = false;
 	diffusionFlashAttn = false;
-	useCustomEta = false;
 	eta = 0.0f;
-	useCustomFlowShift = false;
 	flowShift = 5.0f;
-	useCustomImageCfgScale = false;
-	useCustomVideoCfgScale = false;
-	useCustomGuidance = false;
 	guidance = 3.5f;
 	useHighNoiseOverrides = false;
-	useCustomHighNoiseCfgScale = false;
-	useCustomHighNoiseGuidance = false;
-	useCustomHighNoiseSampleSteps = false;
+	highNoiseSampleSteps = -1;
+	highNoiseCfgScale = 7.0f;
 	highNoiseGuidance = 3.5f;
-	useCustomHighNoiseEta = false;
 	highNoiseEta = 0.0f;
-	useCustomHighNoiseFlowShift = false;
 	highNoiseFlowShift = 5.0f;
 	styleStrength = 20;
 	normalizeInput = true;
 	width = 512;
 	height = 512;
-	cfgScale = 1.0;
-	sampleSteps = 5;
-	useCustomImageSampleSteps = false;
-	useCustomVideoSampleSteps = false;
+	cfgScale = 7.0f;
+	sampleSteps = 20;
 	clipSkip = -1;
 	previewSize = batchCount = 4;
 	selectedImage = 0;
-	strength = 0.5;
-	useCustomImageStrength = false;
-	useCustomVideoStrength = false;
+	strength = 0.75f;
 	controlStrength = 0.9;
 	seed = -1;
 	wType = SD_TYPE_F16;
@@ -787,8 +761,6 @@ void ofApp::setup() {
 	sampleMethodEnum = SAMPLE_METHOD_COUNT;
 	highNoiseSampleMethod = sampleMethod;
 	highNoiseSampleMethodEnum = sampleMethodEnum;
-	highNoiseSampleSteps = sampleSteps;
-	highNoiseCfgScale = cfgScale;
 	videoCacheMode = "disabled";
 	interpolationMode = "Smooth";
 	promptIsEdited = true;
@@ -799,12 +771,10 @@ void ofApp::setup() {
 	videoFrames = 6;
 	videoFps = 6;
 	videoMoeBoundary = 0.875f;
-	useCustomVideoMoeBoundary = false;
 	videoCacheThreshold = 0.25f;
 	videoCacheStartPercent = 0.2f;
 	videoCacheEndPercent = 1.0f;
 	vaceStrength = 1.0f;
-	useCustomVideoVaceStrength = false;
 	enablePromptInterpolation = false;
 	useSeedSequence = false;
 	useEndFrame = false;
@@ -835,10 +805,7 @@ void ofApp::setup() {
 	freeParamsImmediately = true;
 	nThreads = 8;
 	esrganMultiplier = 4;
-	for (int i = 0; i < maxPreviewTextures; i++) {
-		ofTexture texture;
-		textureVector.push_back(texture);
-	}
+	textureVector.resize(static_cast<std::size_t>(maxPreviewTextures));
 	allocate();
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 	applySelectedImageMode(imageModeEnum);
@@ -874,15 +841,17 @@ void ofApp::update() {
 	}
 
 	if (stableDiffusion.isDiffused()) {
-		outputImages = stableDiffusion.returnImages();
 		if (isImageToVideo) {
-			const auto videoClip = stableDiffusion.getVideoClip();
 			totalVideoFrames = stableDiffusion.getOutputCount();
+			if (totalVideoFrames > static_cast<int>(textureVector.size())) {
+				textureVector.resize(static_cast<std::size_t>(totalVideoFrames));
+			}
 			for (int i = 0; i < totalVideoFrames; i++) {
-				if (i >= static_cast<int>(videoClip.frames.size()) || !videoClip.frames[static_cast<std::size_t>(i)].isAllocated()) {
+				const ofPixels* framePixelsPtr = stableDiffusion.getVideoFramePixels(i);
+				if (framePixelsPtr == nullptr || !framePixelsPtr->isAllocated()) {
 					continue;
 				}
-				const auto& framePixels = videoClip.frames[static_cast<std::size_t>(i)].pixels;
+				const auto& framePixels = *framePixelsPtr;
 				const int frameWidth = framePixels.getWidth();
 				const int frameHeight = framePixels.getHeight();
 				const int frameChannels = framePixels.getNumChannels();
@@ -903,7 +872,11 @@ void ofApp::update() {
 			lastFrameTime = ofGetElapsedTimef();
 		}
 		else {
+			outputImages = stableDiffusion.returnImages();
 			const int outputCount = stableDiffusion.getOutputCount();
+			if (outputCount > static_cast<int>(textureVector.size())) {
+				textureVector.resize(static_cast<std::size_t>(outputCount));
+			}
 			for (int i = 0; i < outputCount; i++) {
 				if (isESRGAN) {
 					textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
@@ -928,6 +901,14 @@ void ofApp::update() {
 			lastFrameTime = now;
 		}
 	}
+	if (previewSize <= 0 || textureVector.empty()) {
+		selectedImage = 0;
+		previousSelectedImage = 0;
+	} else {
+		const int maxIndex = std::min(previewSize, static_cast<int>(textureVector.size())) - 1;
+		selectedImage = std::clamp(selectedImage, 0, maxIndex);
+		previousSelectedImage = std::clamp(previousSelectedImage, 0, maxIndex);
+	}
 	selectedImage = previousSelectedImage;
 }
 
@@ -951,6 +932,8 @@ void ofApp::draw() {
 	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
 	static bool logOpenSettings{ true };
 	const bool isBusy = stableDiffusion.isGenerating() || stableDiffusion.isModelLoading;
+	const auto capabilities = stableDiffusion.getCapabilities();
+	syncAutomaticMediaMode(capabilities);
 	gui.begin();
 	ImGui::StyleColorsDark();
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -968,7 +951,8 @@ void ofApp::draw() {
 	ImGui::Begin("ofxStableDiffusion##foo0", NULL, flags);
 	if (ImGui::TreeNodeEx("Image Preview", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
-		for (int i = 0; i < previewSize; i++) {
+		const int previewCount = std::min(previewSize, static_cast<int>(textureVector.size()));
+		for (int i = 0; i < previewCount; i++) {
 			if (i == previewSize - previewSize % 4 && i > 3) {
 				ImGui::Indent(width / 8.f * (4 - previewSize % 4));
 				ImGui::Image((ImTextureID)(uintptr_t)textureVector[i].getTextureData().textureID, ImVec2(width / 4, height / 4));
@@ -995,7 +979,9 @@ void ofApp::draw() {
 	ImGui::Begin("ofxStableDiffusion##foo1", NULL, flags);
 	if (ImGui::TreeNodeEx("Image", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Image((ImTextureID)(uintptr_t)textureVector[selectedImage].getTextureData().textureID, ImVec2(width, height));
+		if (selectedImage >= 0 && selectedImage < static_cast<int>(textureVector.size())) {
+			ImGui::Image((ImTextureID)(uintptr_t)textureVector[selectedImage].getTextureData().textureID, ImVec2(width, height));
+		}
 		const auto& result = stableDiffusion.getLastResult();
 		if (selectedImage >= 0 && selectedImage < static_cast<int>(result.images.size())) {
 			const auto& frame = result.images[static_cast<std::size_t>(selectedImage)];
@@ -1089,7 +1075,6 @@ void ofApp::draw() {
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Settings", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
-		const auto capabilities = stableDiffusion.getCapabilities();
 		if (isBusy) {
 			ImGui::BeginDisabled();
 		}
@@ -1244,17 +1229,119 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		drawHoloscanBridgeSection();
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::BeginCombo("Image Mode", imageMode, ImGuiComboFlags_NoArrowButton)) {
-			for (int n = 0; n < IM_ARRAYSIZE(imageModeArray); n++) {
-				const bool is_selected = (imageMode == imageModeArray[n]);
-				if (ImGui::Selectable(imageModeArray[n], is_selected)) {
-					applySelectedImageMode(static_cast<ofxStableDiffusionImageMode>(n));
+		const bool supportsImageMode =
+			capabilities.textToImage ||
+			capabilities.imageToImage ||
+			capabilities.instructImage ||
+			capabilities.variation ||
+			capabilities.restyle ||
+			capabilities.inpainting;
+		const bool supportsVideoMode = capabilities.imageToVideo;
+		const bool showTopLevelModeSelector = supportsImageMode && supportsVideoMode;
+		const char* currentTopLevelModeLabel =
+			isImageToVideo ? "Video" : "Image";
+		if (!showTopLevelModeSelector) {
+			if (supportsVideoMode && !supportsImageMode) {
+				currentTopLevelModeLabel = "Video";
+			} else if (supportsImageMode && !supportsVideoMode) {
+				currentTopLevelModeLabel = "Image";
+			}
+		}
+		if (!showTopLevelModeSelector) {
+			ImGui::BeginDisabled();
+		}
+		if (ImGui::BeginCombo("Mode", currentTopLevelModeLabel, ImGuiComboFlags_NoArrowButton)) {
+			if (supportsImageMode) {
+				const bool imageSelected = !isImageToVideo;
+				if (ImGui::Selectable("Image", imageSelected)) {
+					isImageToVideo = false;
+					applySelectedImageMode(imageModeEnum);
 				}
-				if (is_selected) {
+				if (imageSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			if (supportsVideoMode) {
+				const bool videoSelected = isImageToVideo;
+				if (ImGui::Selectable("Video", videoSelected)) {
+					isImageToVideo = true;
+					videoUseInputImage = videoModeSupportsTextAndImage() ? false : capabilities.videoRequiresInputImage;
+					applyRecommendedVideoParameters();
+					clampCurrentParametersToProfiles();
+				}
+				if (videoSelected) {
 					ImGui::SetItemDefaultFocus();
 				}
 			}
 			ImGui::EndCombo();
+		}
+		if (!showTopLevelModeSelector) {
+			ImGui::EndDisabled();
+		}
+		if (!isImageToVideo) {
+			ImGui::Dummy(ImVec2(0, 10));
+			if (ImGui::BeginCombo("Image Mode", imageMode, ImGuiComboFlags_NoArrowButton)) {
+				for (int n = 0; n < IM_ARRAYSIZE(imageModeArray); n++) {
+					const auto mode = static_cast<ofxStableDiffusionImageMode>(n);
+					const bool supported =
+						(mode == ofxStableDiffusionImageMode::TextToImage && capabilities.textToImage) ||
+						(mode == ofxStableDiffusionImageMode::ImageToImage && capabilities.imageToImage) ||
+						(mode == ofxStableDiffusionImageMode::InstructImage && capabilities.instructImage) ||
+						(mode == ofxStableDiffusionImageMode::Variation && capabilities.variation) ||
+						(mode == ofxStableDiffusionImageMode::Restyle && capabilities.restyle) ||
+						(mode == ofxStableDiffusionImageMode::Inpainting && capabilities.inpainting);
+					if (!supported) {
+						continue;
+					}
+					const bool is_selected = (imageModeEnum == mode);
+					if (ImGui::Selectable(imageModeArray[n], is_selected)) {
+						applySelectedImageMode(mode);
+					}
+					if (is_selected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+		} else if (supportsVideoMode) {
+			const bool allowVideoModeChoice = videoModeSupportsTextAndImage();
+			const bool fixedImageToVideo = capabilities.videoRequiresInputImage && !allowVideoModeChoice;
+			const char* currentVideoModeLabel =
+				allowVideoModeChoice ?
+					(videoUseInputImage ? "ImageToVideo" : "TextToVideo") :
+					(fixedImageToVideo ? "ImageToVideo" : "TextToVideo");
+			ImGui::Dummy(ImVec2(0, 10));
+			if (!allowVideoModeChoice) {
+				ImGui::BeginDisabled();
+			}
+			if (ImGui::BeginCombo("Video Mode", currentVideoModeLabel, ImGuiComboFlags_NoArrowButton)) {
+				if (!fixedImageToVideo) {
+					const bool t2vSelected = !videoUseInputImage;
+					if (ImGui::Selectable("TextToVideo", t2vSelected)) {
+						videoUseInputImage = false;
+						applyRecommendedVideoParameters();
+						clampCurrentParametersToProfiles();
+					}
+					if (t2vSelected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				if (allowVideoModeChoice || fixedImageToVideo) {
+					const bool i2vSelected = videoUseInputImage;
+					if (ImGui::Selectable("ImageToVideo", i2vSelected)) {
+						videoUseInputImage = true;
+						applyRecommendedVideoParameters();
+						clampCurrentParametersToProfiles();
+					}
+					if (i2vSelected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+			if (!allowVideoModeChoice) {
+				ImGui::EndDisabled();
+			}
 		}
 		if (!isImageToVideo) {
 			ImGui::Dummy(ImVec2(0, 10));
@@ -1273,8 +1360,8 @@ void ofApp::draw() {
 				}
 				ImGui::EndCombo();
 			}
-			ImGui::Dummy(ImVec2(0, 10));
 			if (selectionModeEnum != ofxStableDiffusionImageSelectionMode::KeepOrder) {
+				ImGui::Dummy(ImVec2(0, 10));
 				ImGui::Checkbox("Use Demo Ranking Callback", &useDemoRanking);
 				if (ImGui::IsItemEdited()) {
 					configureExampleRanker();
@@ -1286,26 +1373,7 @@ void ofApp::draw() {
 					ImVec2(512, 80),
 					ImGuiInputTextFlags_CallbackResize);
 				ImGui::Dummy(ImVec2(0, 10));
-				if (useDemoRanking) {
-					ImGui::TextWrapped(
-						"This example scorer is local and heuristic. It demonstrates the Best-of-N API, but real semantic reranking belongs on the ofxGgml CLIP side.");
-				} else {
-					ImGui::TextWrapped(
-						"Attach a CLIP scorer from ofxGgml for semantic Best-of-N reranking, or enable the demo callback here to preview the ranking workflow.");
-				}
-			} else {
-				ImGui::TextWrapped("KeepOrder leaves outputs untouched. Switch to Rerank or BestOnly to exercise the ranking API.");
 			}
-		}
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Checkbox("Generate Video", &isImageToVideo);
-		if (ImGui::IsItemEdited()) {
-			if (isImageToVideo) {
-				applyRecommendedVideoParameters();
-			} else {
-				applyRecommendedImageParameters();
-			}
-			clampCurrentParametersToProfiles();
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Text(
@@ -1316,25 +1384,12 @@ void ofApp::draw() {
 			"%s",
 			isImageToVideo ? videoParameterProfile.summary : imageParameterProfile.summary);
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Button(isImageToVideo ? "Apply Recommended Video Tuning" : "Apply Recommended Image Tuning")) {
+		if (ImGui::Button("Default")) {
 			if (isImageToVideo) {
 				applyRecommendedVideoParameters();
 			} else {
 				applyRecommendedImageParameters();
 			}
-		}
-		if (isInstructImage) {
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TextWrapped("InstructImage uses the prompt as overall target context and the instruction field as the concrete edit request.");
-		} else if (imageModeEnum == ofxStableDiffusionImageMode::Variation) {
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TextWrapped("Variation keeps the source composition closer and uses a lighter denoise strength.");
-		} else if (imageModeEnum == ofxStableDiffusionImageMode::Restyle) {
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TextWrapped("Restyle pushes the source image further toward the prompt aesthetic.");
-		} else if (imageModeEnum == ofxStableDiffusionImageMode::Inpainting) {
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TextWrapped("Inpainting uses the source image plus a mask image. White areas are repainted and black areas are preserved.");
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::Checkbox("TAESD", &isTAESD)) {
@@ -1354,17 +1409,12 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("VAE On CPU", &keepVaeOnCpu);
 		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("Flash Attention", &flashAttn);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("Diffusion Flash Attention", &diffusionFlashAttn);
 		ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Checkbox("VAE Tiling", &vaeTiling)) {
-				if (!isBusy) {
-
-				}
-		}
-		if (usesInputImageMode() || isImageToVideo) {
+		ImGui::Checkbox("VAE Tiling", &vaeTiling);
+		if (usesInputImageMode() || currentVideoModeUsesInputImage()) {
 			ImGui::Dummy(ImVec2(0, 10));
 			if (ImGui::Button("Load Image")) {
 				if (loadImageIntoSlot("Load Image", image, pixels, inputImage, imageName)) {
@@ -1372,7 +1422,7 @@ void ofApp::draw() {
 				}
 			}
 			ImGui::SameLine(0, 5);
-			ImGui::Text(&imageName[0]);
+			ImGui::Text("%s", imageName.empty() ? "No image loaded" : imageName.c_str());
 			ImGui::Dummy(ImVec2(0, 10));
 			ImGui::Image((ImTextureID)(uintptr_t)fbo.getTexture().getTextureData().textureID, ImVec2(128, 128));
 		}
@@ -1420,7 +1470,7 @@ void ofApp::draw() {
 			}
 		}
 		if (isImageToVideo) {
-			const auto videoCapabilities = stableDiffusion.getCapabilities();
+			const auto& videoCapabilities = capabilities;
 			const bool highNoiseOverridesAvailable =
 				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WAN ||
 				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WANI2V ||
@@ -1429,43 +1479,9 @@ void ofApp::draw() {
 				videoCapabilities.modelFamily == ofxStableDiffusionModelFamily::WANVACE;
 			if (!highNoiseOverridesAvailable) {
 				useHighNoiseOverrides = false;
-				useCustomHighNoiseCfgScale = false;
-				useCustomHighNoiseGuidance = false;
-				useCustomHighNoiseSampleSteps = false;
 			}
 			ImGui::Dummy(ImVec2(0, 10));
-			const std::vector<int> videoFrameOptions = buildVideoFrameOptions(
-				videoParameterProfile.minFrameCount,
-				videoParameterProfile.maxFrameCount);
-			if (!videoFrameOptions.empty()) {
-				auto nearestIt = std::lower_bound(
-					videoFrameOptions.begin(),
-					videoFrameOptions.end(),
-					videoFrames);
-				if (nearestIt == videoFrameOptions.end()) {
-					nearestIt = std::prev(videoFrameOptions.end());
-				}
-				int currentFrameOptionIndex =
-					static_cast<int>(std::distance(videoFrameOptions.begin(), nearestIt));
-				videoFrames = videoFrameOptions[static_cast<std::size_t>(currentFrameOptionIndex)];
-				if (ImGui::SliderInt(
-						"Video Frames##Discrete",
-						&currentFrameOptionIndex,
-						0,
-						static_cast<int>(videoFrameOptions.size()) - 1,
-						"")) {
-					videoFrames =
-						videoFrameOptions[static_cast<std::size_t>(currentFrameOptionIndex)];
-				}
-				ImGui::SameLine();
-				ImGui::Text("%d", videoFrames);
-			} else {
-				ImGui::SliderInt(
-					"Video Frames",
-					&videoFrames,
-					videoParameterProfile.minFrameCount,
-					videoParameterProfile.maxFrameCount);
-			}
+			ImGui::InputInt("Video Frames", &videoFrames, 1, 10);
 			if (videoParameterProfile.supportsVaceStrength) {
 				ImGui::Dummy(ImVec2(0, 10));
 				ImGui::SliderFloat(
@@ -1474,13 +1490,11 @@ void ofApp::draw() {
 					videoParameterProfile.minVaceStrength,
 					videoParameterProfile.maxVaceStrength);
 			}
-			ImGui::Dummy(ImVec2(0, 10));
 			if (!videoCapabilities.videoAnimation) {
 				enablePromptInterpolation = false;
 				useSeedSequence = false;
-				ImGui::TextWrapped(
-					"Native video diffusion is active for this model. Wrapper image-sequence animation helpers stay disabled here so the request remains on the real video path.");
 			} else {
+				ImGui::Dummy(ImVec2(0, 10));
 				ImGui::Checkbox("Image-Sequence Prompt Morph", &enablePromptInterpolation);
 				if (enablePromptInterpolation) {
 					ImGui::Dummy(ImVec2(0, 10));
@@ -1593,33 +1607,35 @@ void ofApp::draw() {
 					ImGui::SliderFloat("High-Noise Flow Shift", &highNoiseFlowShift, 0.0f, 12.0f);
 				}
 			}
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Checkbox("Use End Frame", &useEndFrame);
-			if (useEndFrame) {
+			if (currentVideoModeUsesInputImage() && videoCapabilities.videoEndFrame) {
 				ImGui::Dummy(ImVec2(0, 10));
-				if (ImGui::Button("Load End Frame")) {
-					ofFileDialogResult result = ofSystemLoadDialog("Load End Frame", false, "");
-					if (result.bSuccess) {
-						endImageName = result.getName();
-						if (endFrameImage.load(result.getPath())) {
-							endFrameImage.resize(width, height);
-							endFramePixels = endFrameImage.getPixels();
-							endInputImage = {
-								static_cast<uint32_t>(endFramePixels.getWidth()),
-								static_cast<uint32_t>(endFramePixels.getHeight()),
-								static_cast<uint32_t>(endFramePixels.getNumChannels()),
-								endFramePixels.getData()
-							};
+				ImGui::Checkbox("Use End Frame", &useEndFrame);
+				if (useEndFrame) {
+					ImGui::Dummy(ImVec2(0, 10));
+					if (ImGui::Button("Load End Frame")) {
+						ofFileDialogResult result = ofSystemLoadDialog("Load End Frame", false, "");
+						if (result.bSuccess) {
+							endImageName = result.getName();
+							if (endFrameImage.load(result.getPath())) {
+								endFrameImage.resize(width, height);
+								endFramePixels = endFrameImage.getPixels();
+								endInputImage = {
+									static_cast<uint32_t>(endFramePixels.getWidth()),
+									static_cast<uint32_t>(endFramePixels.getHeight()),
+									static_cast<uint32_t>(endFramePixels.getNumChannels()),
+									endFramePixels.getData()
+								};
+							}
 						}
 					}
-				}
-				ImGui::SameLine(0, 5);
-				ImGui::Text("%s", endImageName.empty() ? "No end frame loaded" : endImageName.c_str());
-				if (endFrameImage.isAllocated()) {
-					ImGui::Dummy(ImVec2(0, 10));
-					ImGui::Image(
-						(ImTextureID)(uintptr_t)endFrameImage.getTexture().getTextureData().textureID,
-						ImVec2(128, 128));
+					ImGui::SameLine(0, 5);
+					ImGui::Text("%s", endImageName.empty() ? "No end frame loaded" : endImageName.c_str());
+					if (endFrameImage.isAllocated()) {
+						ImGui::Dummy(ImVec2(0, 10));
+						ImGui::Image(
+							(ImTextureID)(uintptr_t)endFrameImage.getTexture().getTextureData().textureID,
+							ImVec2(128, 128));
+					}
 				}
 			}
 			ImGui::Dummy(ImVec2(0, 10));
@@ -1701,10 +1717,12 @@ void ofApp::draw() {
 				"Clip Skip Layers",
 				&clipSkip,
 				isImageToVideo ? videoParameterProfile.minClipSkip : imageParameterProfile.minClipSkip,
-				isImageToVideo ? videoParameterProfile.maxClipSkip : imageParameterProfile.maxClipSkip);
+					isImageToVideo ? videoParameterProfile.maxClipSkip : imageParameterProfile.maxClipSkip);
 		}
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::SliderFloat("Control Strength", &controlStrength, 0, 2);
+		if (!isImageToVideo && useControlGuide && !controlNetPath.empty()) {
+			ImGui::Dummy(ImVec2(0, 10));
+			ImGui::SliderFloat("Control Strength", &controlStrength, 0, 2);
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::SliderFloat(
 			"CFG Scale",
@@ -1848,11 +1866,10 @@ void ofApp::draw() {
 		ImGui::BeginDisabled();
 	}
 	ImGui::Dummy(ImVec2(0, 10));
-	const auto capabilitiesForGenerate = stableDiffusion.getCapabilities();
-	const bool modelReady = capabilitiesForGenerate.contextConfigured;
+	const bool modelReady = capabilities.contextConfigured;
 	const bool needsInputImage =
 		usesInputImageMode() ||
-		(isImageToVideo && capabilitiesForGenerate.videoRequiresInputImage);
+		currentVideoModeRequiresInputImage();
 	const bool hasInputImage = inputImage.data != nullptr;
 	const bool needsMaskImage = imageModeEnum == ofxStableDiffusionImageMode::Inpainting;
 	const bool maskReady = needsMaskImage ? (useMaskGuide && maskGuideInput.data != nullptr) : true;
@@ -1861,29 +1878,27 @@ void ofApp::draw() {
 	}
 	if (needsInputImage && !hasInputImage) {
 		ImGui::TextWrapped("Load an input image for the selected mode.");
-	} else if (isImageToVideo && !capabilitiesForGenerate.videoRequiresInputImage) {
-		if (hasInputImage || (useEndFrame && endInputImage.data != nullptr)) {
-			ImGui::TextWrapped("Current model is text-to-video. Loaded input or end images are ignored unless you switch to a Wan image-to-video family model.");
-		} else {
-			ImGui::TextWrapped("Current model supports text-to-video, so an input image is optional.");
-		}
 	}
 	if (needsMaskImage && !maskReady) {
 		ImGui::TextWrapped("Inpainting needs a mask image. Enable Use Mask and load one before generating.");
 	}
 	ImGui::Dummy(ImVec2(0, 10));
-	if (ImGui::Button("Generate")) {
-		progressStep = 0;
-		progressSteps = 0;
-		progressTime = 0.0f;
-		configureExampleRanker();
-		clampCurrentParametersToProfiles();
-		if (isImageToVideo) {
+		if (ImGui::Button("Generate")) {
+			progressStep = 0;
+			progressSteps = 0;
+			progressTime = 0.0f;
 			isPlaying = false;
+			currentFrame = 0;
 			totalVideoFrames = 0;
-			ofxStableDiffusionVideoRequest request = buildVideoRequest();
-			stableDiffusion.generateVideo(request);
-		}
+			previewSize = 0;
+			selectedImage = 0;
+			previousSelectedImage = 0;
+			configureExampleRanker();
+			clampCurrentParametersToProfiles();
+			if (isImageToVideo) {
+				ofxStableDiffusionVideoRequest request = buildVideoRequest();
+				stableDiffusion.generateVideo(request);
+			}
 		else {
 			ofxStableDiffusionImageRequest request;
 			request.mode = imageModeEnum;
@@ -1961,27 +1976,6 @@ void ofApp::draw() {
 				ofLogError("ofApp") << "Failed to save result video to '" << path << "'";
 			}
 		}
-		const auto clip = stableDiffusion.getVideoClip();
-		if (currentFrame >= 0 && currentFrame < static_cast<int>(clip.frames.size())) {
-			const auto& frame = clip.frames[static_cast<std::size_t>(currentFrame)];
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::Text("Seed: %lld", static_cast<long long>(frame.seed));
-			if (!frame.generation.prompt.empty()) {
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::TextWrapped("Frame Prompt: %s", frame.generation.prompt.c_str());
-			}
-			if (!frame.generation.negativePrompt.empty()) {
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::TextWrapped("Frame Negative Prompt: %s", frame.generation.negativePrompt.c_str());
-			}
-			if (frame.generation.cfgScale >= 0.0f || frame.generation.strength >= 0.0f) {
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::Text(
-					"CFG %.2f  Strength %.2f",
-					frame.generation.cfgScale,
-					frame.generation.strength);
-			}
-		}
 	}
 	if (isBusy) {
 		ImGui::EndDisabled();
@@ -2044,17 +2038,17 @@ void ofApp::applyRecommendedImageParameters() {
 		stableDiffusion.getContextSettings(),
 		imageModeEnum);
 	freeParamsImmediately = true;
-	cfgScale = imageParameterProfile.defaultCfgScale;
-	sampleSteps = imageParameterProfile.defaultSampleSteps;
-	clipSkip = imageParameterProfile.defaultClipSkip;
+	width = 512;
+	height = 512;
+	cfgScale = std::clamp(7.0f, imageParameterProfile.minCfgScale, imageParameterProfile.maxCfgScale);
+	sampleSteps = std::clamp(20, imageParameterProfile.minSampleSteps, imageParameterProfile.maxSampleSteps);
+	clipSkip = imageParameterProfile.supportsClipSkip ? -1 : imageParameterProfile.defaultClipSkip;
 	sampleMethod = "MODEL_DEFAULT";
 	sampleMethodEnum = SAMPLE_METHOD_COUNT;
-	useCustomImageCfgScale = false;
-	useCustomImageSampleSteps = false;
-	useCustomImageStrength = false;
 	if (imageParameterProfile.supportsStrength) {
-		strength = imageParameterProfile.defaultStrength;
+		strength = std::clamp(0.75f, imageParameterProfile.minStrength, imageParameterProfile.maxStrength);
 	}
+	allocate();
 }
 
 //--------------------------------------------------------------
@@ -2062,71 +2056,43 @@ void ofApp::applyRecommendedVideoParameters() {
 	videoParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveVideoProfile(
 		stableDiffusion.getContextSettings());
 	freeParamsImmediately = true;
-	width = videoParameterProfile.defaultWidth;
-	height = videoParameterProfile.defaultHeight;
-	cfgScale = videoParameterProfile.defaultCfgScale;
-	sampleSteps = videoParameterProfile.defaultSampleSteps;
-	strength = videoParameterProfile.defaultStrength;
-	clipSkip = videoParameterProfile.defaultClipSkip;
-	videoFrames = videoParameterProfile.defaultFrameCount;
-	videoFps = videoParameterProfile.defaultFps;
-	vaceStrength = videoParameterProfile.defaultVaceStrength;
-	useCustomVideoCfgScale = false;
-	useCustomVideoSampleSteps = false;
-	useCustomVideoStrength = false;
-	useCustomVideoMoeBoundary = false;
-	useCustomVideoVaceStrength = false;
+	width = 512;
+	height = 512;
+	cfgScale = std::clamp(7.0f, videoParameterProfile.minCfgScale, videoParameterProfile.maxCfgScale);
+	guidance = 3.5f;
+	sampleSteps = std::clamp(20, videoParameterProfile.minSampleSteps, videoParameterProfile.maxSampleSteps);
+	strength = std::clamp(0.75f, videoParameterProfile.minStrength, videoParameterProfile.maxStrength);
+	clipSkip = videoParameterProfile.supportsClipSkip ? -1 : videoParameterProfile.defaultClipSkip;
+	videoFrames = 6;
+	videoFps = 6;
+	vaceStrength = videoParameterProfile.supportsVaceStrength ?
+		std::clamp(1.0f, videoParameterProfile.minVaceStrength, videoParameterProfile.maxVaceStrength) :
+		1.0f;
+	videoMoeBoundary = 0.875f;
 	schedule = SCHEDULER_COUNT;
-	useCustomGuidance = false;
-	useCustomHighNoiseCfgScale = false;
-	useCustomHighNoiseGuidance = false;
-	useCustomHighNoiseSampleSteps = false;
+	sampleMethod = "MODEL_DEFAULT";
+	sampleMethodEnum = SAMPLE_METHOD_COUNT;
+	eta = 0.0f;
 	switch (videoParameterProfile.modelFamily) {
 	case ofxStableDiffusionModelFamily::WAN:
 	case ofxStableDiffusionModelFamily::WANI2V:
 	case ofxStableDiffusionModelFamily::WANTI2V:
 	case ofxStableDiffusionModelFamily::WANFLF2V:
-		diffusionFlashAttn = true;
-		vaeTiling = false;
-		sampleMethod = "MODEL_DEFAULT";
-		sampleMethodEnum = SAMPLE_METHOD_COUNT;
-		highNoiseSampleMethod = sampleMethod;
-		highNoiseSampleMethodEnum = sampleMethodEnum;
-		useHighNoiseOverrides = false;
-		highNoiseSampleSteps = sampleSteps;
-		highNoiseCfgScale = cfgScale;
-		useCustomVideoCfgScale = true;
-		cfgScale = 6.0f;
-		useCustomFlowShift = true;
-		flowShift = 3.0f;
-		useCustomHighNoiseEta = false;
-		highNoiseEta = 0.0f;
-		useCustomHighNoiseFlowShift = false;
-		highNoiseFlowShift = 8.0f;
-		break;
 	case ofxStableDiffusionModelFamily::WANVACE:
-		diffusionFlashAttn = true;
-		vaeTiling = false;
-		sampleMethod = "MODEL_DEFAULT";
-		sampleMethodEnum = SAMPLE_METHOD_COUNT;
-		highNoiseSampleMethod = sampleMethod;
-		highNoiseSampleMethodEnum = sampleMethodEnum;
-		useHighNoiseOverrides = false;
-		highNoiseSampleSteps = sampleSteps;
-		highNoiseCfgScale = cfgScale;
-		useCustomVideoCfgScale = true;
-		cfgScale = 6.0f;
-		useCustomFlowShift = false;
 		flowShift = 5.0f;
-		useCustomHighNoiseEta = false;
-		highNoiseEta = 0.0f;
-		useCustomHighNoiseFlowShift = false;
-		highNoiseFlowShift = 8.0f;
 		break;
 	default:
-		useHighNoiseOverrides = false;
+		flowShift = 3.0f;
 		break;
 	}
+	highNoiseSampleMethod = sampleMethod;
+	highNoiseSampleMethodEnum = sampleMethodEnum;
+	useHighNoiseOverrides = false;
+	highNoiseSampleSteps = -1;
+	highNoiseCfgScale = cfgScale;
+	highNoiseGuidance = guidance;
+	highNoiseEta = eta;
+	highNoiseFlowShift = flowShift;
 	allocate();
 }
 
@@ -2183,15 +2149,82 @@ bool ofApp::usesInputImageMode() const {
 }
 
 //--------------------------------------------------------------
+void ofApp::syncAutomaticMediaMode(const ofxStableDiffusionCapabilities& capabilities) {
+	if (!capabilities.contextConfigured) {
+		return;
+	}
+
+	const bool supportsImageMode =
+		capabilities.textToImage ||
+		capabilities.imageToImage ||
+		capabilities.instructImage ||
+		capabilities.variation ||
+		capabilities.restyle ||
+		capabilities.inpainting;
+	const bool supportsVideoMode = capabilities.imageToVideo;
+
+	if (supportsVideoMode && !supportsImageMode) {
+		if (!isImageToVideo) {
+			isImageToVideo = true;
+			videoUseInputImage =
+				(capabilities.modelFamily == ofxStableDiffusionModelFamily::WANTI2V) ?
+					false :
+					capabilities.videoRequiresInputImage;
+			applyRecommendedVideoParameters();
+			clampCurrentParametersToProfiles();
+		}
+		return;
+	}
+
+	if (supportsImageMode && !supportsVideoMode && isImageToVideo) {
+		isImageToVideo = false;
+		applySelectedImageMode(imageModeEnum);
+	}
+}
+
+//--------------------------------------------------------------
+bool ofApp::videoModeSupportsTextAndImage() const {
+	const ofxStableDiffusionCapabilities capabilities = stableDiffusion.getCapabilities();
+	return capabilities.modelFamily == ofxStableDiffusionModelFamily::WANTI2V;
+}
+
+//--------------------------------------------------------------
+bool ofApp::currentVideoModeUsesInputImage() const {
+	if (!isImageToVideo) {
+		return false;
+	}
+	const ofxStableDiffusionCapabilities capabilities = stableDiffusion.getCapabilities();
+	if (videoModeSupportsTextAndImage()) {
+		return videoUseInputImage;
+	}
+	return capabilities.videoRequiresInputImage;
+}
+
+//--------------------------------------------------------------
+bool ofApp::currentVideoModeRequiresInputImage() const {
+	if (!isImageToVideo) {
+		return false;
+	}
+	const ofxStableDiffusionCapabilities capabilities = stableDiffusion.getCapabilities();
+	if (videoModeSupportsTextAndImage()) {
+		return videoUseInputImage;
+	}
+	return capabilities.videoRequiresInputImage;
+}
+
+//--------------------------------------------------------------
 void ofApp::allocate() {
-	for (int i = 0; i < maxPreviewTextures; i++) {
-		if (textureVector[i].isAllocated()) {
-			textureVector[i].clear();
+	const std::size_t previewTextureCount =
+		std::min<std::size_t>(textureVector.size(), static_cast<std::size_t>(maxPreviewTextures));
+	for (std::size_t i = 0; i < previewTextureCount; ++i) {
+		auto& texture = textureVector[i];
+		if (texture.isAllocated()) {
+			texture.clear();
 		}
 		if (isESRGAN) {
-			textureVector[i].allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+			texture.allocate(width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
 		} else {
-			textureVector[i].allocate(width, height, GL_RGB);
+			texture.allocate(width, height, GL_RGB);
 		}
 	}
 	fbo.allocate(width, height, GL_RGB);

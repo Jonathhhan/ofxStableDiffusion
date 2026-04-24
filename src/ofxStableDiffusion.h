@@ -63,6 +63,10 @@ public:
 	void clearErrorHistory();
 	int getVideoFrameIndexForTime(float seconds) const;
 	const ofPixels* getVideoFramePixels(int index) const;
+	bool getVideoFrameMetadata(
+		int index,
+		int64_t& seed,
+		ofxStableDiffusionGenerationParameters& generation) const;
 	bool saveVideoFrames(const std::string& directory, const std::string& prefix = "frame") const;
 	bool saveVideoMetadata(const std::string& path) const;
 	bool saveVideoFramesWithMetadata(

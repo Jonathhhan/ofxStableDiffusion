@@ -23,8 +23,14 @@ bool isProgressLikeSdLog(const char* log) {
 	if (log == nullptr) {
 		return false;
 	}
-	return std::strchr(log, '\r') != nullptr ||
-		   (log[0] == ' ' && log[1] == ' ' && log[2] == '|');
+	if (std::strchr(log, '\r') != nullptr) {
+		return true;
+	}
+	const char* p = log;
+	while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+		++p;
+	}
+	return *p == '|';
 }
 
 void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
@@ -43,7 +49,12 @@ void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 		if (g_sdProgressPrefixNeeded.exchange(false)) {
 			fputs("[notice ] ", stream);
 		}
-		fputs(log, stream);
+		for (const char* p = log; *p != '\0'; ++p) {
+			fputc(*p, stream);
+			if (*p == '\r' && p[1] != '\0' && p[1] != '\n') {
+				fputs("[notice ] ", stream);
+			}
+		}
 		if (std::strchr(log, '\n') != nullptr) {
 			g_sdProgressPrefixNeeded.store(true);
 		}
@@ -267,19 +278,8 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 		const ValidationResult dimResult = validateDimensions(request.width, request.height);
 		if (!dimResult.ok()) return dimResult;
 
-		if (request.frameCount <= 0 || request.frameCount > 100) {
-			return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100"};
-		}
-		if (((request.frameCount - 1) % 4) != 0) {
-			const int normalizedFrameCount = ((request.frameCount - 1) / 4) * 4 + 1;
-			return {
-				ofxStableDiffusionErrorCode::InvalidFrameCount,
-				"Frame count must currently be 4n+1 (5, 9, 13, ...). " +
-					ofToString(request.frameCount) +
-					" would otherwise be normalized to " +
-					ofToString(normalizedFrameCount) +
-					" by the current stable-diffusion.cpp video core."
-			};
+		if (request.frameCount <= 0) {
+			return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be positive"};
 		}
 
 		if (request.fps <= 0 || request.fps > 120) {
@@ -787,6 +787,20 @@ const ofPixels* ofxStableDiffusion::getVideoFramePixels(int index) const {
 		return nullptr;
 	}
 	return &lastResult.video.frames[static_cast<std::size_t>(index)].pixels;
+}
+
+bool ofxStableDiffusion::getVideoFrameMetadata(
+	int index,
+	int64_t& seed,
+	ofxStableDiffusionGenerationParameters& generation) const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (index < 0 || index >= static_cast<int>(lastResult.video.frames.size())) {
+		return false;
+	}
+	const auto& frame = lastResult.video.frames[static_cast<std::size_t>(index)];
+	seed = frame.seed;
+	generation = frame.generation;
+	return true;
 }
 
 bool ofxStableDiffusion::saveVideoFrames(const std::string& directory, const std::string& prefix) const {
@@ -1325,21 +1339,9 @@ void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 		setLastError(dimResult.code, dimResult.message);
 		return;
 	}
-	if (videoFrames_ <= 0 || videoFrames_ > 100) {
+	if (videoFrames_ <= 0) {
 		activeTask = ofxStableDiffusionTask::ImageToVideo;
-		setLastError(ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be between 1 and 100");
-		return;
-	}
-	if (((videoFrames_ - 1) % 4) != 0) {
-		activeTask = ofxStableDiffusionTask::ImageToVideo;
-		const int normalizedFrameCount = ((videoFrames_ - 1) / 4) * 4 + 1;
-		setLastError(
-			ofxStableDiffusionErrorCode::InvalidFrameCount,
-			"Frame count must currently be 4n+1 (5, 9, 13, ...). " +
-				ofToString(videoFrames_) +
-				" would otherwise be normalized to " +
-				ofToString(normalizedFrameCount) +
-				" by the current stable-diffusion.cpp video core.");
+		setLastError(ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be positive");
 		return;
 	}
 

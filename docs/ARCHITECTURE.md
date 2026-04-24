@@ -113,6 +113,9 @@ Simple rule:
 
 - help if it helps
 - don't "help" by changing behavior away from the working backend path
+- think twice before changing behavior or UI flow
+- be consistent: if a model or mode has no real choice, show that consistently
+  instead of inventing a different interaction pattern
 
 Rules for addon-side defaults and UI wiring:
 
