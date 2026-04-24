@@ -206,6 +206,7 @@ void stableDiffusionThread::clearContexts() {
 	}
 	isSdCtxLoaded = false;
 	isUpscalerCtxLoaded = false;
+	generationContextNeedsRefresh = false;
 }
 
 void stableDiffusionThread::prepareContextTask(const ContextTaskData& data) {
@@ -310,6 +311,11 @@ void stableDiffusionThread::threadedFunction() {
 			isUpscalerCtxLoaded = (upscalerCtx != nullptr);
 		}
 		isSdCtxLoaded = (sdCtx != nullptr);
+		generationContextNeedsRefresh = false;
+		{
+			std::lock_guard<std::mutex> lock(sd->stateMutex);
+			sd->refreshResolvedDefaultCachesNoLock(sdCtx);
+		}
 		if (contextTaskData.upscalerSettings.enabled &&
 			!contextTaskData.upscalerSettings.modelPath.empty() &&
 			!isUpscalerCtxLoaded) {
@@ -331,12 +337,57 @@ void stableDiffusionThread::threadedFunction() {
 		return;
 	}
 
+	const auto rebuildSdContextForGeneration =
+		[this, &sd](const ofxStableDiffusionContextSettings& currentContextSettings) -> bool {
+			if (sdCtx) {
+				free_sd_ctx(sdCtx);
+				sdCtx = nullptr;
+			}
+
+			stableDiffusionThread::ContextTaskData reloadTask;
+			reloadTask.contextSettings = currentContextSettings;
+			std::vector<std::string> embeddingNames;
+			std::vector<std::string> embeddingPaths;
+			std::vector<sd_embedding_t> embeddings;
+			sd_ctx_params_t ctxParams =
+				ofxStableDiffusionNativeAdapter::buildContextParams(
+					reloadTask,
+					embeddingNames,
+					embeddingPaths,
+					embeddings);
+			sdCtx = new_sd_ctx(&ctxParams);
+			isSdCtxLoaded = (sdCtx != nullptr);
+			{
+				std::lock_guard<std::mutex> lock(sd->stateMutex);
+				sd->refreshResolvedDefaultCachesNoLock(sdCtx);
+			}
+			if (!isSdCtxLoaded) {
+				sd->setLastError("Failed to recreate stable-diffusion context for generation");
+				sd->activeTask = ofxStableDiffusionTask::None;
+				task = ofxStableDiffusionTask::None;
+				return false;
+			}
+			return true;
+		};
+
 	if (!sdCtx) {
 		sd->activeTask = ofxStableDiffusionTask::None;
 		task = ofxStableDiffusionTask::None;
 		sd->setLastError("Stable Diffusion context is not loaded");
 		return;
 	}
+
+	const bool isVideoTask = (task == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo);
+	const ofxStableDiffusionContextSettings& generationContextSettings =
+		isVideoTask ? videoTaskData.contextSettings : imageTaskData.contextSettings;
+	if (generationContextNeedsRefresh) {
+		if (!rebuildSdContextForGeneration(generationContextSettings)) {
+			return;
+		}
+	}
+
+	// After one generation attempt, rebuild the context before the next run.
+	generationContextNeedsRefresh = true;
 
 	const bool upscalerAvailable = isUpscalerCtxLoaded && upscalerCtx;
 
@@ -365,13 +416,7 @@ void stableDiffusionThread::threadedFunction() {
 			videoTaskData.animationFrameCount = frameCount;
 			videoTaskData.animationSampleSteps = videoTaskData.request.sampleSteps;
 
-			{
-				ProgressCallbackGuard progressGuard(
-					generationCallbackMutex(),
-					videoTaskData.progressCallback ? threadProgressCallback : nullptr,
-					videoTaskData.progressCallback ? this : nullptr);
-
-				for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+			for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
 					videoTaskData.animationFrameIndex = frameIndex;
 
 					OwnedImage blendedInitImage;
@@ -434,7 +479,16 @@ void stableDiffusionThread::threadedFunction() {
 						pmPixels,
 						pmImageViews);
 
-					sd_image_t* frameOutput = generate_image(sdCtx, &frameParams);
+					sd_image_t* frameOutput = nullptr;
+					if (videoTaskData.progressCallback) {
+						ProgressCallbackGuard progressGuard(
+							generationCallbackMutex(),
+							threadProgressCallback,
+							this);
+						frameOutput = generate_image(sdCtx, &frameParams);
+					} else {
+						frameOutput = generate_image(sdCtx, &frameParams);
+					}
 					if (!frameOutput || !frameOutput[0].data) {
 						ofxSdReleaseImageArray(frameOutput, 1);
 						generationError = "Animated video generation returned no frame output";
@@ -476,7 +530,6 @@ void stableDiffusionThread::threadedFunction() {
 					ofxSdReleaseImageArray(frameOutput, 1);
 					generatedFrames.push_back(std::move(generatedFrame));
 				}
-			}
 
 			videoTaskData.animationProgressEnabled = false;
 			videoTaskData.animationFrameIndex = 0;
@@ -514,6 +567,7 @@ void stableDiffusionThread::threadedFunction() {
 				videoTaskData.request);
 			sd->activeTask = ofxStableDiffusionTask::None;
 			task = ofxStableDiffusionTask::None;
+			generationContextNeedsRefresh = true;
 			return;
 		}
 
@@ -533,11 +587,13 @@ void stableDiffusionThread::threadedFunction() {
 			<< resolvedVideoSummary;
 		int generatedFrameCount = 0;
 		sd_image_t* output = nullptr;
-		{
+		if (videoTaskData.progressCallback) {
 			ProgressCallbackGuard progressGuard(
 				generationCallbackMutex(),
-				videoTaskData.progressCallback ? threadProgressCallback : nullptr,
-				videoTaskData.progressCallback ? this : nullptr);
+				threadProgressCallback,
+				this);
+			output = generate_video(sdCtx, &params, &generatedFrameCount);
+		} else {
 			output = generate_video(sdCtx, &params, &generatedFrameCount);
 		}
 		const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
@@ -559,6 +615,7 @@ void stableDiffusionThread::threadedFunction() {
 			videoTaskData.request);
 		sd->activeTask = ofxStableDiffusionTask::None;
 		task = ofxStableDiffusionTask::None;
+		generationContextNeedsRefresh = true;
 		return;
 	}
 
@@ -587,11 +644,13 @@ void stableDiffusionThread::threadedFunction() {
 			pmImageViews);
 	params.seed = resolveNativeGenerationSeed(params.seed);
 	sd_image_t* output = nullptr;
-	{
+	if (imageTaskData.progressCallback) {
 		ProgressCallbackGuard progressGuard(
 			generationCallbackMutex(),
-			imageTaskData.progressCallback ? threadProgressCallback : nullptr,
-			imageTaskData.progressCallback ? this : nullptr);
+			threadProgressCallback,
+			this);
+		output = generate_image(sdCtx, &params);
+	} else {
 		output = generate_image(sdCtx, &params);
 	}
 
@@ -637,4 +696,5 @@ void stableDiffusionThread::threadedFunction() {
 		imageTaskData.imageRankCallback);
 	sd->activeTask = ofxStableDiffusionTask::None;
 	task = ofxStableDiffusionTask::None;
+	generationContextNeedsRefresh = true;
 }

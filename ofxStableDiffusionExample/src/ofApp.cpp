@@ -810,11 +810,6 @@ void ofApp::setup() {
 	gui.setup(nullptr, true, ImGuiConfigFlags_None, true);
 	applySelectedImageMode(imageModeEnum);
 	stableDiffusion.setImageSelectionMode(selectionModeEnum);
-	stableDiffusion.setProgressCallback([this](int step, int steps, float time) {
-		progressStep = step;
-		progressSteps = steps;
-		progressTime = time;
-	});
 	stableDiffusion.setNativeLoggingEnabled(true);
 	stableDiffusion.setNativeLogLevel(SD_LOG_DEBUG);
 	configureExampleRanker();
@@ -847,11 +842,10 @@ void ofApp::update() {
 				textureVector.resize(static_cast<std::size_t>(totalVideoFrames));
 			}
 			for (int i = 0; i < totalVideoFrames; i++) {
-				const ofPixels* framePixelsPtr = stableDiffusion.getVideoFramePixels(i);
-				if (framePixelsPtr == nullptr || !framePixelsPtr->isAllocated()) {
+				ofPixels framePixels;
+				if (!stableDiffusion.copyVideoFramePixels(i, framePixels) || !framePixels.isAllocated()) {
 					continue;
 				}
-				const auto& framePixels = *framePixelsPtr;
 				const int frameWidth = framePixels.getWidth();
 				const int frameHeight = framePixels.getHeight();
 				const int frameChannels = framePixels.getNumChannels();
@@ -872,17 +866,28 @@ void ofApp::update() {
 			lastFrameTime = ofGetElapsedTimef();
 		}
 		else {
-			outputImages = stableDiffusion.returnImages();
 			const int outputCount = stableDiffusion.getOutputCount();
 			if (outputCount > static_cast<int>(textureVector.size())) {
 				textureVector.resize(static_cast<std::size_t>(outputCount));
 			}
 			for (int i = 0; i < outputCount; i++) {
+				ofPixels imagePixels;
+				if (!stableDiffusion.copyImagePixels(i, imagePixels) || !imagePixels.isAllocated()) {
+					continue;
+				}
 				if (isESRGAN) {
-					textureVector[i].loadData(outputImages[i].data, width * esrganMultiplier, height * esrganMultiplier, GL_RGB);
+					textureVector[i].loadData(
+						imagePixels.getData(),
+						width * esrganMultiplier,
+						height * esrganMultiplier,
+						GL_RGB);
 				}
 				else {
-					textureVector[i].loadData(outputImages[i].data, width, height, GL_RGB);
+					textureVector[i].loadData(
+						imagePixels.getData(),
+						width,
+						height,
+						GL_RGB);
 				}
 			}
 			previousSelectedImage = std::max(0, stableDiffusion.getSelectedImageIndex());
@@ -982,31 +987,35 @@ void ofApp::draw() {
 		if (selectedImage >= 0 && selectedImage < static_cast<int>(textureVector.size())) {
 			ImGui::Image((ImTextureID)(uintptr_t)textureVector[selectedImage].getTextureData().textureID, ImVec2(width, height));
 		}
-		const auto& result = stableDiffusion.getLastResult();
-		if (selectedImage >= 0 && selectedImage < static_cast<int>(result.images.size())) {
-			const auto& frame = result.images[static_cast<std::size_t>(selectedImage)];
-			if (frame.score.valid) {
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::Text("Score: %.3f", frame.score.score);
-				if (!frame.score.scorer.empty()) {
-					ImGui::SameLine(0, 10);
-					ImGui::Text("Scorer: %s", frame.score.scorer.c_str());
+		if (!isImageToVideo) {
+			ofxStableDiffusionImageScore frameScore;
+			bool frameSelected = false;
+			if (stableDiffusion.getImageFrameMetadata(selectedImage, frameScore, frameSelected)) {
+				if (frameScore.valid) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::Text("Score: %.3f", frameScore.score);
+					if (!frameScore.scorer.empty()) {
+						ImGui::SameLine(0, 10);
+						ImGui::Text("Scorer: %s", frameScore.scorer.c_str());
+					}
 				}
-			}
-			if (frame.isSelected) {
-				ImGui::Dummy(ImVec2(0, 10));
-				ImGui::Text("Best-of-N Selection");
+				if (frameSelected) {
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::Text("Best-of-N Selection");
+				}
 			}
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Indent(-10);
 		if (ImGui::Button("Save")) {
-			const auto& result = stableDiffusion.getLastResult();
-			if (isImageToVideo && selectedImage >= 0 && selectedImage < static_cast<int>(result.video.frames.size())) {
-				ofSaveImage(
-					result.video.frames[static_cast<std::size_t>(selectedImage)].pixels,
-					ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
-			} else {
+			if (isImageToVideo) {
+				ofPixels framePixels;
+				if (stableDiffusion.copyVideoFramePixels(selectedImage, framePixels) && framePixels.isAllocated()) {
+					ofSaveImage(
+						framePixels,
+						ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
+				}
+			} else if (selectedImage >= 0 && selectedImage < static_cast<int>(textureVector.size())) {
 				textureVector[selectedImage].readToPixels(pixels);
 				ofSaveImage(pixels, ofGetTimestampString("output/ofxStableDiffusion-%Y-%m-%d-%H-%M-%S.png"));
 			}
@@ -1890,7 +1899,6 @@ void ofApp::draw() {
 			isPlaying = false;
 			currentFrame = 0;
 			totalVideoFrames = 0;
-			previewSize = 0;
 			selectedImage = 0;
 			previousSelectedImage = 0;
 			configureExampleRanker();

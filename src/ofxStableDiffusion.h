@@ -62,7 +62,14 @@ public:
 	std::vector<ofxStableDiffusionError> getErrorHistory() const;
 	void clearErrorHistory();
 	int getVideoFrameIndexForTime(float seconds) const;
+	const ofPixels* getImagePixels(int index) const;
+	bool copyImagePixels(int index, ofPixels& pixels) const;
+	bool getImageFrameMetadata(
+		int index,
+		ofxStableDiffusionImageScore& score,
+		bool& isSelected) const;
 	const ofPixels* getVideoFramePixels(int index) const;
+	bool copyVideoFramePixels(int index, ofPixels& pixels) const;
 	bool getVideoFrameMetadata(
 		int index,
 		int64_t& seed,
@@ -356,6 +363,8 @@ private:
 	void applyContextSettings(const ofxStableDiffusionContextSettings& settings);
 	bool applyImageRequest(const ofxStableDiffusionImageRequest& request);
 	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
+	void clearResolvedDefaultCachesNoLock();
+	void refreshResolvedDefaultCachesNoLock(sd_ctx_t* ctx);
 	bool validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task);
 	bool validateVideoRequestAndSetError(const ofxStableDiffusionVideoRequest& request);
 	void clearOutputState();
@@ -412,6 +421,9 @@ private:
 	ofxStableDiffusionPerformanceProfiler performanceProfiler;
 	ofxStableDiffusionUpscalerSettings cachedUpscalerSettings;
 	mutable std::mutex stateMutex;
+	sample_method_t cachedResolvedDefaultSampleMethod = SAMPLE_METHOD_COUNT;
+	scheduler_t cachedResolvedDefaultScheduler = SCHEDULER_COUNT;
+	std::vector<scheduler_t> cachedResolvedSchedulersBySampleMethod;
 };
 
 

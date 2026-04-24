@@ -17,8 +17,6 @@ namespace {
 namespace fs = std::filesystem;
 std::atomic<bool> g_sdLoggingEnabled{true};
 std::atomic<int> g_sdMinLogLevel{SD_LOG_DEBUG};
-std::atomic<bool> g_sdProgressPrefixNeeded{true};
-
 bool isProgressLikeSdLog(const char* log) {
 	if (log == nullptr) {
 		return false;
@@ -46,23 +44,25 @@ void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
 	}
 	if (isProgressLikeSdLog(log)) {
 		FILE* stream = (level <= SD_LOG_INFO) ? stdout : stderr;
-		if (g_sdProgressPrefixNeeded.exchange(false)) {
-			fputs("[notice ] ", stream);
-		}
+		std::string prefixed;
+		prefixed.reserve(std::strlen(log) + 16);
+		bool atLineStart = true;
 		for (const char* p = log; *p != '\0'; ++p) {
-			fputc(*p, stream);
-			if (*p == '\r' && p[1] != '\0' && p[1] != '\n') {
-				fputs("[notice ] ", stream);
+			if (*p == '\r' || *p == '\n') {
+				prefixed.push_back(*p);
+				atLineStart = true;
+				continue;
 			}
+			if (atLineStart) {
+				prefixed += "[notice ] ";
+				atLineStart = false;
+			}
+			prefixed.push_back(*p);
 		}
-		if (std::strchr(log, '\n') != nullptr) {
-			g_sdProgressPrefixNeeded.store(true);
-		}
+		fputs(prefixed.c_str(), stream);
 		fflush(stream);
 		return;
 	}
-
-	g_sdProgressPrefixNeeded.store(true);
 
 	std::string message(log);
 	while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
@@ -571,6 +571,7 @@ bool contextSettingsEquivalent(
 ofxStableDiffusion::ofxStableDiffusion() {
 	sd_set_log_callback(sd_log_cb, nullptr);
 	thread.userData = this;
+	cachedResolvedSchedulersBySampleMethod.assign(static_cast<std::size_t>(SAMPLE_METHOD_COUNT), SCHEDULER_COUNT);
 }
 
 ofxStableDiffusion::~ofxStableDiffusion() {
@@ -727,25 +728,28 @@ std::string ofxStableDiffusion::getLastResolvedVideoCliCommand() const {
 
 sample_method_t ofxStableDiffusion::getResolvedSampleMethod(sample_method_t requested) const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	if (thread.sdCtx == nullptr) {
+	if (requested != SAMPLE_METHOD_COUNT) {
 		return requested;
 	}
-	return ofxStableDiffusionNativeAdapter::resolveSampleMethod(thread.sdCtx, requested);
+	return cachedResolvedDefaultSampleMethod;
 }
 
 scheduler_t ofxStableDiffusion::getResolvedScheduler(
 	sample_method_t requestedSampleMethod,
 	scheduler_t requestedSchedule) const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	if (thread.sdCtx == nullptr) {
+	if (requestedSchedule != SCHEDULER_COUNT) {
 		return requestedSchedule;
 	}
-	const sample_method_t resolvedSampleMethod =
-		ofxStableDiffusionNativeAdapter::resolveSampleMethod(thread.sdCtx, requestedSampleMethod);
-	return ofxStableDiffusionNativeAdapter::resolveScheduler(
-		thread.sdCtx,
-		resolvedSampleMethod,
-		requestedSchedule);
+	if (requestedSampleMethod == SAMPLE_METHOD_COUNT) {
+		return cachedResolvedDefaultScheduler;
+	}
+	const int sampleMethodIndex = static_cast<int>(requestedSampleMethod);
+	if (sampleMethodIndex < 0 ||
+		sampleMethodIndex >= static_cast<int>(cachedResolvedSchedulersBySampleMethod.size())) {
+		return SCHEDULER_COUNT;
+	}
+	return cachedResolvedSchedulersBySampleMethod[static_cast<std::size_t>(sampleMethodIndex)];
 }
 
 std::string ofxStableDiffusion::getResolvedSampleMethodName(sample_method_t requested) const {
@@ -781,12 +785,60 @@ int ofxStableDiffusion::getVideoFrameIndexForTime(float seconds) const {
 	return lastResult.video.frameIndexForTime(seconds);
 }
 
+const ofPixels* ofxStableDiffusion::getImagePixels(int index) const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (index < 0 || index >= static_cast<int>(lastResult.images.size())) {
+		return nullptr;
+	}
+	return &lastResult.images[static_cast<std::size_t>(index)].pixels;
+}
+
+bool ofxStableDiffusion::copyImagePixels(int index, ofPixels& pixels) const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (index < 0 || index >= static_cast<int>(lastResult.images.size())) {
+		return false;
+	}
+	const auto& storedPixels = lastResult.images[static_cast<std::size_t>(index)].pixels;
+	if (!storedPixels.isAllocated()) {
+		return false;
+	}
+	pixels = storedPixels;
+	return true;
+}
+
+bool ofxStableDiffusion::getImageFrameMetadata(
+	int index,
+	ofxStableDiffusionImageScore& score,
+	bool& isSelected) const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (index < 0 || index >= static_cast<int>(lastResult.images.size())) {
+		return false;
+	}
+	const auto& frame = lastResult.images[static_cast<std::size_t>(index)];
+	score = frame.score;
+	isSelected = frame.isSelected;
+	return true;
+}
+
 const ofPixels* ofxStableDiffusion::getVideoFramePixels(int index) const {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	if (index < 0 || index >= static_cast<int>(lastResult.video.frames.size())) {
 		return nullptr;
 	}
 	return &lastResult.video.frames[static_cast<std::size_t>(index)].pixels;
+}
+
+bool ofxStableDiffusion::copyVideoFramePixels(int index, ofPixels& pixels) const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (index < 0 || index >= static_cast<int>(lastResult.video.frames.size())) {
+		return false;
+	}
+	const auto& storedPixels = lastResult.video.frames[static_cast<std::size_t>(index)].pixels;
+	if (!storedPixels.isAllocated()) {
+		return false;
+	}
+	pixels = storedPixels;
+	return true;
 }
 
 bool ofxStableDiffusion::getVideoFrameMetadata(
@@ -1110,6 +1162,8 @@ void ofxStableDiffusion::freeSdCtx() {
 		thread.waitForThread(true);
 	}
 	thread.clearContexts();
+	std::lock_guard<std::mutex> lock(stateMutex);
+	clearResolvedDefaultCachesNoLock();
 }
 
 void ofxStableDiffusion::txt2img(const std::string& prompt_,
@@ -1520,6 +1574,38 @@ bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	return true;
 }
 
+void ofxStableDiffusion::clearResolvedDefaultCachesNoLock() {
+	cachedResolvedDefaultSampleMethod = SAMPLE_METHOD_COUNT;
+	cachedResolvedDefaultScheduler = SCHEDULER_COUNT;
+	if (cachedResolvedSchedulersBySampleMethod.size() != static_cast<std::size_t>(SAMPLE_METHOD_COUNT)) {
+		cachedResolvedSchedulersBySampleMethod.assign(static_cast<std::size_t>(SAMPLE_METHOD_COUNT), SCHEDULER_COUNT);
+	} else {
+		std::fill(cachedResolvedSchedulersBySampleMethod.begin(), cachedResolvedSchedulersBySampleMethod.end(), SCHEDULER_COUNT);
+	}
+}
+
+void ofxStableDiffusion::refreshResolvedDefaultCachesNoLock(sd_ctx_t* ctx) {
+	clearResolvedDefaultCachesNoLock();
+	if (ctx == nullptr) {
+		return;
+	}
+	cachedResolvedDefaultSampleMethod =
+		ofxStableDiffusionNativeAdapter::resolveSampleMethod(ctx, SAMPLE_METHOD_COUNT);
+	cachedResolvedDefaultScheduler =
+		ofxStableDiffusionNativeAdapter::resolveScheduler(
+			ctx,
+			cachedResolvedDefaultSampleMethod,
+			SCHEDULER_COUNT);
+	for (int i = 0; i < static_cast<int>(SAMPLE_METHOD_COUNT); ++i) {
+		const auto sampleMethod = static_cast<sample_method_t>(i);
+		cachedResolvedSchedulersBySampleMethod[static_cast<std::size_t>(i)] =
+			ofxStableDiffusionNativeAdapter::resolveScheduler(
+				ctx,
+				sampleMethod,
+				SCHEDULER_COUNT);
+	}
+}
+
 ofxStableDiffusionContextSettings ofxStableDiffusion::captureContextSettingsNoLock() const {
 	ofxStableDiffusionContextSettings settings;
 	settings.modelPath = modelPath;
@@ -1559,6 +1645,7 @@ ofxStableDiffusionUpscalerSettings ofxStableDiffusion::captureUpscalerSettingsNo
 void ofxStableDiffusion::applyContextSettings(const ofxStableDiffusionContextSettings& settings) {
 	const ofxStableDiffusionContextSettings resolvedSettings = resolveContextModelPaths(settings);
 	std::lock_guard<std::mutex> lock(stateMutex);
+	clearResolvedDefaultCachesNoLock();
 	modelPath = resolvedSettings.modelPath;
 	diffusionModelPath = resolvedSettings.diffusionModelPath;
 	clipLPath = resolvedSettings.clipLPath;
@@ -1649,7 +1736,7 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		strength = request.strength;
 		seed = request.seed;
 		batchCount = request.batchCount;
-		controlCond = taskData.request.controlCond;
+		controlCond = nullptr;
 		controlStrength = taskData.request.controlStrength;
 		styleStrength = request.styleStrength;
 		normalizeInput = request.normalizeInput;

@@ -111,5 +111,6 @@ private:
 	void threadedFunction();
 	bool isSdCtxLoaded = false;
 	bool isUpscalerCtxLoaded = false;
+	bool generationContextNeedsRefresh = false;
 	std::vector<sd_lora_t> loraBuffer;
 };
