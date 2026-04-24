@@ -1977,7 +1977,9 @@ void ofApp::draw() {
 		}
 		ImGui::SameLine(0, 10);
 		if (ImGui::Button("Save Video")) {
-			const std::string path = ofGetTimestampString("output/ofxStableDiffusion-video-%Y-%m-%d-%H-%M-%S.avi");
+			const std::string path = ofToDataPath(
+				ofGetTimestampString("output/ofxStableDiffusion-video-%Y-%m-%d-%H-%M-%S.avi"),
+				true);
 			if (stableDiffusion.saveVideoWebm(path)) {
 				ofLogNotice("ofApp") << "Saved result video to '" << path << "'";
 			} else {

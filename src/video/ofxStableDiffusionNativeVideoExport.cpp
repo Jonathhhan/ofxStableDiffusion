@@ -74,15 +74,16 @@ bool saveAvi(const std::string& path, const ofxStableDiffusionVideoClip& clip, i
 		}
 	}
 
-	ofFile outputFile(path);
+	const std::string resolvedPath = ofFilePath::isAbsolute(path) ? path : ofToDataPath(path, true);
+	ofFile outputFile(resolvedPath);
 	const auto directory = outputFile.getEnclosingDirectory();
 	if (!directory.empty()) {
 		ofDirectory::createDirectory(directory, true, true);
 	}
 
-	FilePtr file(std::fopen(path.c_str(), "wb"), &std::fclose);
+	FilePtr file(std::fopen(resolvedPath.c_str(), "wb"), &std::fclose);
 	if (!file) {
-		ofLogError("ofxStableDiffusion") << "Could not open video file for writing: " << path;
+		ofLogError("ofxStableDiffusion") << "Could not open video file for writing: " << resolvedPath;
 		return false;
 	}
 	FILE* rawFile = file.get();
