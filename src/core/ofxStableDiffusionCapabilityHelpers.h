@@ -185,10 +185,11 @@ inline bool familySupportsVideoEndFrame(ofxStableDiffusionModelFamily family) {
 
 inline bool familySupportsWrapperVideoAnimation(ofxStableDiffusionModelFamily family) {
 	switch (family) {
+	case ofxStableDiffusionModelFamily::WANFLF2V:
+		return true;
 	case ofxStableDiffusionModelFamily::WAN:
 	case ofxStableDiffusionModelFamily::WANI2V:
 	case ofxStableDiffusionModelFamily::WANTI2V:
-	case ofxStableDiffusionModelFamily::WANFLF2V:
 	case ofxStableDiffusionModelFamily::WANVACE:
 		return false;
 	default:

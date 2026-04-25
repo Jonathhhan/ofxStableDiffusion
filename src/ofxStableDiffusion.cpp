@@ -1565,6 +1565,23 @@ bool ofxStableDiffusion::isBusy() const {
 	return isGenerating() || isModelLoading;
 }
 
+bool ofxStableDiffusion::requestCancellation() {
+	if (!isGenerating()) {
+		return false;
+	}
+	thread.requestCancellation();
+	return true;
+}
+
+bool ofxStableDiffusion::isCancellationRequested() const {
+	return thread.isCancellationRequested();
+}
+
+bool ofxStableDiffusion::wasCancelled() const {
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return lastOperationCancelled;
+}
+
 bool ofxStableDiffusion::matchesContextSettings(
 	const ofxStableDiffusionContextSettings& settings) const {
 	const ofxStableDiffusionContextSettings resolvedSettings =
@@ -1609,6 +1626,8 @@ bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	clearLastError();
 	clearOutputState();
 	thread.userData = this;
+	thread.resetCancellation();  // Reset cancellation flag for new task
+	lastOperationCancelled = false;
 	return true;
 }
 

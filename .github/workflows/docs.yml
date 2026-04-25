@@ -1,0 +1,164 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'Doxyfile'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Doxygen
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz
+
+    - name: Generate API documentation
+      run: |
+        doxygen Doxyfile
+        echo "Documentation generated"
+
+    - name: Create index page
+      run: |
+        mkdir -p docs/site
+        cat > docs/site/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>ofxStableDiffusion Documentation</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 40px 20px;
+                    line-height: 1.6;
+                    color: #333;
+                }
+                h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+                h2 { color: #34495e; margin-top: 30px; }
+                .card {
+                    background: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                    border-radius: 8px;
+                    padding: 20px;
+                    margin: 20px 0;
+                }
+                .card h3 { margin-top: 0; color: #3498db; }
+                a { color: #3498db; text-decoration: none; }
+                a:hover { text-decoration: underline; }
+                .btn {
+                    display: inline-block;
+                    padding: 10px 20px;
+                    background: #3498db;
+                    color: white;
+                    border-radius: 5px;
+                    margin: 5px;
+                }
+                .btn:hover { background: #2980b9; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <h1>ofxStableDiffusion Documentation</h1>
+
+            <p>
+                <strong>ofxStableDiffusion</strong> is an openFrameworks addon that wraps
+                stable-diffusion.cpp for text-to-image, image-to-image, and video generation.
+            </p>
+
+            <div class="card">
+                <h3>📚 Documentation</h3>
+                <p>
+                    <a href="api/html/index.html" class="btn">API Reference</a>
+                    <a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/API_REFERENCE.md" class="btn">User Guide</a>
+                    <a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/MIGRATION_GUIDE.md" class="btn">Migration Guide</a>
+                    <a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/TROUBLESHOOTING.md" class="btn">Troubleshooting</a>
+                </p>
+            </div>
+
+            <div class="card">
+                <h3>🚀 Quick Start</h3>
+                <ul>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion#requirements">Requirements</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/tree/main/examples/basic_generation">Basic Generation Example</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/tree/main/examples/cancellation_example">Cancellation Example</a></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>📖 Key Topics</h3>
+                <ul>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/API_REFERENCE.md#core-classes">Core Classes</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/API_REFERENCE.md#error-handling">Error Handling</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/API_REFERENCE.md#cancellation">Cancellation Support</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/API_REFERENCE.md#performance-optimization">Performance Optimization</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/API_REFERENCE.md#platform-support">Platform Support</a></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>🔧 Development</h3>
+                <ul>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion">GitHub Repository</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/ARCHITECTURE.md">Architecture Notes</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/docs/NATIVE_BUILD.md">Native Build Guide</a></li>
+                    <li><a href="https://github.com/Jonathhhan/ofxStableDiffusion/blob/main/CHANGELOG.md">Changelog</a></li>
+                </ul>
+            </div>
+
+            <footer style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #dee2e6; color: #6c757d;">
+                <p>Built with ❤️ using Doxygen | Last updated: <span id="date"></span></p>
+                <script>
+                    document.getElementById('date').textContent = new Date().toLocaleDateString();
+                </script>
+            </footer>
+        </body>
+        </html>
+        EOF
+
+    - name: Copy API docs to site
+      run: |
+        cp -r docs/api docs/site/
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: 'docs/site'
+
+  deploy:
+    name: Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4

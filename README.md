@@ -438,6 +438,31 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 - Use `isGenerating()` to check if generation is in progress
 - Progress callbacks are fired from the background thread - use thread-safe operations in callbacks
 
+## Documentation
+
+Comprehensive documentation is available:
+
+- **[API Reference](docs/API_REFERENCE.md)** - Complete API documentation with classes, methods, and types
+- **[Migration Guide](docs/MIGRATION_GUIDE.md)** - Upgrade from legacy API to modern request-based API
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Architecture Notes](docs/ARCHITECTURE.md)** - Design decisions and integration patterns
+- **[Native Build Guide](docs/NATIVE_BUILD.md)** - Building stable-diffusion.cpp from source
+
+### Code Examples
+
+The `examples/` directory contains working sample applications:
+
+- **[basic_generation](examples/basic_generation/)** - Simple text-to-image generation
+- **[cancellation_example](examples/cancellation_example/)** - Cancelling long-running operations
+
+### Quick Links
+
+- [Model Family Capabilities](docs/API_REFERENCE.md#model-families-and-capabilities)
+- [Error Handling](docs/API_REFERENCE.md#error-handling)
+- [Performance Tips](docs/API_REFERENCE.md#performance-optimization)
+- [Platform Support](docs/API_REFERENCE.md#platform-support)
+- [Cancellation API](docs/API_REFERENCE.md#cancellation)
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).

@@ -4,6 +4,7 @@
 #include "core/ofxStableDiffusionTypes.h"
 #include "stable-diffusion.h"
 
+#include <atomic>
 #include <cstring>
 #include <functional>
 #include <string>
@@ -124,10 +125,27 @@ public:
 	void prepareContextTask(const ContextTaskData& data);
 	void prepareImageTask(const ImageTaskData& data);
 	void prepareVideoTask(const VideoTaskData& data);
+
+	/// Request cancellation of current operation
+	void requestCancellation();
+
+	/// Check if cancellation was requested
+	bool isCancellationRequested() const;
+
+	/// Reset cancellation flag
+	void resetCancellation();
+
 private:
 	void threadedFunction();
+	std::string computeContextFingerprint(const ofxStableDiffusionContextSettings& settings);
 	bool isSdCtxLoaded = false;
 	bool isUpscalerCtxLoaded = false;
 	bool generationContextNeedsRefresh = false;
 	std::vector<sd_lora_t> loraBuffer;
+	std::atomic<bool> cancellationRequested{false};
+
+	// Context reuse optimization
+	std::string lastContextFingerprint;
+	int generationsSinceRebuild = 0;
+	static constexpr int MAX_REUSE_COUNT = 10; // Safety valve: rebuild after N generations
 };

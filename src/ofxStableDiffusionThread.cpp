@@ -12,6 +12,7 @@
 #include <mutex>
 #include <ctime>
 #include <vector>
+#include <sstream>
 
 namespace {
 
@@ -207,6 +208,41 @@ void stableDiffusionThread::clearContexts() {
 	isSdCtxLoaded = false;
 	isUpscalerCtxLoaded = false;
 	generationContextNeedsRefresh = false;
+	lastContextFingerprint.clear();
+	generationsSinceRebuild = 0;
+}
+
+std::string stableDiffusionThread::computeContextFingerprint(const ofxStableDiffusionContextSettings& settings) {
+	// Create a fingerprint from settings that affect the native context
+	// Only include settings that require context rebuild when changed
+	std::ostringstream oss;
+	oss << settings.modelPath << "|"
+		<< settings.diffusionModelPath << "|"
+		<< settings.clipLPath << "|"
+		<< settings.clipGPath << "|"
+		<< settings.t5xxlPath << "|"
+		<< settings.vaePath << "|"
+		<< settings.taesdPath << "|"
+		<< settings.controlNetPath << "|"
+		<< settings.loraModelDir << "|"
+		<< settings.embedDir << "|"
+		<< settings.stackedIdEmbedDir << "|"
+		<< (int)settings.vaeDecodeOnly << "|"
+		<< (int)settings.vaeTiling << "|"
+		<< settings.nThreads << "|"
+		<< (int)settings.weightType << "|"
+		<< (int)settings.rngType << "|"
+		<< (int)settings.schedule << "|"
+		<< (int)settings.prediction << "|"
+		<< (int)settings.loraApplyMode << "|"
+		<< (int)settings.keepClipOnCpu << "|"
+		<< (int)settings.keepControlNetCpu << "|"
+		<< (int)settings.keepVaeOnCpu << "|"
+		<< (int)settings.offloadParamsToCpu << "|"
+		<< (int)settings.flashAttn << "|"
+		<< (int)settings.diffusionFlashAttn << "|"
+		<< (int)settings.enableMmap;
+	return oss.str();
 }
 
 void stableDiffusionThread::prepareContextTask(const ContextTaskData& data) {
@@ -380,14 +416,24 @@ void stableDiffusionThread::threadedFunction() {
 	const bool isVideoTask = (task == ofxStableDiffusionTask::ImageToVideo);
 	const ofxStableDiffusionContextSettings& generationContextSettings =
 		isVideoTask ? videoTaskData.contextSettings : imageTaskData.contextSettings;
-	if (generationContextNeedsRefresh) {
+
+	// Smart context reuse: only rebuild when necessary
+	std::string currentFingerprint = computeContextFingerprint(generationContextSettings);
+	bool needsRebuild = generationContextNeedsRefresh
+		|| (currentFingerprint != lastContextFingerprint)
+		|| (generationsSinceRebuild >= MAX_REUSE_COUNT)
+		|| !sdCtx;
+
+	if (needsRebuild) {
 		if (!rebuildSdContextForGeneration(generationContextSettings)) {
 			return;
 		}
+		lastContextFingerprint = currentFingerprint;
+		generationsSinceRebuild = 0;
+		generationContextNeedsRefresh = false;
+	} else {
+		generationsSinceRebuild++;
 	}
-
-	// After one generation attempt, rebuild the context before the next run.
-	generationContextNeedsRefresh = true;
 
 	const bool upscalerAvailable = isUpscalerCtxLoaded && upscalerCtx;
 
@@ -707,3 +753,16 @@ void stableDiffusionThread::threadedFunction() {
 	task = ofxStableDiffusionTask::None;
 	generationContextNeedsRefresh = true;
 }
+
+void stableDiffusionThread::requestCancellation() {
+	cancellationRequested.store(true);
+}
+
+bool stableDiffusionThread::isCancellationRequested() const {
+	return cancellationRequested.load();
+}
+
+void stableDiffusionThread::resetCancellation() {
+	cancellationRequested.store(false);
+}
+

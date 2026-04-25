@@ -425,8 +425,25 @@ public:
 		int channels = 1);
 
 	/// Returns true if generation is currently in progress.
+	/// @note Thread-safe. Can be called from any thread.
 	bool isGenerating() const;
 	bool isBusy() const;
+
+	/// Request cancellation of current generation.
+	/// @return true if cancellation was requested, false if nothing is running
+	/// @note Thread-safe. The operation will stop gracefully after the current step.
+	bool requestCancellation();
+
+	/// Check if cancellation was requested.
+	/// @return true if cancellation is pending
+	/// @note Thread-safe. Can be called from any thread.
+	bool isCancellationRequested() const;
+
+	/// Check if last operation was cancelled.
+	/// @return true if the last operation completed due to cancellation
+	bool wasCancelled() const;
+
+
 	bool matchesContextSettings(const ofxStableDiffusionContextSettings& settings) const;
 
 	/// Returns the actual seed used in the last generation (auto-generated if seed was -1).
@@ -582,6 +599,7 @@ private:
 	sample_method_t cachedResolvedDefaultSampleMethod = SAMPLE_METHOD_COUNT;
 	scheduler_t cachedResolvedDefaultScheduler = SCHEDULER_COUNT;
 	std::vector<scheduler_t> cachedResolvedSchedulersBySampleMethod;
+	bool lastOperationCancelled = false;
 };
 
 

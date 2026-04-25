@@ -172,6 +172,7 @@ const char * ofxStableDiffusionErrorCodeLabel(ofxStableDiffusionErrorCode code) 
 	case ofxStableDiffusionErrorCode::GenerationFailed: return "GenerationFailed";
 	case ofxStableDiffusionErrorCode::ThreadBusy: return "ThreadBusy";
 	case ofxStableDiffusionErrorCode::UpscaleFailed: return "UpscaleFailed";
+	case ofxStableDiffusionErrorCode::Cancelled: return "Cancelled";
 	case ofxStableDiffusionErrorCode::Unknown: return "Unknown";
 	case ofxStableDiffusionErrorCode::None:
 	default:
@@ -205,6 +206,8 @@ std::string ofxStableDiffusionErrorCodeSuggestion(ofxStableDiffusionErrorCode co
 		return "Wait for current generation to complete or use isGenerating() to check status";
 	case ofxStableDiffusionErrorCode::UpscaleFailed:
 		return "Verify upscaler model path and compatibility";
+	case ofxStableDiffusionErrorCode::Cancelled:
+		return "Operation was cancelled by user request";
 	case ofxStableDiffusionErrorCode::Unknown:
 		return "Check logs for more details";
 	case ofxStableDiffusionErrorCode::None:
