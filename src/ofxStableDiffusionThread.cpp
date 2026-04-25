@@ -698,3 +698,16 @@ void stableDiffusionThread::threadedFunction() {
 	task = ofxStableDiffusionTask::None;
 	generationContextNeedsRefresh = true;
 }
+
+void stableDiffusionThread::requestCancellation() {
+	cancellationRequested.store(true);
+}
+
+bool stableDiffusionThread::isCancellationRequested() const {
+	return cancellationRequested.load();
+}
+
+void stableDiffusionThread::resetCancellation() {
+	cancellationRequested.store(false);
+}
+
