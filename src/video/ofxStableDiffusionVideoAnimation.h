@@ -262,3 +262,73 @@ inline int64_t ofxStableDiffusionGetKeyframedSeed(
 	}
 	return -1;
 }
+
+inline bool ofxStableDiffusionValidateAnimationKeyframes(
+	const ofxStableDiffusionVideoAnimationSettings& settings,
+	int frameCount,
+	std::string& errorMessage) {
+	if (settings.enablePromptInterpolation) {
+		if (settings.promptKeyframes.empty()) {
+			errorMessage = "Prompt interpolation enabled but no prompt keyframes provided";
+			return false;
+		}
+		for (std::size_t i = 0; i < settings.promptKeyframes.size(); ++i) {
+			const auto& keyframe = settings.promptKeyframes[i];
+			if (keyframe.frameNumber < 0) {
+				errorMessage = "Prompt keyframe " + std::to_string(i) +
+					" has invalid frame number: " + std::to_string(keyframe.frameNumber);
+				return false;
+			}
+			if (keyframe.frameNumber >= frameCount) {
+				errorMessage = "Prompt keyframe " + std::to_string(i) +
+					" frame number (" + std::to_string(keyframe.frameNumber) +
+					") exceeds total frame count (" + std::to_string(frameCount) + ")";
+				return false;
+			}
+			if (keyframe.weight < 0.0f || keyframe.weight > 2.0f) {
+				errorMessage = "Prompt keyframe " + std::to_string(i) +
+					" has invalid weight: " + std::to_string(keyframe.weight) +
+					" (must be between 0.0 and 2.0)";
+				return false;
+			}
+			if (keyframe.prompt.empty()) {
+				errorMessage = "Prompt keyframe " + std::to_string(i) + " has empty prompt";
+				return false;
+			}
+		}
+	}
+
+	if (settings.enableParameterAnimation) {
+		if (settings.parameterKeyframes.empty()) {
+			errorMessage = "Parameter animation enabled but no parameter keyframes provided";
+			return false;
+		}
+		for (std::size_t i = 0; i < settings.parameterKeyframes.size(); ++i) {
+			const auto& keyframe = settings.parameterKeyframes[i];
+			if (keyframe.frameNumber < 0) {
+				errorMessage = "Parameter keyframe " + std::to_string(i) +
+					" has invalid frame number: " + std::to_string(keyframe.frameNumber);
+				return false;
+			}
+			if (keyframe.frameNumber >= frameCount) {
+				errorMessage = "Parameter keyframe " + std::to_string(i) +
+					" frame number (" + std::to_string(keyframe.frameNumber) +
+					") exceeds total frame count (" + std::to_string(frameCount) + ")";
+				return false;
+			}
+			if (keyframe.cfgScale >= 0.0f && (keyframe.cfgScale < 0.0f || keyframe.cfgScale > 50.0f)) {
+				errorMessage = "Parameter keyframe " + std::to_string(i) +
+					" has invalid cfgScale: " + std::to_string(keyframe.cfgScale);
+				return false;
+			}
+			if (keyframe.strength >= 0.0f && (keyframe.strength < 0.0f || keyframe.strength > 1.0f)) {
+				errorMessage = "Parameter keyframe " + std::to_string(i) +
+					" has invalid strength: " + std::to_string(keyframe.strength);
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+

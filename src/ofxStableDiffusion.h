@@ -56,6 +56,10 @@ public:
 	/// @brief Generate a video from a prompt.
 	/// @threadsafe Yes, but only one generation at a time. Returns immediately; results
 	/// available via callbacks or getLastResult() after completion.
+	/// @note Video generation supports animation via keyframes (prompt interpolation,
+	/// parameter animation, seed sequences). Use ofxStableDiffusionVideoAnimationSettings
+	/// to configure animation. For animated videos, progress callbacks report overall
+	/// progress across all frames.
 	void generateVideo(const ofxStableDiffusionVideoRequest& request);
 
 	/// @brief Configure upscaler settings (ESRGAN).
@@ -84,6 +88,7 @@ public:
 
 	/// @brief Get generated video clip from last result.
 	/// @threadsafe Yes (returns copy under lock).
+	/// @note For animated videos, frames contain per-frame generation parameters.
 	ofxStableDiffusionVideoClip getVideoClip() const;
 
 	/// @brief Check if last result contains images.
@@ -207,6 +212,9 @@ public:
 
 	/// @brief Set video generation mode (Standard, Loop, PingPong, Boomerang).
 	/// @threadsafe Yes.
+	/// @note This affects frame sequence construction for video output modes.
+	/// Standard: forward only. Loop: adds loop-back frame. PingPong: forward then backward (excluding endpoints).
+	/// Boomerang: forward then full reverse.
 	void setVideoGenerationMode(ofxStableDiffusionVideoMode mode);
 
 	/// @brief Get current video generation mode.

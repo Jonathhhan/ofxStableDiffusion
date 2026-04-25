@@ -96,6 +96,23 @@ namespace ofxStableDiffusionLimits {
 
 	/// @}
 
+	/// @name Video Generation Constraints
+	/// @{
+
+	/// Minimum frame count for video generation
+	constexpr int MIN_FRAME_COUNT = 1;
+
+	/// Maximum frame count for video generation
+	constexpr int MAX_FRAME_COUNT = 1000;
+
+	/// Minimum FPS (frames per second) for video generation
+	constexpr int MIN_FPS = 1;
+
+	/// Maximum FPS (frames per second) for video generation
+	constexpr int MAX_FPS = 120;
+
+	/// @}
+
 	/// @name History Limits
 	/// @{
 
@@ -169,6 +186,20 @@ namespace ofxStableDiffusionLimits {
 	/// @return true if seed is valid
 	inline constexpr bool isValidSeed(int64_t seed) {
 		return seed == SEED_RANDOM || seed >= MIN_SEED;
+	}
+
+	/// @brief Check if frame count is valid
+	/// @param frameCount Number of frames to generate
+	/// @return true if frame count is within valid range
+	inline constexpr bool isValidFrameCount(int frameCount) {
+		return frameCount >= MIN_FRAME_COUNT && frameCount <= MAX_FRAME_COUNT;
+	}
+
+	/// @brief Check if FPS value is valid
+	/// @param fps Frames per second
+	/// @return true if FPS is within valid range
+	inline constexpr bool isValidFps(int fps) {
+		return fps >= MIN_FPS && fps <= MAX_FPS;
 	}
 
 } // namespace ofxStableDiffusionLimits

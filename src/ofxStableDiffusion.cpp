@@ -297,12 +297,18 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 		const ValidationResult dimResult = validateDimensions(request.width, request.height);
 		if (!dimResult.ok()) return dimResult;
 
-		if (request.frameCount <= 0) {
-			return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be positive"};
+		if (!ofxStableDiffusionLimits::isValidFrameCount(request.frameCount)) {
+			return {ofxStableDiffusionErrorCode::InvalidFrameCount,
+				"Frame count must be between " +
+				std::to_string(ofxStableDiffusionLimits::MIN_FRAME_COUNT) + " and " +
+				std::to_string(ofxStableDiffusionLimits::MAX_FRAME_COUNT)};
 		}
 
-		if (request.fps <= 0 || request.fps > 120) {
-			return {ofxStableDiffusionErrorCode::InvalidParameter, "FPS must be between 1 and 120"};
+		if (!ofxStableDiffusionLimits::isValidFps(request.fps)) {
+			return {ofxStableDiffusionErrorCode::InvalidParameter,
+				"FPS must be between " +
+				std::to_string(ofxStableDiffusionLimits::MIN_FPS) + " and " +
+				std::to_string(ofxStableDiffusionLimits::MAX_FPS)};
 		}
 
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
@@ -362,7 +368,18 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	}
 
 	if (std::isfinite(request.vaceStrength)) {
-		return validateVaceStrength(request.vaceStrength);
+		const ValidationResult vaceResult = validateVaceStrength(request.vaceStrength);
+		if (!vaceResult.ok()) return vaceResult;
+	}
+
+	if (request.hasAnimation()) {
+		std::string animationError;
+		if (!ofxStableDiffusionValidateAnimationKeyframes(
+				request.animationSettings,
+				request.frameCount,
+				animationError)) {
+			return {ofxStableDiffusionErrorCode::InvalidParameter, animationError};
+		}
 	}
 
 	return {};
