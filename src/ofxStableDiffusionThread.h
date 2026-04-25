@@ -120,9 +120,15 @@ public:
 
 private:
 	void threadedFunction();
+	std::string computeContextFingerprint(const ofxStableDiffusionContextSettings& settings);
 	bool isSdCtxLoaded = false;
 	bool isUpscalerCtxLoaded = false;
 	bool generationContextNeedsRefresh = false;
 	std::vector<sd_lora_t> loraBuffer;
 	std::atomic<bool> cancellationRequested{false};
+
+	// Context reuse optimization
+	std::string lastContextFingerprint;
+	int generationsSinceRebuild = 0;
+	static constexpr int MAX_REUSE_COUNT = 10; // Safety valve: rebuild after N generations
 };
