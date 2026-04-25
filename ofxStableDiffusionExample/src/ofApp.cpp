@@ -717,7 +717,6 @@ void ofApp::setup() {
 	vaePath = ""; // "data/models/vae/vae.safetensors";
 	prompt = "animal with futuristic clothes"; // "man img, man with futuristic clothes";
 	promptB = "animal with elegant retro-futuristic clothes";
-	instruction = "edit the source image so the subject feels more futuristic while keeping the composition readable";
 	rankingPrompt = "bright futuristic vivid cinematic";
 	esrganPath = ""; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth"; // "data/models/esrgan/RealESRGAN_x4plus_anime_6B.pth";
 	controlImagePath = ""; // "data/openpose.jpeg";
@@ -766,7 +765,6 @@ void ofApp::setup() {
 	promptIsEdited = true;
 	negativePromptIsEdited = true;
 	isTextToImage = true;
-	isInstructImage = false;
 	isImageToVideo = false;
 	videoFrames = 6;
 	videoFps = videoParameterProfile.defaultFps;
@@ -1056,18 +1054,6 @@ void ofApp::draw() {
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::TreePop();
 	}
-	if (isInstructImage) {
-		if (ImGui::TreeNodeEx("Instruction", ImGuiStyleVar_WindowPadding | ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Dummy(ImVec2(0, 10));
-			Funcs::MyInputTextMultiline("##MyStrInstruction", &instruction, ImVec2(512, 110), ImGuiInputTextFlags_CallbackResize);
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				instruction.erase(std::remove(instruction.begin(), instruction.end(), '\r'), instruction.end());
-				instruction.erase(std::remove(instruction.begin(), instruction.end(), '\n'), instruction.end());
-			}
-			ImGui::Dummy(ImVec2(0, 10));
-			ImGui::TreePop();
-		}
-	}
 	if (negativePromptIsEdited) {
 		addSoftReturnsToText(negativePrompt, 500);
 		negativePromptIsEdited = false;
@@ -1241,9 +1227,6 @@ void ofApp::draw() {
 		const bool supportsImageMode =
 			capabilities.textToImage ||
 			capabilities.imageToImage ||
-			capabilities.instructImage ||
-			capabilities.variation ||
-			capabilities.restyle ||
 			capabilities.inpainting;
 		const bool supportsVideoMode = capabilities.imageToVideo;
 		const bool showTopLevelModeSelector = supportsImageMode && supportsVideoMode;
@@ -1295,9 +1278,6 @@ void ofApp::draw() {
 					const bool supported =
 						(mode == ofxStableDiffusionImageMode::TextToImage && capabilities.textToImage) ||
 						(mode == ofxStableDiffusionImageMode::ImageToImage && capabilities.imageToImage) ||
-						(mode == ofxStableDiffusionImageMode::InstructImage && capabilities.instructImage) ||
-						(mode == ofxStableDiffusionImageMode::Variation && capabilities.variation) ||
-						(mode == ofxStableDiffusionImageMode::Restyle && capabilities.restyle) ||
 						(mode == ofxStableDiffusionImageMode::Inpainting && capabilities.inpainting);
 					if (!supported) {
 						continue;
@@ -1443,6 +1423,7 @@ void ofApp::draw() {
 				if (ImGui::Button("Load Mask")) {
 					if (loadImageIntoSlot("Load Mask Image", maskGuideImage, maskGuidePixels, maskGuideInput, maskImageName)) {
 						useMaskGuide = true;
+						allocate();
 					}
 				}
 				ImGui::SameLine(0, 5);
@@ -1584,11 +1565,13 @@ void ofApp::draw() {
 						if (is_default_selected) {
 							ImGui::SetItemDefaultFocus();
 						}
-						for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
-							const bool is_selected = (highNoiseSampleMethod == sampleMethodArray[n]);
-							if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
-								highNoiseSampleMethod = sampleMethodArray[n];
-								highNoiseSampleMethodEnum = static_cast<sample_method_t>(n);
+						for (int n = 0; n < SAMPLE_METHOD_COUNT; n++) {
+							const auto method = static_cast<sample_method_t>(n);
+							const std::string methodLabel = stableDiffusion.getResolvedSampleMethodName(method);
+							const bool is_selected = (highNoiseSampleMethodEnum == method);
+							if (ImGui::Selectable(methodLabel.c_str(), is_selected)) {
+								highNoiseSampleMethod = sd_sample_method_name(method);
+								highNoiseSampleMethodEnum = method;
 							}
 							if (is_selected) {
 								ImGui::SetItemDefaultFocus();
@@ -1785,11 +1768,13 @@ void ofApp::draw() {
 			}
 			if (is_default_selected)
 				ImGui::SetItemDefaultFocus();
-			for (int n = 0; n < IM_ARRAYSIZE(sampleMethodArray); n++) {
-				bool is_selected = (sampleMethod == sampleMethodArray[n]);
-				if (ImGui::Selectable(sampleMethodArray[n], is_selected)) {
-					sampleMethod = sampleMethodArray[n];
-					sampleMethodEnum = (sample_method_t)n;
+			for (int n = 0; n < SAMPLE_METHOD_COUNT; n++) {
+				const auto method = static_cast<sample_method_t>(n);
+				const std::string methodLabel = stableDiffusion.getResolvedSampleMethodName(method);
+				const bool is_selected = (sampleMethodEnum == method);
+				if (ImGui::Selectable(methodLabel.c_str(), is_selected)) {
+					sampleMethod = sd_sample_method_name(method);
+					sampleMethodEnum = method;
 					if (!useHighNoiseOverrides) {
 						highNoiseSampleMethod = sampleMethod;
 						highNoiseSampleMethodEnum = sampleMethodEnum;
@@ -1913,7 +1898,6 @@ void ofApp::draw() {
 			request.selectionMode = selectionModeEnum;
 			request.initImage = inputImage;
 			request.prompt = prompt;
-			request.instruction = isInstructImage ? instruction : "";
 			request.negativePrompt = negativePrompt;
 			request.clipSkip = clipSkip;
 			request.cfgScale = cfgScale;
@@ -2036,7 +2020,6 @@ void ofApp::applySelectedImageMode(ofxStableDiffusionImageMode mode) {
 	imageModeEnum = mode;
 	imageMode = imageModeArray[static_cast<int>(mode)];
 	isTextToImage = (mode == ofxStableDiffusionImageMode::TextToImage);
-	isInstructImage = (mode == ofxStableDiffusionImageMode::InstructImage);
 	stableDiffusion.setImageGenerationMode(mode);
 	applyRecommendedImageParameters();
 	clampCurrentParametersToProfiles();
@@ -2056,7 +2039,10 @@ void ofApp::applyRecommendedImageParameters() {
 	sampleMethod = "MODEL_DEFAULT";
 	sampleMethodEnum = SAMPLE_METHOD_COUNT;
 	if (imageParameterProfile.supportsStrength) {
-		strength = std::clamp(0.75f, imageParameterProfile.minStrength, imageParameterProfile.maxStrength);
+		strength = std::clamp(
+			imageParameterProfile.defaultStrength,
+			imageParameterProfile.minStrength,
+			imageParameterProfile.maxStrength);
 	}
 	allocate();
 }
@@ -2131,7 +2117,7 @@ void ofApp::configureExampleRanker() {
 			scores.reserve(images.size());
 			const std::string effectiveRankingPrompt =
 				rankingPrompt.empty()
-					? (request.instruction.empty() ? request.prompt : request.instruction)
+					? request.prompt
 					: rankingPrompt;
 			for (const auto& frame : images) {
 				ofxStableDiffusionImageScore score;
@@ -2167,9 +2153,6 @@ void ofApp::syncAutomaticMediaMode(const ofxStableDiffusionCapabilities& capabil
 	const bool supportsImageMode =
 		capabilities.textToImage ||
 		capabilities.imageToImage ||
-		capabilities.instructImage ||
-		capabilities.variation ||
-		capabilities.restyle ||
 		capabilities.inpainting;
 	const bool supportsVideoMode = capabilities.imageToVideo;
 

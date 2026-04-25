@@ -133,9 +133,6 @@ const char * ofxStableDiffusionTaskLabel(ofxStableDiffusionTask task) {
 	case ofxStableDiffusionTask::LoadModel: return "LoadModel";
 	case ofxStableDiffusionTask::TextToImage: return "TextToImage";
 	case ofxStableDiffusionTask::ImageToImage: return "ImageToImage";
-	case ofxStableDiffusionTask::InstructImage: return "InstructImage";
-	case ofxStableDiffusionTask::ImageVariation: return "ImageVariation";
-	case ofxStableDiffusionTask::ImageRestyle: return "ImageRestyle";
 	case ofxStableDiffusionTask::Inpainting: return "Inpainting";
 	case ofxStableDiffusionTask::ImageToVideo: return "ImageToVideo";
 	case ofxStableDiffusionTask::Upscale: return "Upscale";
@@ -244,4 +241,3 @@ int64_t ofxStableDiffusionHashStringToSeed(const std::string& text) {
 	// Convert to int64_t, ensuring we stay in valid seed range
 	return static_cast<int64_t>(hash & 0x7FFFFFFFFFFFFFFF);
 }
-

@@ -71,7 +71,6 @@ class ofApp : public ofBaseApp {
 		std::vector<ofPixels> videoControlFramePixels;
 		std::string prompt;
 		std::string promptB;
-		std::string instruction;
 		std::string negativePrompt;
 		std::string rankingPrompt;
 		int width;
@@ -85,7 +84,7 @@ class ofApp : public ofBaseApp {
 		int previewSize;
 		int selectedImage;
 		int previousSelectedImage;
-		const char* imageModeArray[6] = {"TextToImage", "ImageToImage", "InstructImage", "Variation", "Restyle", "Inpainting"};
+		const char* imageModeArray[3] = {"TextToImage", "ImageToImage", "Inpainting"};
 		const char* imageMode;
 		const char* selectionModeArray[3] = {"KeepOrder", "Rerank", "BestOnly"};
 		const char* selectionMode;
@@ -155,7 +154,6 @@ class ofApp : public ofBaseApp {
 		ofxStableDiffusionImageSelectionMode selectionModeEnum =
 			ofxStableDiffusionImageSelectionMode::KeepOrder;
 		bool isTextToImage;
-		bool isInstructImage;
 		bool isImageToVideo;
 		bool videoUseInputImage = false;
 		int videoFrames;

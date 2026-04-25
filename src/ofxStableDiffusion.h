@@ -372,22 +372,6 @@ public:
 		float styleStrength,
 		bool normalizeInput,
 		const std::string& inputIdImagesPath);
-	void instructImage(sd_image_t initImage,
-		const std::string& instruction,
-		const std::string& negativePrompt,
-		int clipSkip,
-		float cfgScale,
-		int width,
-		int height,
-		enum sample_method_t sampleMethod,
-		int sampleSteps,
-		float strength,
-		int64_t seed,
-		int batchCount,
-		sd_image_t* controlCond,
-		float controlStrength,
-		bool normalizeInput);
-
 	void img2vid(sd_image_t init_image,
 		int width,
 		int height,
@@ -460,7 +444,6 @@ public:
 	static int64_t hashStringToSeed(const std::string& text);
 
 	std::string prompt;
-	std::string instruction;
 	std::string negativePrompt;
 	int width = 512;
 	int height = 512;

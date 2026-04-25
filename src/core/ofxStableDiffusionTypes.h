@@ -129,9 +129,6 @@ struct ofxStableDiffusionCapabilities {
 	ofxStableDiffusionModelFamily modelFamily = ofxStableDiffusionModelFamily::Unknown;
 	bool textToImage = false;
 	bool imageToImage = false;
-	bool instructImage = false;
-	bool variation = false;
-	bool restyle = false;
 	bool inpainting = false;
 	bool imageToVideo = false;
 	bool videoRequiresInputImage = true;
@@ -154,9 +151,6 @@ struct ofxStableDiffusionCapabilities {
 		switch (mode) {
 		case ofxStableDiffusionImageMode::TextToImage: return textToImage;
 		case ofxStableDiffusionImageMode::ImageToImage: return imageToImage;
-		case ofxStableDiffusionImageMode::InstructImage: return instructImage;
-		case ofxStableDiffusionImageMode::Variation: return variation;
-		case ofxStableDiffusionImageMode::Restyle: return restyle;
 		case ofxStableDiffusionImageMode::Inpainting: return inpainting;
 		default:
 			return false;
@@ -171,7 +165,6 @@ struct ofxStableDiffusionImageRequest {
 	sd_image_t initImage{0, 0, 0, nullptr};
 	sd_image_t maskImage{0, 0, 0, nullptr};  // For inpainting (white=inpaint, black=keep)
 	std::string prompt;
-	std::string instruction;
 	std::string negativePrompt;
 	int clipSkip = -1;
 	float cfgScale = std::numeric_limits<float>::infinity();

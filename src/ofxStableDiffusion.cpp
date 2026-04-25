@@ -1330,75 +1330,6 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	generate(request);
 }
 
-void ofxStableDiffusion::instructImage(sd_image_t initImage_,
-	const std::string& instruction_,
-	const std::string& negativePrompt_,
-	int clipSkip_,
-	float cfgScale_,
-	int width_,
-	int height_,
-	enum sample_method_t sampleMethod_,
-	int sampleSteps_,
-	float strength_,
-	int64_t seed_,
-	int batchCount_,
-	sd_image_t* controlCond_,
-	float controlStrength_,
-	bool normalizeInput_) {
-	if (thread.isThreadRunning()) {
-		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
-		return;
-	}
-
-	if (initImage_.data == nullptr) {
-		imageMode = ofxStableDiffusionImageMode::InstructImage;
-		activeTask = ofxStableDiffusionTask::InstructImage;
-		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Instruct image requires an input image");
-		return;
-	}
-
-	const ValidationResult dimResult = validateDimensions(width_, height_);
-	if (!dimResult.ok()) {
-		imageMode = ofxStableDiffusionImageMode::InstructImage;
-		activeTask = ofxStableDiffusionTask::InstructImage;
-		setLastError(dimResult.code, dimResult.message);
-		return;
-	}
-	const ValidationResult batchResult = validateBatchCount(batchCount_);
-	if (!batchResult.ok()) {
-		imageMode = ofxStableDiffusionImageMode::InstructImage;
-		activeTask = ofxStableDiffusionTask::InstructImage;
-		setLastError(batchResult.code, batchResult.message);
-		return;
-	}
-
-	ofxStableDiffusionImageRequest request;
-	{
-		std::lock_guard<std::mutex> lock(stateMutex);
-		request.selectionMode = imageSelectionMode;
-		request.styleStrength = styleStrength;
-		request.loras = loras;
-	}
-	request.mode = ofxStableDiffusionImageMode::InstructImage;
-	request.initImage = initImage_;
-	request.prompt = instruction_;
-	request.instruction = instruction_;
-	request.negativePrompt = negativePrompt_;
-	request.clipSkip = clipSkip_;
-	request.cfgScale = cfgScale_;
-	request.width = width_;
-	request.height = height_;
-	request.sampleMethod = sampleMethod_;
-	request.sampleSteps = sampleSteps_;
-	request.strength = strength_;
-	request.seed = seed_;
-	request.batchCount = batchCount_;
-	request.controlCond = controlCond_;
-	request.controlStrength = controlStrength_;
-	request.normalizeInput = normalizeInput_;
-	generate(request);
-}
-
 void ofxStableDiffusion::img2vid(sd_image_t initImage_,
 	int width_,
 	int height_,
@@ -1792,7 +1723,6 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		imageSelectionMode = request.selectionMode;
 		maskImage = request.maskImage;
 		endImage = {0, 0, 0, nullptr};
-		instruction = request.instruction;
 		prompt = request.prompt;
 		negativePrompt = request.negativePrompt;
 		clipSkip = request.clipSkip;

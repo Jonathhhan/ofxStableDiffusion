@@ -16,6 +16,40 @@ public:
 		sd_image_t image{0, 0, 0, nullptr};
 		std::vector<uint8_t> storage;
 
+		OwnedImage() = default;
+
+		OwnedImage(const OwnedImage& other)
+			: image(other.image)
+			, storage(other.storage) {
+			rebindImageData();
+		}
+
+		OwnedImage& operator=(const OwnedImage& other) {
+			if (this != &other) {
+				image = other.image;
+				storage = other.storage;
+				rebindImageData();
+			}
+			return *this;
+		}
+
+		OwnedImage(OwnedImage&& other) noexcept
+			: image(other.image)
+			, storage(std::move(other.storage)) {
+			rebindImageData();
+			other.image = {0, 0, 0, nullptr};
+		}
+
+		OwnedImage& operator=(OwnedImage&& other) noexcept {
+			if (this != &other) {
+				image = other.image;
+				storage = std::move(other.storage);
+				rebindImageData();
+				other.image = {0, 0, 0, nullptr};
+			}
+			return *this;
+		}
+
 		void clear() {
 			storage.clear();
 			image = {0, 0, 0, nullptr};
@@ -56,6 +90,15 @@ public:
 
 		bool isAllocated() const {
 			return image.data != nullptr;
+		}
+
+	private:
+		void rebindImageData() {
+			if (storage.empty() || image.width == 0 || image.height == 0 || image.channel == 0) {
+				image = {0, 0, 0, nullptr};
+				return;
+			}
+			image.data = storage.data();
 		}
 	};
 

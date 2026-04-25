@@ -120,26 +120,13 @@ inline ofxStableDiffusionImageParameterProfile resolveImageProfile(
 		profile.maxSampleSteps = 12;
 		profile.summary = "Turbo and lightning checkpoints prefer low CFG and very short schedules.";
 		switch (mode) {
-		case ofxStableDiffusionImageMode::InstructImage:
-			profile.defaultCfgScale = 1.3f;
-			profile.defaultStrength = 0.3f;
-			break;
-		case ofxStableDiffusionImageMode::Variation:
-			profile.defaultCfgScale = 1.2f;
-			profile.defaultStrength = 0.25f;
-			profile.maxStrength = 0.55f;
-			break;
-		case ofxStableDiffusionImageMode::Restyle:
-			profile.defaultCfgScale = 1.8f;
-			profile.defaultStrength = 0.65f;
-			break;
 		case ofxStableDiffusionImageMode::Inpainting:
 			profile.defaultCfgScale = 1.7f;
 			profile.defaultStrength = 0.7f;
 			break;
 		case ofxStableDiffusionImageMode::ImageToImage:
 			profile.defaultCfgScale = 1.5f;
-			profile.defaultStrength = 0.45f;
+			profile.defaultStrength = 0.5f;
 			break;
 		case ofxStableDiffusionImageMode::TextToImage:
 		default:
@@ -194,24 +181,6 @@ inline ofxStableDiffusionImageParameterProfile resolveImageProfile(
 	}
 
 	switch (mode) {
-	case ofxStableDiffusionImageMode::InstructImage:
-		profile.defaultCfgScale = std::min(profile.defaultCfgScale, 4.5f);
-		profile.defaultSampleSteps = std::max(profile.minSampleSteps, profile.defaultSampleSteps - 4);
-		profile.defaultStrength = 0.35f;
-		profile.maxStrength = 0.7f;
-		break;
-	case ofxStableDiffusionImageMode::Variation:
-		profile.defaultCfgScale = std::min(profile.defaultCfgScale, 3.0f);
-		profile.defaultSampleSteps = std::max(profile.minSampleSteps, profile.defaultSampleSteps - 6);
-		profile.defaultStrength = 0.25f;
-		profile.maxStrength = 0.6f;
-		break;
-	case ofxStableDiffusionImageMode::Restyle:
-		profile.defaultCfgScale = clampValue(profile.defaultCfgScale + 1.5f, profile.minCfgScale, profile.maxCfgScale);
-		profile.defaultSampleSteps = std::min(profile.maxSampleSteps, profile.defaultSampleSteps + 4);
-		profile.defaultStrength = 0.75f;
-		profile.minStrength = 0.25f;
-		break;
 	case ofxStableDiffusionImageMode::Inpainting:
 		profile.defaultCfgScale = clampValue(profile.defaultCfgScale + 0.5f, profile.minCfgScale, profile.maxCfgScale);
 		profile.defaultSampleSteps = std::min(profile.maxSampleSteps, profile.defaultSampleSteps + 2);

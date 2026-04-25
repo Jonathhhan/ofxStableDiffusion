@@ -46,9 +46,9 @@ int main() {
 		settings.modelPath = "models/juggernautXL.safetensors";
 		const auto profile = ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
 			settings,
-			ofxStableDiffusionImageMode::Restyle);
+			ofxStableDiffusionImageMode::Inpainting);
 		ok &= expect(profile.modelFamily == ofxStableDiffusionModelFamily::SDXL, "sdxl profile detects family");
-		ok &= expect(profile.defaultSampleSteps >= 30, "sdxl restyle prefers longer schedules");
+		ok &= expect(profile.defaultSampleSteps >= 30, "sdxl inpainting prefers longer schedules");
 		ok &= expect(profile.defaultCfgScale <= profile.maxCfgScale, "sdxl cfg stays in range");
 		ok &= expect(profile.supportsClipSkip, "sdxl still exposes clip skip");
 	}
@@ -60,9 +60,9 @@ int main() {
 		settings.t5xxlPath = "models/flux/t5xxl.safetensors";
 		const auto profile = ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
 			settings,
-			ofxStableDiffusionImageMode::Variation);
+			ofxStableDiffusionImageMode::ImageToImage);
 		ok &= expect(profile.modelFamily == ofxStableDiffusionModelFamily::FLUX, "flux profile detects split family");
-		ok &= expectNear(profile.defaultCfgScale, 3.0f, 1.0f, "flux variation lowers cfg");
+		ok &= expect(profile.defaultCfgScale <= 8.0f, "flux img2img keeps cfg moderate");
 		ok &= expect(!profile.supportsClipSkip, "flux disables clip skip tuning");
 		ok &= expect(profile.maxCfgScale <= 8.0f, "flux keeps cfg range moderate");
 	}

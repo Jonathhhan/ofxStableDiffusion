@@ -245,9 +245,6 @@ inline ofxStableDiffusionCapabilities resolveCapabilities(
 	const bool imageGeneration = familySupportsImageGeneration(capabilities.modelFamily);
 	capabilities.textToImage = imageGeneration;
 	capabilities.imageToImage = imageGeneration;
-	capabilities.instructImage = imageGeneration;
-	capabilities.variation = imageGeneration;
-	capabilities.restyle = imageGeneration;
 	capabilities.inpainting = imageGeneration;
 	capabilities.imageToVideo = familySupportsVideo(capabilities.modelFamily);
 	capabilities.videoRequiresInputImage =

@@ -58,9 +58,7 @@ struct ofxStableDiffusionQueueRequest {
 	bool isImageGeneration() const {
 		return taskType == ofxStableDiffusionTask::TextToImage ||
 			   taskType == ofxStableDiffusionTask::ImageToImage ||
-			   taskType == ofxStableDiffusionTask::InstructImage ||
-			   taskType == ofxStableDiffusionTask::ImageVariation ||
-			   taskType == ofxStableDiffusionTask::ImageRestyle;
+			   taskType == ofxStableDiffusionTask::Inpainting;
 	}
 
 	bool isVideoGeneration() const {

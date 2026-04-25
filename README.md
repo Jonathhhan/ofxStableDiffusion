@@ -24,7 +24,7 @@ The addon is now structured more like a production addon:
 ## Highlights
 
 - Text-to-image and image-to-image generation
-- Expanded image modes: `TextToImage`, `ImageToImage`, `InstructImage`, `Variation`, and `Restyle`
+- Native image modes: `TextToImage`, `ImageToImage`, and `Inpainting`
 - Best-of-N image reranking through a callback seam that can be driven by `ofxGgml` CLIP scoring
 - Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
 - ESRGAN upscaling support
@@ -110,7 +110,7 @@ you want model-family-aware defaults before building a request:
 const auto imageProfile =
     ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
         context,
-        ofxStableDiffusionImageMode::Restyle);
+        ofxStableDiffusionImageMode::ImageToImage);
 
 request.cfgScale = imageProfile.defaultCfgScale;
 request.sampleSteps = imageProfile.defaultSampleSteps;
@@ -230,18 +230,11 @@ preview clip without re-asking the native runtime for more frames.
 
 ## Image Modes
 
-The typed image request layer now exposes addon-level image modes:
+The typed image request layer exposes the native image modes:
 
 - `TextToImage`
 - `ImageToImage`
-- `InstructImage`
-- `Variation`
-- `Restyle`
-
-`InstructImage` is implemented as a first-class wrapper mode in the addon layer,
-with the wrapper mapping legacy-style request data onto the current upstream
-parameter-struct API while still keeping the editing-oriented API clear for
-callers.
+- `Inpainting`
 
 ## CLIP-Rerank Integration
 

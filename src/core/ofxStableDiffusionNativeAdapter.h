@@ -101,16 +101,7 @@ inline sd_tiling_params_t makeTilingParams(bool enabled) {
 }
 
 inline std::string buildEffectivePrompt(const ofxStableDiffusionImageRequest& request) {
-	if (request.instruction.empty()) {
-		return request.prompt;
-	}
-	if (request.prompt.empty()) {
-		return request.instruction;
-	}
-	if (request.instruction == request.prompt) {
-		return request.prompt;
-	}
-	return request.prompt + "\nInstruction: " + request.instruction;
+	return request.prompt;
 }
 
 inline bool looksLikeEmbeddingFile(const std::string& extension) {
@@ -288,8 +279,7 @@ inline sd_img_gen_params_t buildImageParams(
 	if (std::isfinite(request.cfgScale)) {
 		params.sample_params.guidance.txt_cfg = request.cfgScale;
 	}
-	if (std::isfinite(request.cfgScale) &&
-		(request.initImage.data != nullptr || !request.instruction.empty())) {
+	if (std::isfinite(request.cfgScale) && request.initImage.data != nullptr) {
 		params.sample_params.guidance.img_cfg = request.cfgScale;
 	}
 	if (std::isfinite(request.strength)) {

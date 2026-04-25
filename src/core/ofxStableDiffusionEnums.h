@@ -5,9 +5,6 @@ enum class ofxStableDiffusionTask {
 	LoadModel,
 	TextToImage,
 	ImageToImage,
-	InstructImage,
-	ImageVariation,
-	ImageRestyle,
 	Inpainting,
 	ImageToVideo,
 	Upscale
@@ -16,9 +13,6 @@ enum class ofxStableDiffusionTask {
 enum class ofxStableDiffusionImageMode {
 	TextToImage = 0,
 	ImageToImage,
-	InstructImage,
-	Variation,
-	Restyle,
 	Inpainting
 };
 

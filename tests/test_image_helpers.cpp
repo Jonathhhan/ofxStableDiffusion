@@ -32,21 +32,17 @@ int main() {
 
 	ok &= expect(std::string(ofxStableDiffusionImageModeName(ofxStableDiffusionImageMode::TextToImage)) == "TextToImage", "text label");
 	ok &= expect(std::string(ofxStableDiffusionImageModeName(ofxStableDiffusionImageMode::ImageToImage)) == "ImageToImage", "img2img label");
-	ok &= expect(std::string(ofxStableDiffusionImageModeName(ofxStableDiffusionImageMode::InstructImage)) == "InstructImage", "instruct label");
-	ok &= expect(std::string(ofxStableDiffusionImageModeName(ofxStableDiffusionImageMode::Variation)) == "Variation", "variation label");
-	ok &= expect(std::string(ofxStableDiffusionImageModeName(ofxStableDiffusionImageMode::Restyle)) == "Restyle", "restyle label");
+	ok &= expect(std::string(ofxStableDiffusionImageModeName(ofxStableDiffusionImageMode::Inpainting)) == "Inpainting", "inpainting label");
 
 	ok &= expect(!ofxStableDiffusionImageModeUsesInputImage(ofxStableDiffusionImageMode::TextToImage), "text does not need input image");
 	ok &= expect(ofxStableDiffusionImageModeUsesInputImage(ofxStableDiffusionImageMode::ImageToImage), "img2img needs input image");
-	ok &= expect(ofxStableDiffusionImageModeUsesInputImage(ofxStableDiffusionImageMode::InstructImage), "instruct needs input image");
+	ok &= expect(ofxStableDiffusionImageModeUsesInputImage(ofxStableDiffusionImageMode::Inpainting), "inpainting needs input image");
 	ok &= expect(ofxStableDiffusionTaskForImageMode(ofxStableDiffusionImageMode::TextToImage) == ofxStableDiffusionTask::TextToImage, "text task");
-	ok &= expect(ofxStableDiffusionTaskForImageMode(ofxStableDiffusionImageMode::InstructImage) == ofxStableDiffusionTask::InstructImage, "instruct task");
-	ok &= expect(ofxStableDiffusionTaskForImageMode(ofxStableDiffusionImageMode::Variation) == ofxStableDiffusionTask::ImageVariation, "variation task");
-	ok &= expect(ofxStableDiffusionTaskForImageMode(ofxStableDiffusionImageMode::Restyle) == ofxStableDiffusionTask::ImageRestyle, "restyle task");
+	ok &= expect(ofxStableDiffusionTaskForImageMode(ofxStableDiffusionImageMode::ImageToImage) == ofxStableDiffusionTask::ImageToImage, "img2img task");
+	ok &= expect(ofxStableDiffusionTaskForImageMode(ofxStableDiffusionImageMode::Inpainting) == ofxStableDiffusionTask::Inpainting, "inpainting task");
 
-	ok &= expectNear(ofxStableDiffusionDefaultStrengthForImageMode(ofxStableDiffusionImageMode::InstructImage), 0.35f, 0.0001f, "instruct strength");
-	ok &= expectNear(ofxStableDiffusionDefaultStrengthForImageMode(ofxStableDiffusionImageMode::Variation), 0.25f, 0.0001f, "variation strength");
-	ok &= expectNear(ofxStableDiffusionDefaultCfgScaleForImageMode(ofxStableDiffusionImageMode::Restyle), 9.0f, 0.0001f, "restyle cfg");
+	ok &= expectNear(ofxStableDiffusionDefaultStrengthForImageMode(ofxStableDiffusionImageMode::ImageToImage), 0.50f, 0.0001f, "img2img strength");
+	ok &= expectNear(ofxStableDiffusionDefaultCfgScaleForImageMode(ofxStableDiffusionImageMode::Inpainting), 7.5f, 0.0001f, "inpainting cfg");
 
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
