@@ -1,5 +1,6 @@
 #include "ofxStableDiffusion.h"
 #include "core/ofxStableDiffusionCapabilityHelpers.h"
+#include "core/ofxStableDiffusionLimits.h"
 #include "core/ofxStableDiffusionMemoryHelpers.h"
 #include "core/ofxStableDiffusionNativeAdapter.h"
 
@@ -99,76 +100,94 @@ struct ValidationResult {
 };
 
 ValidationResult validateDimensions(int width, int height) {
+	using namespace ofxStableDiffusionLimits;
 	if (width <= 0 || height <= 0) {
 		return {ofxStableDiffusionErrorCode::InvalidDimensions, "Width and height must be positive values"};
 	}
-	if (width > 2048 || height > 2048) {
-		return {ofxStableDiffusionErrorCode::InvalidDimensions, "Width and height must not exceed 2048 pixels"};
+	if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+		return {ofxStableDiffusionErrorCode::InvalidDimensions,
+			"Width and height must not exceed " + std::to_string(MAX_DIMENSION) + " pixels"};
 	}
 	return {};
 }
 
 ValidationResult validateBatchCount(int batchCount) {
+	using namespace ofxStableDiffusionLimits;
 	if (batchCount <= 0) {
 		return {ofxStableDiffusionErrorCode::InvalidBatchCount, "Batch count must be positive"};
 	}
-	if (batchCount > 16) {
-		return {ofxStableDiffusionErrorCode::InvalidBatchCount, "Batch count exceeds maximum of 16"};
+	if (batchCount > MAX_BATCH_COUNT) {
+		return {ofxStableDiffusionErrorCode::InvalidBatchCount,
+			"Batch count exceeds maximum of " + std::to_string(MAX_BATCH_COUNT)};
 	}
 	return {};
 }
 
 ValidationResult validateSampleSteps(int sampleSteps) {
-	if (sampleSteps <= 0 || sampleSteps > 200) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Sample steps must be between 1 and 200"};
+	using namespace ofxStableDiffusionLimits;
+	if (sampleSteps <= 0 || sampleSteps > MAX_SAMPLE_STEPS) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Sample steps must be between 1 and " + std::to_string(MAX_SAMPLE_STEPS)};
 	}
 	return {};
 }
 
 ValidationResult validateCfgScale(float cfgScale) {
-	if (cfgScale <= 0.0f || cfgScale > 50.0f) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "CFG scale must be greater than 0 and no more than 50"};
+	using namespace ofxStableDiffusionLimits;
+	if (cfgScale <= MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"CFG scale must be greater than 0 and no more than " + std::to_string(static_cast<int>(MAX_CFG_SCALE))};
 	}
 	return {};
 }
 
 ValidationResult validateStrength(float strength) {
-	if (strength < 0.0f || strength > 1.0f) {
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidUnitInterval(strength)) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "Strength must be between 0.0 and 1.0"};
 	}
 	return {};
 }
 
 ValidationResult validateClipSkip(int clipSkip) {
-	if (clipSkip < -1 || clipSkip > 12) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Clip skip must be -1 (auto) or between 0 and 12"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidClipSkip(clipSkip)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Clip skip must be -1 (auto) or between 0 and " + std::to_string(MAX_CLIP_SKIP)};
 	}
 	return {};
 }
 
 ValidationResult validateSeed(int64_t seed) {
-	if (seed < -1) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Seed must be -1 for randomization or a non-negative value"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidSeed(seed)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Seed must be -1 for randomization or a non-negative value"};
 	}
 	return {};
 }
 
 ValidationResult validateControlStrength(float controlStrength) {
-	if (controlStrength < 0.0f || controlStrength > 2.0f) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Control strength must be between 0.0 and 2.0"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidControlStrength(controlStrength)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Control strength must be between 0.0 and " + std::to_string(static_cast<int>(MAX_CONTROL_STRENGTH))};
 	}
 	return {};
 }
 
 ValidationResult validateStyleStrength(float styleStrength) {
-	if (styleStrength < 0.0f || styleStrength > 100.0f) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Style strength must be between 0 and 100"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidStyleStrength(styleStrength)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Style strength must be between 0 and " + std::to_string(static_cast<int>(MAX_STYLE_STRENGTH))};
 	}
 	return {};
 }
 
 ValidationResult validateVaceStrength(float vaceStrength) {
-	if (vaceStrength < 0.0f || vaceStrength > 1.0f) {
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidUnitInterval(vaceStrength)) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "VACE strength must be between 0.0 and 1.0"};
 	}
 	return {};
@@ -278,12 +297,18 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 		const ValidationResult dimResult = validateDimensions(request.width, request.height);
 		if (!dimResult.ok()) return dimResult;
 
-		if (request.frameCount <= 0) {
-			return {ofxStableDiffusionErrorCode::InvalidFrameCount, "Frame count must be positive"};
+		if (!ofxStableDiffusionLimits::isValidFrameCount(request.frameCount)) {
+			return {ofxStableDiffusionErrorCode::InvalidFrameCount,
+				"Frame count must be between " +
+				std::to_string(ofxStableDiffusionLimits::MIN_FRAME_COUNT) + " and " +
+				std::to_string(ofxStableDiffusionLimits::MAX_FRAME_COUNT)};
 		}
 
-		if (request.fps <= 0 || request.fps > 120) {
-			return {ofxStableDiffusionErrorCode::InvalidParameter, "FPS must be between 1 and 120"};
+		if (!ofxStableDiffusionLimits::isValidFps(request.fps)) {
+			return {ofxStableDiffusionErrorCode::InvalidParameter,
+				"FPS must be between " +
+				std::to_string(ofxStableDiffusionLimits::MIN_FPS) + " and " +
+				std::to_string(ofxStableDiffusionLimits::MAX_FPS)};
 		}
 
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
@@ -343,7 +368,18 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	}
 
 	if (std::isfinite(request.vaceStrength)) {
-		return validateVaceStrength(request.vaceStrength);
+		const ValidationResult vaceResult = validateVaceStrength(request.vaceStrength);
+		if (!vaceResult.ok()) return vaceResult;
+	}
+
+	if (request.hasAnimation()) {
+		std::string animationError;
+		if (!ofxStableDiffusionValidateAnimationKeyframes(
+				request.animationSettings,
+				request.frameCount,
+				animationError)) {
+			return {ofxStableDiffusionErrorCode::InvalidParameter, animationError};
+		}
 	}
 
 	return {};
@@ -887,8 +923,8 @@ ofxStableDiffusionVideoMode ofxStableDiffusion::getVideoGenerationMode() const {
 void ofxStableDiffusion::setImageGenerationMode(ofxStableDiffusionImageMode mode) {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	imageMode = mode;
-	isTextToImage = (mode == ofxStableDiffusionImageMode::TextToImage);
-	isImageToVideo = false;
+	isTextToImage.store(mode == ofxStableDiffusionImageMode::TextToImage, std::memory_order_relaxed);
+	isImageToVideo.store(false, std::memory_order_relaxed);
 }
 
 ofxStableDiffusionImageMode ofxStableDiffusion::getImageGenerationMode() const {
@@ -918,12 +954,14 @@ int ofxStableDiffusion::getSelectedImageIndex() const {
 
 void ofxStableDiffusion::loadImage(const ofPixels& pixels) {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	loadedInputImage.assign({
+	// Create a temporary sd_image_t with the pixel data, then copy via assign()
+	sd_image_t tempImage{
 		static_cast<uint32_t>(pixels.getWidth()),
 		static_cast<uint32_t>(pixels.getHeight()),
 		static_cast<uint32_t>(pixels.getNumChannels()),
-		const_cast<unsigned char*>(pixels.getData())
-	});
+		pixels.getData()
+	};
+	loadedInputImage.assign(tempImage);
 	inputImage = loadedInputImage.image;
 }
 
@@ -1583,8 +1621,8 @@ bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	activeTask = task;
 	taskStartMicros = ofGetElapsedTimeMicros();
 	isModelLoading = (task == ofxStableDiffusionTask::LoadModel);
-	isTextToImage = (task == ofxStableDiffusionTask::TextToImage);
-	isImageToVideo = (task == ofxStableDiffusionTask::ImageToVideo);
+	isTextToImage.store(task == ofxStableDiffusionTask::TextToImage, std::memory_order_relaxed);
+	isImageToVideo.store(task == ofxStableDiffusionTask::ImageToVideo, std::memory_order_relaxed);
 	clearLastError();
 	clearOutputState();
 	thread.userData = this;
@@ -1700,7 +1738,8 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 	bool mergeFailed = false;
 	std::string mergeError;
 	float mergedStrength = request.controlStrength;
-	{
+
+	try {
 		std::lock_guard<std::mutex> lock(stateMutex);
 		taskData.task = activeTask;
 		taskData.contextSettings = captureContextSettingsNoLock();
@@ -1761,6 +1800,14 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		normalizeInput = request.normalizeInput;
 		inputIdImagesPath = request.inputIdImagesPath;
 		loras = request.loras;
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while preparing image request: ") + e.what());
+		return false;
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while preparing image request");
+		return false;
 	}
 
 	if (mergeFailed) {
@@ -1770,13 +1817,26 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, message);
 		return false;
 	}
-	thread.prepareImageTask(taskData);
+
+	try {
+		thread.prepareImageTask(taskData);
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while starting image task: ") + e.what());
+		return false;
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while starting image task");
+		return false;
+	}
+
 	return true;
 }
 
 void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
 	stableDiffusionThread::VideoTaskData taskData;
-	{
+
+	try {
 		std::lock_guard<std::mutex> lock(stateMutex);
 		taskData.task = activeTask;
 		taskData.contextSettings = captureContextSettingsNoLock();
@@ -1813,8 +1873,25 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 		vaceStrength = request.vaceStrength;
 		videoMode = request.mode;
 		loras = request.loras;
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while preparing video request: ") + e.what());
+		return;
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while preparing video request");
+		return;
 	}
-	thread.prepareVideoTask(taskData);
+
+	try {
+		thread.prepareVideoTask(taskData);
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while starting video task: ") + e.what());
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while starting video task");
+	}
 }
 
 bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task) {
@@ -2147,6 +2224,7 @@ std::vector<sd_image_t> ofxStableDiffusion::buildOutputImageViews(const ofxStabl
 			if (!frame.isAllocated()) {
 				continue;
 			}
+			// NOTE: const_cast required for sd_image_t compatibility; this creates read-only views
 			views.push_back({
 				static_cast<uint32_t>(frame.pixels.getWidth()),
 				static_cast<uint32_t>(frame.pixels.getHeight()),

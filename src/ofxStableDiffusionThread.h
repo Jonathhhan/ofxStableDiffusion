@@ -27,10 +27,27 @@ public:
 				return false;
 			}
 
-			const std::size_t byteCount =
-				static_cast<std::size_t>(source.width) *
-				static_cast<std::size_t>(source.height) *
-				static_cast<std::size_t>(source.channel);
+			// Check for potential overflow in byte count calculation
+			const std::size_t width = static_cast<std::size_t>(source.width);
+			const std::size_t height = static_cast<std::size_t>(source.height);
+			const std::size_t channels = static_cast<std::size_t>(source.channel);
+
+			// Check for overflow: if width * height would overflow, fail
+			if (width > 0 && height > SIZE_MAX / width) {
+				ofLogError("OwnedImage") << "Image dimensions too large: " << width << "x" << height;
+				clear();
+				return false;
+			}
+			const std::size_t pixelCount = width * height;
+
+			// Check for overflow: if pixelCount * channels would overflow, fail
+			if (pixelCount > 0 && channels > SIZE_MAX / pixelCount) {
+				ofLogError("OwnedImage") << "Image byte count too large: " << pixelCount << " pixels x " << channels << " channels";
+				clear();
+				return false;
+			}
+			const std::size_t byteCount = pixelCount * channels;
+
 			storage.resize(byteCount);
 			std::memcpy(storage.data(), source.data, byteCount);
 			image = {source.width, source.height, source.channel, storage.data()};

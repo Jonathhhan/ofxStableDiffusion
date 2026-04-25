@@ -342,6 +342,7 @@ inline sd_vid_gen_params_t buildVideoParams(
 	params.clip_skip = request.clipSkip;
 	params.init_image = request.initImage;
 	params.end_image = request.endImage;
+	// NOTE: const_cast required for C API compatibility; native API should not modify control frames
 	params.control_frames =
 		request.controlFrames.empty() ? nullptr : const_cast<sd_image_t*>(request.controlFrames.data());
 	params.control_frames_size = static_cast<int>(request.controlFrames.size());

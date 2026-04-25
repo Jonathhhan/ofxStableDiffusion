@@ -413,7 +413,7 @@ void stableDiffusionThread::threadedFunction() {
 		return;
 	}
 
-	const bool isVideoTask = (task == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo);
+	const bool isVideoTask = (task == ofxStableDiffusionTask::ImageToVideo);
 	const ofxStableDiffusionContextSettings& generationContextSettings =
 		isVideoTask ? videoTaskData.contextSettings : imageTaskData.contextSettings;
 
@@ -437,7 +437,7 @@ void stableDiffusionThread::threadedFunction() {
 
 	const bool upscalerAvailable = isUpscalerCtxLoaded && upscalerCtx;
 
-	if (task == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo) {
+	if (task == ofxStableDiffusionTask::ImageToVideo) {
 		if (videoTaskData.upscalerSettings.enabled && !upscalerAvailable) {
 			videoTaskData.upscalerSettings.enabled = false;
 			sd->setLastError(
@@ -537,7 +537,10 @@ void stableDiffusionThread::threadedFunction() {
 					}
 					if (!frameOutput || !frameOutput[0].data) {
 						ofxSdReleaseImageArray(frameOutput, 1);
-						generationError = "Animated video generation returned no frame output";
+						generationError = "Animated video generation returned no frame output for frame " +
+							std::to_string(frameIndex);
+						ofLogError("ofxStableDiffusion")
+							<< "Frame " << frameIndex << " generation failed: " << generationError;
 						break;
 					}
 
@@ -569,7 +572,13 @@ void stableDiffusionThread::threadedFunction() {
 					OwnedImage generatedFrame;
 					if (!generatedFrame.assign(frameOutput[0])) {
 						ofxSdReleaseImageArray(frameOutput, 1);
-						generationError = "Animated video generation produced an invalid frame";
+						generationError = "Animated video generation produced an invalid frame at index " +
+							std::to_string(frameIndex) + " (width=" +
+							std::to_string(frameOutput[0].width) + ", height=" +
+							std::to_string(frameOutput[0].height) + ", channels=" +
+							std::to_string(frameOutput[0].channel) + ")";
+						ofLogError("ofxStableDiffusion")
+							<< "Frame " << frameIndex << " assignment failed: invalid image data";
 						break;
 					}
 
