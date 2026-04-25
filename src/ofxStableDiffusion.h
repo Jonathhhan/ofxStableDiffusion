@@ -13,6 +13,7 @@
 #include "ofxStableDiffusionThread.h"
 #include "stable-diffusion.h"
 
+#include <atomic>
 #include <deque>
 #include <functional>
 #include <mutex>
@@ -348,8 +349,10 @@ public:
 	sd_image_t* outputImages = nullptr;
 	sd_image_t* controlCond = nullptr;
 	stableDiffusionThread thread;
-	bool isTextToImage = false;
-	bool isImageToVideo = false;
+	/// @deprecated Internal state flags; use getLastResult().task instead. Thread-safe via atomic.
+	std::atomic<bool> isTextToImage{false};
+	/// @deprecated Internal state flags; use getLastResult().task instead. Thread-safe via atomic.
+	std::atomic<bool> isImageToVideo{false};
 	bool isModelLoading = false;
 	bool diffused = false;
 

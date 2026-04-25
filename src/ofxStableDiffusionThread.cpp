@@ -377,7 +377,7 @@ void stableDiffusionThread::threadedFunction() {
 		return;
 	}
 
-	const bool isVideoTask = (task == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo);
+	const bool isVideoTask = (task == ofxStableDiffusionTask::ImageToVideo);
 	const ofxStableDiffusionContextSettings& generationContextSettings =
 		isVideoTask ? videoTaskData.contextSettings : imageTaskData.contextSettings;
 	if (generationContextNeedsRefresh) {
@@ -391,7 +391,7 @@ void stableDiffusionThread::threadedFunction() {
 
 	const bool upscalerAvailable = isUpscalerCtxLoaded && upscalerCtx;
 
-	if (task == ofxStableDiffusionTask::ImageToVideo || sd->isImageToVideo) {
+	if (task == ofxStableDiffusionTask::ImageToVideo) {
 		if (videoTaskData.upscalerSettings.enabled && !upscalerAvailable) {
 			videoTaskData.upscalerSettings.enabled = false;
 			sd->setLastError(

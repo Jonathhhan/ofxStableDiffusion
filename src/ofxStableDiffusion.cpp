@@ -887,8 +887,8 @@ ofxStableDiffusionVideoMode ofxStableDiffusion::getVideoGenerationMode() const {
 void ofxStableDiffusion::setImageGenerationMode(ofxStableDiffusionImageMode mode) {
 	std::lock_guard<std::mutex> lock(stateMutex);
 	imageMode = mode;
-	isTextToImage = (mode == ofxStableDiffusionImageMode::TextToImage);
-	isImageToVideo = false;
+	isTextToImage.store(mode == ofxStableDiffusionImageMode::TextToImage, std::memory_order_relaxed);
+	isImageToVideo.store(false, std::memory_order_relaxed);
 }
 
 ofxStableDiffusionImageMode ofxStableDiffusion::getImageGenerationMode() const {
@@ -1568,8 +1568,8 @@ bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	activeTask = task;
 	taskStartMicros = ofGetElapsedTimeMicros();
 	isModelLoading = (task == ofxStableDiffusionTask::LoadModel);
-	isTextToImage = (task == ofxStableDiffusionTask::TextToImage);
-	isImageToVideo = (task == ofxStableDiffusionTask::ImageToVideo);
+	isTextToImage.store(task == ofxStableDiffusionTask::TextToImage, std::memory_order_relaxed);
+	isImageToVideo.store(task == ofxStableDiffusionTask::ImageToVideo, std::memory_order_relaxed);
 	clearLastError();
 	clearOutputState();
 	thread.userData = this;
