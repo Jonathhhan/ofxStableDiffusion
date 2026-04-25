@@ -101,6 +101,10 @@ inline sd_tiling_params_t makeTilingParams(bool enabled) {
 }
 
 inline std::string buildEffectivePrompt(const ofxStableDiffusionImageRequest& request) {
+	// Image variation mode requires an empty prompt
+	if (request.mode == ofxStableDiffusionImageMode::Variation) {
+		return std::string();
+	}
 	if (request.instruction.empty()) {
 		return request.prompt;
 	}
