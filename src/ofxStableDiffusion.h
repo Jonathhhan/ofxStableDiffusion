@@ -28,67 +28,213 @@ using ofxSdImageRankCallback = std::function<std::vector<ofxStableDiffusionImage
 	const ofxStableDiffusionImageRequest& request,
 	const std::vector<ofxStableDiffusionImageFrame>& images)>;
 
+/// @brief Main interface for Stable Diffusion image and video generation.
+///
+/// This class wraps stable-diffusion.cpp and provides thread-safe generation with typed
+/// request/result objects, progress callbacks, and error handling.
+///
+/// @threadsafety Most methods are thread-safe and protected by internal locking.
+/// Generation methods (generate, generateVideo) can be called from any thread but only
+/// one generation can run at a time. Attempting concurrent generation will fail with
+/// ThreadBusy error. Callbacks are invoked from the worker thread.
 class ofxStableDiffusion {
 public:
 	ofxStableDiffusion();
 	virtual ~ofxStableDiffusion();
 
+	/// @brief Configure the Stable Diffusion context (model, VAE, settings).
+	/// @threadsafe Yes. Will fail if generation is in progress.
 	void configureContext(const ofxStableDiffusionContextSettings& settings);
+
+	/// @brief Generate one or more images from a text/image prompt.
+	/// @threadsafe Yes, but only one generation at a time. Returns immediately; results
+	/// available via callbacks or getLastResult() after completion.
+	/// @note Validates request and returns immediately. Check getLastError() if failed.
 	void generate(const ofxStableDiffusionImageRequest& request);
+
+	/// @brief Generate a video from a prompt.
+	/// @threadsafe Yes, but only one generation at a time. Returns immediately; results
+	/// available via callbacks or getLastResult() after completion.
 	void generateVideo(const ofxStableDiffusionVideoRequest& request);
+
+	/// @brief Configure upscaler settings (ESRGAN).
+	/// @threadsafe Yes. Will fail if generation is in progress.
 	void setUpscalerSettings(const ofxStableDiffusionUpscalerSettings& settings);
+
+	/// @brief Get current context settings.
+	/// @threadsafe Yes (returns copy under lock).
 	ofxStableDiffusionContextSettings getContextSettings() const;
+
+	/// @brief Get current upscaler settings.
+	/// @threadsafe Yes (returns copy under lock).
 	ofxStableDiffusionUpscalerSettings getUpscalerSettings() const;
+
+	/// @brief Get capabilities of currently loaded model.
+	/// @threadsafe Yes (returns copy under lock).
 	ofxStableDiffusionCapabilities getCapabilities() const;
+
+	/// @brief Get complete result from last generation.
+	/// @threadsafe Yes (returns copy under lock).
 	ofxStableDiffusionResult getLastResult() const;
+
+	/// @brief Get generated images from last result.
+	/// @threadsafe Yes (returns copy under lock).
 	std::vector<ofxStableDiffusionImageFrame> getImages() const;
+
+	/// @brief Get generated video clip from last result.
+	/// @threadsafe Yes (returns copy under lock).
 	ofxStableDiffusionVideoClip getVideoClip() const;
+
+	/// @brief Check if last result contains images.
+	/// @threadsafe Yes.
 	bool hasImageResult() const;
+
+	/// @brief Check if last result contains video.
+	/// @threadsafe Yes.
 	bool hasVideoResult() const;
+
+	/// @brief Check if a model context is loaded.
+	/// @threadsafe Yes.
 	bool hasLoadedContext() const;
+
+	/// @brief Get number of output images/frames in last result.
+	/// @threadsafe Yes.
 	int getOutputCount() const;
+
+	/// @brief Get last error message (empty if no error).
+	/// @threadsafe Yes (returns copy under lock).
 	std::string getLastError() const;
+
+	/// @brief Get last error code.
+	/// @threadsafe Yes.
 	ofxStableDiffusionErrorCode getLastErrorCode() const;
+
+	/// @brief Get detailed error information.
+	/// @threadsafe Yes (returns copy under lock).
 	ofxStableDiffusionError getLastErrorInfo() const;
+
+	/// @brief Get summary of last video request resolution.
+	/// @threadsafe Yes (returns copy under lock).
 	std::string getLastResolvedVideoRequestSummary() const;
+
+	/// @brief Get CLI command for last video request.
+	/// @threadsafe Yes (returns copy under lock).
 	std::string getLastResolvedVideoCliCommand() const;
+
+	/// @brief Resolve sample method (auto-selects default if SAMPLE_METHOD_COUNT).
+	/// @threadsafe Yes (returns copy under lock).
 	sample_method_t getResolvedSampleMethod(sample_method_t requested = SAMPLE_METHOD_COUNT) const;
+
+	/// @brief Resolve scheduler for given sample method.
+	/// @threadsafe Yes (returns copy under lock).
 	scheduler_t getResolvedScheduler(
 		sample_method_t requestedSampleMethod = SAMPLE_METHOD_COUNT,
 		scheduler_t requestedSchedule = SCHEDULER_COUNT) const;
+
+	/// @brief Get name of resolved sample method.
+	/// @threadsafe Yes (returns copy under lock).
 	std::string getResolvedSampleMethodName(sample_method_t requested = SAMPLE_METHOD_COUNT) const;
+
+	/// @brief Get name of resolved scheduler.
+	/// @threadsafe Yes (returns copy under lock).
 	std::string getResolvedSchedulerName(
 		sample_method_t requestedSampleMethod = SAMPLE_METHOD_COUNT,
 		scheduler_t requestedSchedule = SCHEDULER_COUNT) const;
+
+	/// @brief Get error history (up to 10 most recent errors).
+	/// @threadsafe Yes (returns copy under lock).
 	std::vector<ofxStableDiffusionError> getErrorHistory() const;
+
+	/// @brief Clear error history.
+	/// @threadsafe Yes.
 	void clearErrorHistory();
+
+	/// @brief Get video frame index for given time in seconds.
+	/// @threadsafe Yes.
 	int getVideoFrameIndexForTime(float seconds) const;
+
+	/// @brief Get pointer to image pixels (lifetime tied to lastResult).
+	/// @threadsafe No. Pointer becomes invalid when new generation completes.
+	/// @warning Do not cache this pointer. Use copyImagePixels() for safe access.
 	const ofPixels* getImagePixels(int index) const;
+
+	/// @brief Copy image pixels safely.
+	/// @threadsafe Yes (copies data under lock).
 	bool copyImagePixels(int index, ofPixels& pixels) const;
+
+	/// @brief Get image frame metadata (score, selection status).
+	/// @threadsafe Yes.
 	bool getImageFrameMetadata(
 		int index,
 		ofxStableDiffusionImageScore& score,
 		bool& isSelected) const;
+
+	/// @brief Get pointer to video frame pixels (lifetime tied to lastResult).
+	/// @threadsafe No. Pointer becomes invalid when new generation completes.
+	/// @warning Do not cache this pointer. Use copyVideoFramePixels() for safe access.
 	const ofPixels* getVideoFramePixels(int index) const;
+
+	/// @brief Copy video frame pixels safely.
+	/// @threadsafe Yes (copies data under lock).
 	bool copyVideoFramePixels(int index, ofPixels& pixels) const;
+
+	/// @brief Get video frame metadata (seed, generation parameters).
+	/// @threadsafe Yes.
 	bool getVideoFrameMetadata(
 		int index,
 		int64_t& seed,
 		ofxStableDiffusionGenerationParameters& generation) const;
+
+	/// @brief Save video frames to directory as individual image files.
+	/// @threadsafe Yes.
 	bool saveVideoFrames(const std::string& directory, const std::string& prefix = "frame") const;
+
+	/// @brief Save video metadata to JSON file.
+	/// @threadsafe Yes.
 	bool saveVideoMetadata(const std::string& path) const;
+
+	/// @brief Save video frames and metadata together.
+	/// @threadsafe Yes.
 	bool saveVideoFramesWithMetadata(
 		const std::string& directory,
 		const std::string& prefix = "frame",
 		const std::string& metadataFilename = "metadata.json") const;
+
+	/// @brief Save video as WebM file (requires FFmpeg).
+	/// @threadsafe Yes.
 	bool saveVideoWebm(const std::string& path, int quality = 90) const;
+
+	/// @brief Set video generation mode (Standard, Loop, PingPong, Boomerang).
+	/// @threadsafe Yes.
 	void setVideoGenerationMode(ofxStableDiffusionVideoMode mode);
+
+	/// @brief Get current video generation mode.
+	/// @threadsafe Yes.
 	ofxStableDiffusionVideoMode getVideoGenerationMode() const;
+
+	/// @brief Set image generation mode (TextToImage, ImageToImage, etc).
+	/// @threadsafe Yes.
 	void setImageGenerationMode(ofxStableDiffusionImageMode mode);
+
+	/// @brief Get current image generation mode.
+	/// @threadsafe Yes.
 	ofxStableDiffusionImageMode getImageGenerationMode() const;
+
+	/// @brief Set image selection mode for multi-image generation.
+	/// @threadsafe Yes.
 	void setImageSelectionMode(ofxStableDiffusionImageSelectionMode mode);
+
+	/// @brief Get current image selection mode.
+	/// @threadsafe Yes.
 	ofxStableDiffusionImageSelectionMode getImageSelectionMode() const;
+
+	/// @brief Set callback for custom image ranking/scoring.
+	/// @threadsafe Yes. Callback will be invoked from worker thread.
+	/// @note Callback must be thread-safe and should not block for long.
 	void setImageRankCallback(ofxSdImageRankCallback cb);
+
+	/// @brief Get index of selected image in last batch.
+	/// @threadsafe Yes.
 	int getSelectedImageIndex() const;
 
 	/// Load an input image from ofPixels. A deep copy is made immediately;
