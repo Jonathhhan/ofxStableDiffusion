@@ -1,6 +1,6 @@
 #pragma once
 
-#include "stable-diffusion.h"
+#include "ofxStableDiffusionNativeApi.h"
 #include <string>
 #include <vector>
 #include <map>

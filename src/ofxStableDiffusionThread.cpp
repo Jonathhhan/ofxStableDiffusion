@@ -400,7 +400,7 @@ void stableDiffusionThread::threadedFunction() {
 	}
 
 	const auto rebuildSdContextForGeneration =
-		[this, &sd](const ofxStableDiffusionContextSettings& currentContextSettings) -> bool {
+		[this, &sd, &finishTask](const ofxStableDiffusionContextSettings& currentContextSettings) -> bool {
 			if (sdCtx) {
 				free_sd_ctx(sdCtx);
 				sdCtx = nullptr;

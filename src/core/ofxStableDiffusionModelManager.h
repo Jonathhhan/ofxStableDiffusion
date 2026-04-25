@@ -2,7 +2,7 @@
 
 #include "ofMain.h"
 #include "ofxStableDiffusionEnums.h"
-#include "stable-diffusion.h"
+#include "ofxStableDiffusionNativeApi.h"
 
 #include <functional>
 #include <map>
@@ -147,4 +147,3 @@ private:
 	std::string extractModelType(const std::string& modelPath) const;
 	bool isValidModelFile(const std::string& modelPath) const;
 };
-

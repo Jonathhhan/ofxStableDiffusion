@@ -2,7 +2,7 @@
 
 #include "ofMain.h"
 #include "core/ofxStableDiffusionTypes.h"
-#include "stable-diffusion.h"
+#include "core/ofxStableDiffusionNativeApi.h"
 
 #include <atomic>
 #include <cstring>

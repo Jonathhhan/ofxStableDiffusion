@@ -1,6 +1,6 @@
 #pragma once
 
-#include "stable-diffusion.h"
+#include "ofxStableDiffusionNativeApi.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -27,4 +27,3 @@ inline void ofxSdReleaseImageArray(sd_image_t* images, int count) {
 	}
 	free(images);
 }
-

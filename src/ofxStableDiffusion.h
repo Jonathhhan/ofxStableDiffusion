@@ -12,7 +12,7 @@
 #include "video/ofxStableDiffusionLongVideoWorkflow.h"
 #include "video/ofxStableDiffusionVideoWorkflowHelpers.h"
 #include "ofxStableDiffusionThread.h"
-#include "stable-diffusion.h"
+#include "core/ofxStableDiffusionNativeApi.h"
 
 #include <atomic>
 #include <deque>

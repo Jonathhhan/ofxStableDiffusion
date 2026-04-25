@@ -5,7 +5,7 @@
 #include "ofxStableDiffusionImageHelpers.h"
 #include "ofxStableDiffusionRankingHelpers.h"
 #include "../video/ofxStableDiffusionVideoAnimation.h"
-#include "stable-diffusion.h"
+#include "ofxStableDiffusionNativeApi.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -337,4 +337,3 @@ std::vector<ofxStableDiffusionImageFrame> ofxStableDiffusionBuildVideoFrames(
 
 /// Hash a string to a deterministic seed value for reproducibility.
 int64_t ofxStableDiffusionHashStringToSeed(const std::string& text);
-

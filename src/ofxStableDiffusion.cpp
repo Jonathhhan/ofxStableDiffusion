@@ -972,7 +972,7 @@ void ofxStableDiffusion::loadImage(const ofPixels& pixels) {
 		static_cast<uint32_t>(pixels.getWidth()),
 		static_cast<uint32_t>(pixels.getHeight()),
 		static_cast<uint32_t>(pixels.getNumChannels()),
-		pixels.getData()
+		const_cast<unsigned char*>(pixels.getData())
 	};
 	loadedInputImage.assign(tempImage);
 	inputImage = loadedInputImage.image;
