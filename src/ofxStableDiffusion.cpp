@@ -918,12 +918,14 @@ int ofxStableDiffusion::getSelectedImageIndex() const {
 
 void ofxStableDiffusion::loadImage(const ofPixels& pixels) {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	loadedInputImage.assign({
+	// Create a temporary sd_image_t with the pixel data, then copy via assign()
+	sd_image_t tempImage{
 		static_cast<uint32_t>(pixels.getWidth()),
 		static_cast<uint32_t>(pixels.getHeight()),
 		static_cast<uint32_t>(pixels.getNumChannels()),
-		const_cast<unsigned char*>(pixels.getData())
-	});
+		pixels.getData()
+	};
+	loadedInputImage.assign(tempImage);
 	inputImage = loadedInputImage.image;
 }
 
@@ -2128,6 +2130,7 @@ std::vector<sd_image_t> ofxStableDiffusion::buildOutputImageViews(const ofxStabl
 			if (!frame.isAllocated()) {
 				continue;
 			}
+			// NOTE: const_cast required for sd_image_t compatibility; this creates read-only views
 			views.push_back({
 				static_cast<uint32_t>(frame.pixels.getWidth()),
 				static_cast<uint32_t>(frame.pixels.getHeight()),
