@@ -1940,6 +1940,15 @@ bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusio
 		}
 	}
 
+	const std::string effectivePrompt =
+		ofTrim(ofxStableDiffusionNativeAdapter::buildEffectivePrompt(request));
+	if (effectivePrompt.empty()) {
+		setLastError(
+			ofxStableDiffusionErrorCode::InvalidParameter,
+			"Image generation requires a non-empty prompt or instruction");
+		return false;
+	}
+
 	return true;
 }
 
