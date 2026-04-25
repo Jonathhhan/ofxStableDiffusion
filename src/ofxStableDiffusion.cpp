@@ -1683,7 +1683,8 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 	bool mergeFailed = false;
 	std::string mergeError;
 	float mergedStrength = request.controlStrength;
-	{
+
+	try {
 		std::lock_guard<std::mutex> lock(stateMutex);
 		taskData.task = activeTask;
 		taskData.contextSettings = captureContextSettingsNoLock();
@@ -1744,6 +1745,14 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		normalizeInput = request.normalizeInput;
 		inputIdImagesPath = request.inputIdImagesPath;
 		loras = request.loras;
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while preparing image request: ") + e.what());
+		return false;
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while preparing image request");
+		return false;
 	}
 
 	if (mergeFailed) {
@@ -1753,13 +1762,26 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, message);
 		return false;
 	}
-	thread.prepareImageTask(taskData);
+
+	try {
+		thread.prepareImageTask(taskData);
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while starting image task: ") + e.what());
+		return false;
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while starting image task");
+		return false;
+	}
+
 	return true;
 }
 
 void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
 	stableDiffusionThread::VideoTaskData taskData;
-	{
+
+	try {
 		std::lock_guard<std::mutex> lock(stateMutex);
 		taskData.task = activeTask;
 		taskData.contextSettings = captureContextSettingsNoLock();
@@ -1796,8 +1818,25 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 		vaceStrength = request.vaceStrength;
 		videoMode = request.mode;
 		loras = request.loras;
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while preparing video request: ") + e.what());
+		return;
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while preparing video request");
+		return;
 	}
-	thread.prepareVideoTask(taskData);
+
+	try {
+		thread.prepareVideoTask(taskData);
+	} catch (const std::exception& e) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			std::string("Exception while starting video task: ") + e.what());
+	} catch (...) {
+		setLastError(ofxStableDiffusionErrorCode::Unknown,
+			"Unknown exception while starting video task");
+	}
 }
 
 bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task) {
