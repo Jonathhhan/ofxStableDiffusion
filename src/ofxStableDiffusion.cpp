@@ -1,5 +1,6 @@
 #include "ofxStableDiffusion.h"
 #include "core/ofxStableDiffusionCapabilityHelpers.h"
+#include "core/ofxStableDiffusionLimits.h"
 #include "core/ofxStableDiffusionMemoryHelpers.h"
 #include "core/ofxStableDiffusionNativeAdapter.h"
 
@@ -99,76 +100,94 @@ struct ValidationResult {
 };
 
 ValidationResult validateDimensions(int width, int height) {
+	using namespace ofxStableDiffusionLimits;
 	if (width <= 0 || height <= 0) {
 		return {ofxStableDiffusionErrorCode::InvalidDimensions, "Width and height must be positive values"};
 	}
-	if (width > 2048 || height > 2048) {
-		return {ofxStableDiffusionErrorCode::InvalidDimensions, "Width and height must not exceed 2048 pixels"};
+	if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+		return {ofxStableDiffusionErrorCode::InvalidDimensions,
+			"Width and height must not exceed " + std::to_string(MAX_DIMENSION) + " pixels"};
 	}
 	return {};
 }
 
 ValidationResult validateBatchCount(int batchCount) {
+	using namespace ofxStableDiffusionLimits;
 	if (batchCount <= 0) {
 		return {ofxStableDiffusionErrorCode::InvalidBatchCount, "Batch count must be positive"};
 	}
-	if (batchCount > 16) {
-		return {ofxStableDiffusionErrorCode::InvalidBatchCount, "Batch count exceeds maximum of 16"};
+	if (batchCount > MAX_BATCH_COUNT) {
+		return {ofxStableDiffusionErrorCode::InvalidBatchCount,
+			"Batch count exceeds maximum of " + std::to_string(MAX_BATCH_COUNT)};
 	}
 	return {};
 }
 
 ValidationResult validateSampleSteps(int sampleSteps) {
-	if (sampleSteps <= 0 || sampleSteps > 200) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Sample steps must be between 1 and 200"};
+	using namespace ofxStableDiffusionLimits;
+	if (sampleSteps <= 0 || sampleSteps > MAX_SAMPLE_STEPS) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Sample steps must be between 1 and " + std::to_string(MAX_SAMPLE_STEPS)};
 	}
 	return {};
 }
 
 ValidationResult validateCfgScale(float cfgScale) {
-	if (cfgScale <= 0.0f || cfgScale > 50.0f) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "CFG scale must be greater than 0 and no more than 50"};
+	using namespace ofxStableDiffusionLimits;
+	if (cfgScale <= MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"CFG scale must be greater than 0 and no more than " + std::to_string(static_cast<int>(MAX_CFG_SCALE))};
 	}
 	return {};
 }
 
 ValidationResult validateStrength(float strength) {
-	if (strength < 0.0f || strength > 1.0f) {
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidUnitInterval(strength)) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "Strength must be between 0.0 and 1.0"};
 	}
 	return {};
 }
 
 ValidationResult validateClipSkip(int clipSkip) {
-	if (clipSkip < -1 || clipSkip > 12) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Clip skip must be -1 (auto) or between 0 and 12"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidClipSkip(clipSkip)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Clip skip must be -1 (auto) or between 0 and " + std::to_string(MAX_CLIP_SKIP)};
 	}
 	return {};
 }
 
 ValidationResult validateSeed(int64_t seed) {
-	if (seed < -1) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Seed must be -1 for randomization or a non-negative value"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidSeed(seed)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Seed must be -1 for randomization or a non-negative value"};
 	}
 	return {};
 }
 
 ValidationResult validateControlStrength(float controlStrength) {
-	if (controlStrength < 0.0f || controlStrength > 2.0f) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Control strength must be between 0.0 and 2.0"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidControlStrength(controlStrength)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Control strength must be between 0.0 and " + std::to_string(static_cast<int>(MAX_CONTROL_STRENGTH))};
 	}
 	return {};
 }
 
 ValidationResult validateStyleStrength(float styleStrength) {
-	if (styleStrength < 0.0f || styleStrength > 100.0f) {
-		return {ofxStableDiffusionErrorCode::InvalidParameter, "Style strength must be between 0 and 100"};
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidStyleStrength(styleStrength)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"Style strength must be between 0 and " + std::to_string(static_cast<int>(MAX_STYLE_STRENGTH))};
 	}
 	return {};
 }
 
 ValidationResult validateVaceStrength(float vaceStrength) {
-	if (vaceStrength < 0.0f || vaceStrength > 1.0f) {
+	using namespace ofxStableDiffusionLimits;
+	if (!isValidUnitInterval(vaceStrength)) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter, "VACE strength must be between 0.0 and 1.0"};
 	}
 	return {};
