@@ -47,6 +47,13 @@ class ofApp : public ofBaseApp {
 		ofxStableDiffusionContextSettings buildContextSettings() const;
 		ofxStableDiffusionVideoRequest buildVideoRequest() const;
 		std::string buildEquivalentSdCliCommand() const;
+		std::string currentModelMenuLabel() const;
+		std::string buildResolvedSampleMethodMenuLabel(sample_method_t requested) const;
+		std::string buildModelDefaultSampleMethodMenuLabel() const;
+		std::string buildResolvedSchedulerMenuLabel(
+			sample_method_t requestedSampleMethod,
+			scheduler_t requestedSchedule) const;
+		std::string buildModelDefaultSchedulerMenuLabel(sample_method_t requestedSampleMethod) const;
 		void refreshModelContext();
 		bool selectPath(
 			const std::string& dialogTitle,

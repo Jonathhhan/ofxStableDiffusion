@@ -678,6 +678,45 @@ std::string ofApp::buildEquivalentSdCliCommand() const {
 }
 
 //--------------------------------------------------------------
+std::string ofApp::currentModelMenuLabel() const {
+	if (!modelName.empty()) {
+		return modelName;
+	}
+	const std::string activeModelPath = modelPath.empty() ? diffusionModelPath : modelPath;
+	if (!activeModelPath.empty()) {
+		return ofFilePath::getFileName(activeModelPath);
+	}
+	return "Backend";
+}
+
+//--------------------------------------------------------------
+std::string ofApp::buildResolvedSampleMethodMenuLabel(sample_method_t requested) const {
+	const std::string resolved = stableDiffusion.getResolvedSampleMethodName(requested);
+	return resolved == "MODEL_DEFAULT" ? "Auto" : resolved;
+}
+
+//--------------------------------------------------------------
+std::string ofApp::buildModelDefaultSampleMethodMenuLabel() const {
+	return currentModelMenuLabel() + " default: " +
+		buildResolvedSampleMethodMenuLabel(SAMPLE_METHOD_COUNT);
+}
+
+//--------------------------------------------------------------
+std::string ofApp::buildResolvedSchedulerMenuLabel(
+	sample_method_t requestedSampleMethod,
+	scheduler_t requestedSchedule) const {
+	const std::string resolved =
+		stableDiffusion.getResolvedSchedulerName(requestedSampleMethod, requestedSchedule);
+	return resolved == "MODEL_DEFAULT" ? "Auto" : resolved;
+}
+
+//--------------------------------------------------------------
+std::string ofApp::buildModelDefaultSchedulerMenuLabel(sample_method_t requestedSampleMethod) const {
+	return currentModelMenuLabel() + " default: " +
+		buildResolvedSchedulerMenuLabel(requestedSampleMethod, SCHEDULER_COUNT);
+}
+
+//--------------------------------------------------------------
 void ofApp::refreshModelContext() {
 	modelName = ofFilePath::getFileName(modelPath.empty() ? diffusionModelPath : modelPath);
 	stableDiffusion.newSdCtx(buildContextSettings());
@@ -1568,10 +1607,9 @@ void ofApp::draw() {
 				if (useHighNoiseOverrides) {
 					ImGui::Dummy(ImVec2(0, 10));
 					const std::string resolvedHighNoiseSampleLabel =
-						stableDiffusion.getResolvedSampleMethodName(highNoiseSampleMethodEnum);
+						buildResolvedSampleMethodMenuLabel(highNoiseSampleMethodEnum);
 					const std::string highNoiseDefaultOptionLabel =
-						"Backend default: " +
-						stableDiffusion.getResolvedSampleMethodName(SAMPLE_METHOD_COUNT);
+						buildModelDefaultSampleMethodMenuLabel();
 					if (ImGui::BeginCombo(
 							"High-Noise Sample",
 							resolvedHighNoiseSampleLabel.c_str(),
@@ -1766,10 +1804,9 @@ void ofApp::draw() {
 		}
 		ImGui::Dummy(ImVec2(0, 10));
 		const std::string resolvedSampleMethodLabel =
-			stableDiffusion.getResolvedSampleMethodName(sampleMethodEnum);
+			buildResolvedSampleMethodMenuLabel(sampleMethodEnum);
 		const std::string sampleMethodDefaultOptionLabel =
-			"Backend default: " +
-			stableDiffusion.getResolvedSampleMethodName(SAMPLE_METHOD_COUNT);
+			buildModelDefaultSampleMethodMenuLabel();
 		if (ImGui::BeginCombo(
 				"Sample Method",
 				resolvedSampleMethodLabel.c_str(),
@@ -1816,10 +1853,9 @@ void ofApp::draw() {
 			};
 			ImGui::Dummy(ImVec2(0, 10));
 			const std::string resolvedSchedulerLabel =
-				stableDiffusion.getResolvedSchedulerName(sampleMethodEnum, schedule);
+				buildResolvedSchedulerMenuLabel(sampleMethodEnum, schedule);
 			const std::string schedulerDefaultOptionLabel =
-				"Backend default: " +
-				stableDiffusion.getResolvedSchedulerName(sampleMethodEnum, SCHEDULER_COUNT);
+				buildModelDefaultSchedulerMenuLabel(sampleMethodEnum);
 			if (ImGui::BeginCombo(
 					"Scheduler",
 					resolvedSchedulerLabel.c_str(),
