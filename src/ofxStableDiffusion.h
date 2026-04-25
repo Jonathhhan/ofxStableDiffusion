@@ -2,6 +2,7 @@
 
 #include "ofMain.h"
 #include "bridges/ofxStableDiffusionHoloscanBridge.h"
+#include "core/ofxStableDiffusionLimits.h"
 #include "core/ofxStableDiffusionModelManager.h"
 #include "core/ofxStableDiffusionParameterTuningHelpers.h"
 #include "core/ofxStableDiffusionPerformanceProfiler.h"
