@@ -49,7 +49,12 @@ android/armeabi:
 android/armeabi-v7a:
 
 osx:
+	ADDON_LIBS += libs/stable-diffusion/lib/osx/libstable-diffusion.dylib
+	ADDON_LDFLAGS += -Wl,-rpath,@loader_path/../../../../addons/ofxStableDiffusion/libs/stable-diffusion/lib/osx
 
 ios:
+	# iOS requires static linking
+	ADDON_LIBS += libs/stable-diffusion/lib/ios/libstable-diffusion.a
+	ADDON_CFLAGS += -DIOS_PLATFORM
 
 emscripten:

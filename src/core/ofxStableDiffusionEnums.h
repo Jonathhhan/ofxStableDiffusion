@@ -43,5 +43,6 @@ enum class ofxStableDiffusionErrorCode {
 	GenerationFailed,
 	ThreadBusy,
 	UpscaleFailed,
+	Cancelled,
 	Unknown
 };
