@@ -45,12 +45,13 @@ public:
 
 	/// @brief Configure the Stable Diffusion context (model, VAE, settings).
 	/// @threadsafe Yes. Will fail if generation is in progress.
+	/// @note Starts an asynchronous background model-load task.
 	void configureContext(const ofxStableDiffusionContextSettings& settings);
 
 	/// @brief Generate one or more images from a text/image prompt.
 	/// @threadsafe Yes, but only one generation at a time. Returns immediately; results
 	/// available via callbacks or getLastResult() after completion.
-	/// @note Validates request and returns immediately. Check getLastError() if failed.
+	/// @note Requires a previously loaded context. Check hasLoadedContext() or getLastError() if failed.
 	void generate(const ofxStableDiffusionImageRequest& request);
 
 	/// @brief Generate a video from a prompt.
@@ -431,7 +432,7 @@ public:
 
 	/// Request cancellation of current generation.
 	/// @return true if cancellation was requested, false if nothing is running
-	/// @note Thread-safe. The operation will stop gracefully after the current step.
+	/// @note Thread-safe. Cancellation is best-effort and completes at the earliest safe checkpoint.
 	bool requestCancellation();
 
 	/// Check if cancellation was requested.
@@ -535,6 +536,7 @@ private:
 	friend class stableDiffusionThread;
 
 	bool beginBackgroundTask(ofxStableDiffusionTask task);
+	void finishBackgroundTask(bool cancelled = false, const std::string& cancelMessage = "");
 	void applyContextSettings(const ofxStableDiffusionContextSettings& settings);
 	bool applyImageRequest(const ofxStableDiffusionImageRequest& request);
 	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);

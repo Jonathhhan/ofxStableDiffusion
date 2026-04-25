@@ -623,7 +623,20 @@ void ofxStableDiffusion::configureContext(const ofxStableDiffusionContextSetting
 		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Thread count must be -1 (auto) or a positive value");
 		return;
 	}
+
+	if (!beginBackgroundTask(ofxStableDiffusionTask::LoadModel)) {
+		return;
+	}
+
 	applyContextSettings(settings);
+	stableDiffusionThread::ContextTaskData taskData;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		taskData.contextSettings = captureContextSettingsNoLock();
+		taskData.upscalerSettings = captureUpscalerSettingsNoLock();
+	}
+	thread.prepareContextTask(taskData);
+	thread.startThread();
 }
 
 void ofxStableDiffusion::generate(const ofxStableDiffusionImageRequest& request) {
@@ -1174,25 +1187,7 @@ sd_log_level_t ofxStableDiffusion::getNativeLogLevel() const {
 
 //--------------------------------------------------------------
 void ofxStableDiffusion::newSdCtx(const ofxStableDiffusionContextSettings& settings) {
-	if (settings.nThreads == 0 || settings.nThreads < -1) {
-		activeTask = ofxStableDiffusionTask::LoadModel;
-		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Thread count must be -1 (auto) or a positive value");
-		return;
-	}
-
-	if (!beginBackgroundTask(ofxStableDiffusionTask::LoadModel)) {
-		return;
-	}
-
-	applyContextSettings(settings);
-	stableDiffusionThread::ContextTaskData taskData;
-	{
-		std::lock_guard<std::mutex> lock(stateMutex);
-		taskData.contextSettings = captureContextSettingsNoLock();
-		taskData.upscalerSettings = captureUpscalerSettingsNoLock();
-	}
-	thread.prepareContextTask(taskData);
-	thread.startThread();
+	configureContext(settings);
 }
 
 void ofxStableDiffusion::freeSdCtx() {
@@ -1629,6 +1624,21 @@ bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	thread.resetCancellation();  // Reset cancellation flag for new task
 	lastOperationCancelled = false;
 	return true;
+}
+
+void ofxStableDiffusion::finishBackgroundTask(bool cancelled, const std::string& cancelMessage) {
+	if (cancelled) {
+		setLastError(
+			ofxStableDiffusionErrorCode::Cancelled,
+			cancelMessage.empty() ? "Operation cancelled" : cancelMessage);
+		std::lock_guard<std::mutex> lock(stateMutex);
+		lastOperationCancelled = true;
+	}
+
+	isModelLoading = false;
+	isTextToImage.store(false, std::memory_order_relaxed);
+	isImageToVideo.store(false, std::memory_order_relaxed);
+	activeTask = ofxStableDiffusionTask::None;
 }
 
 void ofxStableDiffusion::clearResolvedDefaultCachesNoLock() {

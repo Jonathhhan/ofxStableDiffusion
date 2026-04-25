@@ -18,8 +18,8 @@ The main class for Stable Diffusion generation. Provides methods for:
 **Key Methods:**
 - `generate(const ofxStableDiffusionImageRequest& request)` - Generate images
 - `generateVideo(const ofxStableDiffusionVideoRequest& request)` - Generate videos
-- `configureContext(const ofxStableDiffusionContextSettings& settings)` - Load models
-- `requestCancellation()` - Cancel ongoing generation
+- `configureContext(const ofxStableDiffusionContextSettings& settings)` - Start asynchronous model loading
+- `requestCancellation()` - Best-effort cancellation at the earliest safe checkpoint
 - `isGenerating()` - Check if generation is in progress
 
 **Thread Safety:** Most methods are NOT thread-safe. Always call from the main thread unless otherwise documented.

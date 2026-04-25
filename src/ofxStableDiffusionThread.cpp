@@ -268,7 +268,26 @@ void stableDiffusionThread::threadedFunction() {
 		return;
 	}
 
+	const auto finishTask =
+		[this, &sd](bool cancelled = false, const std::string& cancelMessage = std::string()) {
+			sd->finishBackgroundTask(cancelled, cancelMessage);
+			task = ofxStableDiffusionTask::None;
+		};
+
+	const auto cancelRequested =
+		[this, &finishTask](const std::string& message) {
+			if (!isCancellationRequested()) {
+				return false;
+			}
+			finishTask(true, message);
+			return true;
+		};
+
 	if (task == ofxStableDiffusionTask::LoadModel || sd->isModelLoading) {
+		if (cancelRequested("Model loading cancelled before the native context was created")) {
+			return;
+		}
+
 		if (sdCtx) {
 			free_sd_ctx(sdCtx);
 			sdCtx = nullptr;
@@ -306,6 +325,15 @@ void stableDiffusionThread::threadedFunction() {
 				embeddingPaths,
 				embeddings);
 		sdCtx = new_sd_ctx(&ctxParams);
+		if (isCancellationRequested()) {
+			if (sdCtx) {
+				free_sd_ctx(sdCtx);
+				sdCtx = nullptr;
+			}
+			isSdCtxLoaded = false;
+			finishTask(true, "Model loading cancelled");
+			return;
+		}
 		if (!sdCtx) {
 			const auto missing = describeMissingPaths();
 			if (!missing.empty()) {
@@ -364,12 +392,10 @@ void stableDiffusionThread::threadedFunction() {
 			contextTaskData.upscalerSettings.modelPath.clear();
 			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Failed to create upscaler context");
 		}
-		sd->isModelLoading = false;
-		sd->activeTask = ofxStableDiffusionTask::None;
-		task = ofxStableDiffusionTask::None;
 		if (!isSdCtxLoaded && !contextErrorReported) {
 			sd->setLastError("Failed to create stable-diffusion context");
 		}
+		finishTask();
 		return;
 	}
 
@@ -399,17 +425,19 @@ void stableDiffusionThread::threadedFunction() {
 			}
 			if (!isSdCtxLoaded) {
 				sd->setLastError("Failed to recreate stable-diffusion context for generation");
-				sd->activeTask = ofxStableDiffusionTask::None;
-				task = ofxStableDiffusionTask::None;
+				finishTask();
 				return false;
 			}
 			return true;
 		};
 
+	if (cancelRequested("Generation cancelled before the request started")) {
+		return;
+	}
+
 	if (!sdCtx) {
-		sd->activeTask = ofxStableDiffusionTask::None;
-		task = ofxStableDiffusionTask::None;
 		sd->setLastError("Stable Diffusion context is not loaded");
+		finishTask();
 		return;
 	}
 
@@ -443,8 +471,7 @@ void stableDiffusionThread::threadedFunction() {
 			sd->setLastError(
 				ofxStableDiffusionErrorCode::UpscaleFailed,
 				"Upscaler context is not available for video generation");
-			sd->activeTask = ofxStableDiffusionTask::None;
-			task = ofxStableDiffusionTask::None;
+			finishTask();
 			return;
 		}
 
@@ -463,6 +490,11 @@ void stableDiffusionThread::threadedFunction() {
 			videoTaskData.animationSampleSteps = videoTaskData.request.sampleSteps;
 
 			for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+					if (isCancellationRequested()) {
+						generationError = "Animated video generation cancelled";
+						break;
+					}
+
 					videoTaskData.animationFrameIndex = frameIndex;
 
 					OwnedImage blendedInitImage;
@@ -569,6 +601,12 @@ void stableDiffusionThread::threadedFunction() {
 						frameOutput[0] = upscaled;
 					}
 
+					if (isCancellationRequested()) {
+						ofxSdReleaseImageArray(frameOutput, 1);
+						generationError = "Animated video generation cancelled";
+						break;
+					}
+
 					OwnedImage generatedFrame;
 					if (!generatedFrame.assign(frameOutput[0])) {
 						ofxSdReleaseImageArray(frameOutput, 1);
@@ -591,12 +629,16 @@ void stableDiffusionThread::threadedFunction() {
 			videoTaskData.animationFrameCount = 0;
 			videoTaskData.animationSampleSteps = 0;
 
+			if (isCancellationRequested()) {
+				finishTask(true, generationError.empty() ? "Animated video generation cancelled" : generationError);
+				return;
+			}
+
 			if (generatedFrames.size() != static_cast<std::size_t>(frameCount)) {
 				if (!generationError.empty()) {
 					sd->setLastError(generationError);
 				}
-				sd->activeTask = ofxStableDiffusionTask::None;
-				task = ofxStableDiffusionTask::None;
+				finishTask();
 				return;
 			}
 
@@ -605,8 +647,7 @@ void stableDiffusionThread::threadedFunction() {
 				static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
 			if (!output) {
 				sd->setLastError("Animated video generation could not allocate output frames");
-				sd->activeTask = ofxStableDiffusionTask::None;
-				task = ofxStableDiffusionTask::None;
+				finishTask();
 				return;
 			}
 
@@ -620,9 +661,8 @@ void stableDiffusionThread::threadedFunction() {
 				elapsedMs,
 				task,
 				videoTaskData.request);
-			sd->activeTask = ofxStableDiffusionTask::None;
-			task = ofxStableDiffusionTask::None;
 			generationContextNeedsRefresh = true;
+			finishTask();
 			return;
 		}
 
@@ -655,8 +695,12 @@ void stableDiffusionThread::threadedFunction() {
 		if (!output || generatedFrameCount <= 0) {
 			ofxSdReleaseImageArray(output, generatedFrameCount);
 			sd->setLastError("Image-to-video generation returned no frames");
-			sd->activeTask = ofxStableDiffusionTask::None;
-			task = ofxStableDiffusionTask::None;
+			finishTask();
+			return;
+		}
+		if (isCancellationRequested()) {
+			ofxSdReleaseImageArray(output, generatedFrameCount);
+			finishTask(true, "Video generation cancelled");
 			return;
 		}
 		sd->captureVideoResults(
@@ -668,9 +712,8 @@ void stableDiffusionThread::threadedFunction() {
 			elapsedMs,
 			task,
 			videoTaskData.request);
-		sd->activeTask = ofxStableDiffusionTask::None;
-		task = ofxStableDiffusionTask::None;
 		generationContextNeedsRefresh = true;
+		finishTask();
 		return;
 	}
 
@@ -684,8 +727,7 @@ void stableDiffusionThread::threadedFunction() {
 		sd->setLastError(
 			ofxStableDiffusionErrorCode::UpscaleFailed,
 			"Upscaler context is not available for image generation");
-		sd->activeTask = ofxStableDiffusionTask::None;
-		task = ofxStableDiffusionTask::None;
+		finishTask();
 		return;
 	}
 
@@ -713,8 +755,7 @@ void stableDiffusionThread::threadedFunction() {
 		if (!upscalerCtx) {
 			ofxSdReleaseImageArray(output, imageTaskData.request.batchCount);
 			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Upscaler context is not loaded");
-			sd->activeTask = ofxStableDiffusionTask::None;
-			task = ofxStableDiffusionTask::None;
+			finishTask();
 			return;
 		}
 
@@ -724,8 +765,7 @@ void stableDiffusionThread::threadedFunction() {
 				ofxSdReleaseImage(output[i]);
 				ofxSdReleaseImageArray(output, imageTaskData.request.batchCount);
 				sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Upscaling failed for one or more images");
-				sd->activeTask = ofxStableDiffusionTask::None;
-				task = ofxStableDiffusionTask::None;
+				finishTask();
 				return;
 			}
 			ofxSdReleaseImage(output[i]);
@@ -736,8 +776,13 @@ void stableDiffusionThread::threadedFunction() {
 	const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
 	if (!output) {
 		sd->setLastError("Image generation returned no images");
-		sd->activeTask = ofxStableDiffusionTask::None;
-		task = ofxStableDiffusionTask::None;
+		finishTask();
+		return;
+	}
+
+	if (isCancellationRequested()) {
+		ofxSdReleaseImageArray(output, imageTaskData.request.batchCount);
+		finishTask(true, "Image generation cancelled");
 		return;
 	}
 
@@ -749,9 +794,8 @@ void stableDiffusionThread::threadedFunction() {
 		task,
 		imageTaskData.request,
 		imageTaskData.imageRankCallback);
-	sd->activeTask = ofxStableDiffusionTask::None;
-	task = ofxStableDiffusionTask::None;
 	generationContextNeedsRefresh = true;
+	finishTask();
 }
 
 void stableDiffusionThread::requestCancellation() {
@@ -765,4 +809,3 @@ bool stableDiffusionThread::isCancellationRequested() const {
 void stableDiffusionThread::resetCancellation() {
 	cancellationRequested.store(false);
 }
-
