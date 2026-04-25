@@ -2086,13 +2086,22 @@ void ofApp::applyRecommendedImageParameters() {
 	freeParamsImmediately = true;
 	width = 512;
 	height = 512;
-	cfgScale = imageParameterProfile.defaultCfgScale;
-	sampleSteps = imageParameterProfile.defaultSampleSteps;
+	cfgScale = std::clamp(
+		imageParameterProfile.defaultCfgScale,
+		imageParameterProfile.minCfgScale,
+		imageParameterProfile.maxCfgScale);
+	sampleSteps = std::clamp(
+		imageParameterProfile.defaultSampleSteps,
+		imageParameterProfile.minSampleSteps,
+		imageParameterProfile.maxSampleSteps);
 	clipSkip = imageParameterProfile.supportsClipSkip ? -1 : imageParameterProfile.defaultClipSkip;
 	sampleMethod = "MODEL_DEFAULT";
 	sampleMethodEnum = SAMPLE_METHOD_COUNT;
 	if (imageParameterProfile.supportsStrength) {
-		strength = imageParameterProfile.defaultStrength;
+		strength = std::clamp(
+			imageParameterProfile.defaultStrength,
+			imageParameterProfile.minStrength,
+			imageParameterProfile.maxStrength);
 	}
 	allocate();
 }
