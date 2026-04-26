@@ -21,7 +21,9 @@ param(
     [switch]$All,
     [switch]$BuildCli,
     [switch]$SkipSourceRefresh,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$UseSystemGgml,
+    [string]$OfxGgmlPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -104,7 +106,9 @@ function Invoke-SelfBuild {
         [switch]$Clean,
         [switch]$BuildCli,
         [switch]$DryRun,
-        [switch]$SkipSourceRefresh
+        [switch]$SkipSourceRefresh,
+        [switch]$UseSystemGgml,
+        [string]$OfxGgmlPath
     )
 
     $invokeArgs = @{
@@ -137,6 +141,12 @@ function Invoke-SelfBuild {
     }
     if ($SkipSourceRefresh) {
         $invokeArgs.SkipSourceRefresh = $true
+    }
+    if ($UseSystemGgml) {
+        $invokeArgs.UseSystemGgml = $true
+    }
+    if (-not [string]::IsNullOrWhiteSpace($OfxGgmlPath)) {
+        $invokeArgs.OfxGgmlPath = $OfxGgmlPath
     }
 
     switch ($BackendName) {
@@ -541,7 +551,9 @@ if ($All) {
             -Clean `
             -BuildCli:$BuildCli `
             -DryRun:$DryRun `
-            -SkipSourceRefresh:$(-not $firstBuild)
+            -SkipSourceRefresh:$(-not $firstBuild) `
+            -UseSystemGgml:$UseSystemGgml `
+            -OfxGgmlPath $OfxGgmlPath
         $firstBuild = $false
     }
 
@@ -658,6 +670,43 @@ if (-not (Test-Path -LiteralPath $sourceCmakeLists)) {
     throw "No CMakeLists.txt was found in $SourceDir. Vendor the full stable-diffusion.cpp source tree first."
 }
 
+# Handle system GGML configuration
+if ($UseSystemGgml) {
+    # Set default ofxGgml path if not provided
+    if ([string]::IsNullOrWhiteSpace($OfxGgmlPath)) {
+        $OfxGgmlPath = Join-Path $AddonRoot '..' 'ofxGgml'
+    }
+
+    # Convert to absolute path
+    $OfxGgmlPath = [System.IO.Path]::GetFullPath($OfxGgmlPath)
+
+    # Validate ofxGgml exists
+    if (-not (Test-Path -LiteralPath $OfxGgmlPath)) {
+        throw @"
+ofxGgml not found at:
+  $OfxGgmlPath
+
+Use -OfxGgmlPath to specify the correct location.
+"@
+    }
+
+    $ofxGgmlIncludeDir = Join-Path $OfxGgmlPath 'libs' 'ggml' 'include'
+    $ofxGgmlLibDir = Join-Path $OfxGgmlPath 'libs' 'ggml' 'lib'
+
+    # Check for GGML headers
+    if (-not (Test-Path -LiteralPath $ofxGgmlIncludeDir)) {
+        throw @"
+ofxGgml GGML headers not found at:
+  $ofxGgmlIncludeDir
+
+Build ofxGgml first.
+"@
+    }
+
+    Write-Step "Using system GGML from ofxGgml"
+    Write-Host ("    ofxGgml path: {0}" -f $OfxGgmlPath)
+}
+
 if ($Clean -and (Test-Path -LiteralPath $BuildDir)) {
     Write-Step "Cleaning previous stable-diffusion build"
     if (-not $DryRun) {
@@ -719,12 +768,29 @@ $configureArgs += @(
     '-DSD_WEBM=ON'
 )
 
+# Add system GGML configuration if requested
+if ($UseSystemGgml) {
+    $ofxGgmlCmakeDir = Join-Path $OfxGgmlPath 'libs' 'ggml' 'lib' 'cmake'
+    $ofxGgmlGgmlDir = Join-Path $ofxGgmlCmakeDir 'ggml'
+
+    $configureArgs += @(
+        '-DSD_USE_SYSTEM_GGML=ON',
+        "-DCMAKE_PREFIX_PATH=$ofxGgmlCmakeDir",
+        "-Dggml_DIR=$ofxGgmlGgmlDir"
+    )
+}
+
 Write-Step "Configuring stable-diffusion native library"
 Write-Host ("    Backend mode: {0} (CUDA={1}, Vulkan={2}, Metal={3})" -f
     $backendMode,
     $(if ($enableCuda) { 'ON' } else { 'OFF' }),
     $(if ($enableVulkan) { 'ON' } else { 'OFF' }),
     $(if ($enableMetal) { 'ON' } else { 'OFF' }))
+if ($UseSystemGgml) {
+    Write-Host ("    System GGML: ON (from {0})" -f $OfxGgmlPath)
+} else {
+    Write-Host "    System GGML: OFF (using bundled)"
+}
 if ($buildDirWasImplicit -and (Test-IsWindowsHost) -and $enableVulkan) {
     Write-Host "    Using short Windows build dir for Vulkan: $BuildDir"
 }

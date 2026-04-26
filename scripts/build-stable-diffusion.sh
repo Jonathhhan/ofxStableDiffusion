@@ -15,6 +15,8 @@ CUDA=0
 VULKAN=0
 METAL=0
 CONFIGURATION="Release"
+USE_SYSTEM_GGML=0
+OFXGGML_PATH=""
 
 write_step() {
 	printf '==> %s\n' "$1"
@@ -54,6 +56,8 @@ while [[ $# -gt 0 ]]; do
 		--vulkan) CPU_ONLY=0; VULKAN=1; AUTO=0; shift ;;
 		--metal) CPU_ONLY=0; METAL=1; AUTO=0; shift ;;
 		--auto) AUTO=1; CPU_ONLY=0; CUDA=0; VULKAN=0; METAL=0; shift ;;
+		--use-system-ggml) USE_SYSTEM_GGML=1; shift ;;
+		--ofxggml-path) OFXGGML_PATH="$2"; shift 2 ;;
 		--help|-h)
 			cat <<'EOF'
 build-stable-diffusion.sh - Build the bundled stable-diffusion.cpp runtime.
@@ -73,6 +77,8 @@ Options:
   --source-dir DIR       Override vendored source directory
   --build-dir DIR        Override build directory
   --install-lib-dir DIR  Override staged library directory
+  --use-system-ggml      Use system GGML from ofxGgml instead of bundled
+  --ofxggml-path PATH    Path to ofxGgml addon (default: ../../ofxGgml)
   --help                 Show this help message
 EOF
 			exit 0
@@ -94,6 +100,32 @@ fi
 command -v cmake >/dev/null 2>&1 || die "cmake was not found in PATH"
 [[ -d "$SOURCE_DIR" ]] || die "stable-diffusion.cpp source is missing at $SOURCE_DIR"
 [[ -f "$SOURCE_DIR/CMakeLists.txt" ]] || die "No CMakeLists.txt was found in $SOURCE_DIR"
+
+# Handle system GGML configuration
+if [[ "$USE_SYSTEM_GGML" -eq 1 ]]; then
+	# Set default ofxGgml path if not provided
+	if [[ -z "$OFXGGML_PATH" ]]; then
+		OFXGGML_PATH="$ADDON_ROOT/../ofxGgml"
+	fi
+
+	# Expand to absolute path
+	OFXGGML_PATH="$(cd "$OFXGGML_PATH" 2>/dev/null && pwd || echo "$OFXGGML_PATH")"
+
+	# Validate ofxGgml exists
+	if [[ ! -d "$OFXGGML_PATH" ]]; then
+		die "ofxGgml not found at $OFXGGML_PATH. Use --ofxggml-path to specify the correct location."
+	fi
+
+	OFXGGML_INCLUDE_DIR="$OFXGGML_PATH/libs/ggml/include"
+	OFXGGML_LIB_DIR="$OFXGGML_PATH/libs/ggml/lib"
+
+	# Check for GGML headers
+	if [[ ! -d "$OFXGGML_INCLUDE_DIR" ]]; then
+		die "ofxGgml GGML headers not found at $OFXGGML_INCLUDE_DIR. Build ofxGgml first."
+	fi
+
+	write_step "Using system GGML from ofxGgml at $OFXGGML_PATH"
+fi
 
 if [[ "$CLEAN" -eq 1 ]]; then
 	write_step "Cleaning previous stable-diffusion build"
@@ -137,12 +169,29 @@ CMAKE_ARGS=(
 	-DSD_METAL=$([[ "$ENABLE_METAL" -eq 1 ]] && echo ON || echo OFF)
 )
 
+# Add system GGML configuration if requested
+if [[ "$USE_SYSTEM_GGML" -eq 1 ]]; then
+	CMAKE_ARGS+=(
+		-DSD_USE_SYSTEM_GGML=ON
+		-DCMAKE_PREFIX_PATH="$OFXGGML_PATH/libs/ggml/lib/cmake"
+	)
+	# Provide hints for finding GGML
+	CMAKE_ARGS+=(
+		-Dggml_DIR="$OFXGGML_PATH/libs/ggml/lib/cmake/ggml"
+	)
+fi
+
 write_step "Configuring stable-diffusion native library"
 printf '    Backend mode: %s (CUDA=%s, Vulkan=%s, Metal=%s)\n' \
 	"$BACKEND_MODE" \
 	"$([[ "$ENABLE_CUDA" -eq 1 ]] && echo ON || echo OFF)" \
 	"$([[ "$ENABLE_VULKAN" -eq 1 ]] && echo ON || echo OFF)" \
 	"$([[ "$ENABLE_METAL" -eq 1 ]] && echo ON || echo OFF)"
+if [[ "$USE_SYSTEM_GGML" -eq 1 ]]; then
+	printf '    System GGML: ON (from %s)\n' "$OFXGGML_PATH"
+else
+	printf '    System GGML: OFF (using bundled)\n'
+fi
 cmake "${CMAKE_ARGS[@]}"
 
 write_step "Building stable-diffusion ($CONFIGURATION)"
