@@ -111,6 +111,7 @@ int main() {
 			ofxStableDiffusionModelFamily::WANTI2V,
 			"wan ti2v family");
 		ok &= expect(capabilities.imageToVideo, "wan ti2v supports video generation");
+		ok &= expect(!capabilities.videoRequiresInputImage, "wan ti2v allows text-to-video without input image");
 		ok &= expect(!capabilities.videoAnimation, "wan ti2v does not expose animation wrapper");
 		ok &= expect(!capabilities.videoEndFrame, "wan ti2v does not advertise end-frame morphing");
 	}

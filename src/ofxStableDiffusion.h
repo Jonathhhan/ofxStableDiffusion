@@ -532,6 +532,10 @@ private:
 	ofxStableDiffusionUpscalerSettings captureUpscalerSettingsNoLock() const;
 	void setLastError(const std::string& errorMessage, ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::Unknown);
 	void setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage);
+	void setLastErrorPreservingResult(
+		const std::string& errorMessage,
+		ofxStableDiffusionErrorCode code = ofxStableDiffusionErrorCode::Unknown);
+	void setLastErrorPreservingResult(ofxStableDiffusionErrorCode code, const std::string& errorMessage);
 	void setLastResolvedVideoRequestSummary(const std::string& summary);
 	void setLastResolvedVideoCliCommand(const std::string& command);
 	void clearLastError();

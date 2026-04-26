@@ -1877,7 +1877,14 @@ void ofApp::draw() {
 		ImGui::TextWrapped("Inpainting needs a mask image. Enable Use Mask and load one before generating.");
 	}
 	ImGui::Dummy(ImVec2(0, 10));
-		if (ImGui::Button("Generate")) {
+	const bool canGenerate =
+		modelReady &&
+		(!needsInputImage || hasInputImage) &&
+		maskReady;
+	if (!canGenerate) {
+		ImGui::BeginDisabled();
+	}
+	if (ImGui::Button("Generate")) {
 			progressStep = 0;
 			progressSteps = 0;
 			progressTime = 0.0f;
@@ -1925,6 +1932,9 @@ void ofApp::draw() {
 			request.inputIdImagesPath = inputIdImagesPath;
 			stableDiffusion.generate(request);
 		}
+	}
+	if (!canGenerate) {
+		ImGui::EndDisabled();
 	}
 	if (isImageToVideo) {
 		ImGui::SameLine(0, 10);

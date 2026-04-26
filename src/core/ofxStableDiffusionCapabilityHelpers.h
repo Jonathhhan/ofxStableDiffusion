@@ -164,7 +164,6 @@ inline bool familySupportsVideo(ofxStableDiffusionModelFamily family) {
 inline bool familyRequiresInputImageForVideo(ofxStableDiffusionModelFamily family) {
 	switch (family) {
 	case ofxStableDiffusionModelFamily::WANI2V:
-	case ofxStableDiffusionModelFamily::WANTI2V:
 	case ofxStableDiffusionModelFamily::WANFLF2V:
 	case ofxStableDiffusionModelFamily::WANVACE:
 		return true;

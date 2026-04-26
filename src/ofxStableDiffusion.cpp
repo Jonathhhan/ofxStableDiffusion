@@ -1839,7 +1839,7 @@ bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusio
 	imageMode = request.mode;
 	activeTask = task;
 	if (!validation.ok()) {
-		setLastError(validation.code, validation.message);
+		setLastErrorPreservingResult(validation.code, validation.message);
 		return false;
 	}
 
@@ -1849,12 +1849,12 @@ bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusio
 		candidateInputImage = inputImage;
 	}
 	if (ofxStableDiffusionImageModeUsesInputImage(request.mode) && candidateInputImage.data == nullptr) {
-		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Selected image mode requires an input image");
+		setLastErrorPreservingResult(ofxStableDiffusionErrorCode::MissingInputImage, "Selected image mode requires an input image");
 		return false;
 	}
 
 	if (request.mode == ofxStableDiffusionImageMode::Inpainting && request.maskImage.data == nullptr) {
-		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Inpainting requires a mask image");
+		setLastErrorPreservingResult(ofxStableDiffusionErrorCode::InvalidParameter, "Inpainting requires a mask image");
 		return false;
 	}
 
@@ -1864,7 +1864,7 @@ bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusio
 		candidateInputImage.data != nullptr) {
 		if (request.maskImage.width != candidateInputImage.width ||
 			request.maskImage.height != candidateInputImage.height) {
-			setLastError(ofxStableDiffusionErrorCode::InvalidDimensions,
+			setLastErrorPreservingResult(ofxStableDiffusionErrorCode::InvalidDimensions,
 				"Inpainting mask dimensions must match input image dimensions");
 			return false;
 		}
@@ -1877,16 +1877,16 @@ bool ofxStableDiffusion::validateVideoRequestAndSetError(const ofxStableDiffusio
 	const ValidationResult validation = validateVideoRequestNumbers(request);
 	activeTask = ofxStableDiffusionTask::ImageToVideo;
 	if (!validation.ok()) {
-		setLastError(validation.code, validation.message);
+		setLastErrorPreservingResult(validation.code, validation.message);
 		return false;
 	}
 	const ofxStableDiffusionCapabilities capabilities = getCapabilities();
 	if (capabilities.videoRequiresInputImage && request.initImage.data == nullptr) {
-		setLastError(ofxStableDiffusionErrorCode::MissingInputImage, "Video generation requires an input image");
+		setLastErrorPreservingResult(ofxStableDiffusionErrorCode::MissingInputImage, "Video generation requires an input image");
 		return false;
 	}
 	if (request.hasAnimation() && isNativeWanVideoFamily(capabilities.modelFamily)) {
-		setLastError(
+		setLastErrorPreservingResult(
 			ofxStableDiffusionErrorCode::InvalidParameter,
 			"Wrapper image-sequence animation is not supported for native Wan video models. Use native video diffusion settings instead.");
 		return false;
@@ -1935,6 +1935,33 @@ void ofxStableDiffusion::setLastError(const std::string& errorMessage, ofxStable
 
 void ofxStableDiffusion::setLastError(ofxStableDiffusionErrorCode code, const std::string& errorMessage) {
 	setLastError(errorMessage, code);
+}
+
+void ofxStableDiffusion::setLastErrorPreservingResult(
+	const std::string& errorMessage,
+	ofxStableDiffusionErrorCode code) {
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		lastError = errorMessage;
+		lastErrorInfo.code = code;
+		lastErrorInfo.message = errorMessage;
+		lastErrorInfo.suggestion = ofxStableDiffusionErrorCodeSuggestion(code);
+		lastErrorInfo.timestampMicros = ofGetElapsedTimeMicros();
+		errorHistory.push_back(lastErrorInfo);
+		if (errorHistory.size() > maxErrorHistorySize) {
+			errorHistory.pop_front();
+		}
+	}
+
+	if (!errorMessage.empty()) {
+		ofLogError("ofxStableDiffusion") << errorMessage;
+	}
+}
+
+void ofxStableDiffusion::setLastErrorPreservingResult(
+	ofxStableDiffusionErrorCode code,
+	const std::string& errorMessage) {
+	setLastErrorPreservingResult(errorMessage, code);
 }
 
 void ofxStableDiffusion::setLastResolvedVideoRequestSummary(const std::string& summary) {
