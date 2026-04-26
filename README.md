@@ -252,7 +252,9 @@ cross-addon workflow.
 
 ## `ofxGgml` Integration Guidance
 
-Recommended architecture:
+This addon can be integrated with `ofxGgml` in two ways:
+
+### 1. Addon-Level Integration (Recommended)
 
 - keep `ofxStableDiffusion` standalone at the native-runtime layer
 - integrate `ofxGgml` with it through the addon API
@@ -264,20 +266,34 @@ Why:
 - backend flags and ABI expectations can diverge
 - wrapper-level integration is more stable than native binary coupling
 
-More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-
 There is already an addon-level bridge seam on the `ofxGgml` side through
-`ofxGgmlStableDiffusionAdapters.h`. Notes from comparing the staged public
-surfaces of both addons live here: [docs/OFXGGML_BRIDGE.md](docs/OFXGGML_BRIDGE.md)
-
-This addon also now exposes a small bridge helper header for wrapper-level
-integration work:
+`ofxGgmlStableDiffusionAdapters.h`. This addon also exposes a small bridge helper header:
 
 - `src/bridges/ofxStableDiffusionGgmlBridge.h`
 
-It provides thin helpers such as waiting for idle and checking whether a
-context reload is actually needed, without reaching into low-level runtime
-replacement.
+### 2. System GGML Integration (Optional)
+
+For advanced use cases where you want a single GGML binary shared across addons, you can build `ofxStableDiffusion` to consume GGML from `ofxGgml`:
+
+```bash
+# Linux/macOS
+./scripts/build-stable-diffusion.sh --use-system-ggml --ofxggml-path ../ofxGgml
+
+# Windows
+.\scripts\build-stable-diffusion.ps1 -UseSystemGgml -OfxGgmlPath ..\ofxGgml
+```
+
+This enables `stable-diffusion.cpp`'s built-in system GGML support via `-DSD_USE_SYSTEM_GGML=ON`. The build scripts will:
+- Detect `ofxGgml` at the specified path (defaults to `../../ofxGgml`)
+- Use ofxGgml's GGML headers and libraries instead of bundling GGML
+- Validate that ofxGgml is built before proceeding
+
+**Important considerations:**
+- ofxGgml must be built first with matching backend flags (CPU/CUDA/Vulkan)
+- GGML version compatibility between stable-diffusion.cpp and ofxGgml must be maintained
+- This mode is opt-in; the default remains standalone for stability
+
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/OFXGGML_BRIDGE.md](docs/OFXGGML_BRIDGE.md)
 
 ## Native Runtime
 
