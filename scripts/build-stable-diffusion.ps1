@@ -63,6 +63,91 @@ function Get-CommandPathOrNull {
     }
 }
 
+function Convert-ToCMakePath {
+    param([string]$Path)
+    return ([System.IO.Path]::GetFullPath($Path) -replace '\\', '/')
+}
+
+function Add-RequiredLibraryPath {
+    param(
+        [System.Collections.Generic.List[string]]$Libraries,
+        [string]$Path,
+        [string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "$Description was not found at: $Path"
+    }
+    $Libraries.Add($Path)
+}
+
+function New-OfxGgmlCmakePackage {
+    param(
+        [string]$OfxGgmlPath,
+        [string]$PackageRoot,
+        [bool]$EnableCuda,
+        [bool]$EnableVulkan
+    )
+
+    $includeDir = [System.IO.Path]::Combine($OfxGgmlPath, 'libs', 'ggml', 'include')
+    $libDir = [System.IO.Path]::Combine($OfxGgmlPath, 'libs', 'ggml', 'lib')
+    $packageDir = Join-Path $PackageRoot 'ggml'
+    $libraries = [System.Collections.Generic.List[string]]::new()
+
+    Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $libDir 'ggml.lib') -Description 'ofxGgml ggml.lib'
+    Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $libDir 'ggml-base.lib') -Description 'ofxGgml ggml-base.lib'
+    Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $libDir 'ggml-cpu.lib') -Description 'ofxGgml ggml-cpu.lib'
+
+    if ($EnableCuda) {
+        Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $libDir 'ggml-cuda.lib') -Description 'ofxGgml ggml-cuda.lib'
+        $cudaLibDir = if ($env:CUDA_PATH) { [System.IO.Path]::Combine($env:CUDA_PATH, 'lib', 'x64') } else { '' }
+        Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $cudaLibDir 'cublas.lib') -Description 'CUDA cublas.lib'
+        Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $cudaLibDir 'cudart.lib') -Description 'CUDA cudart.lib'
+        Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $cudaLibDir 'cuda.lib') -Description 'CUDA cuda.lib'
+    }
+
+    if ($EnableVulkan) {
+        Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $libDir 'ggml-vulkan.lib') -Description 'ofxGgml ggml-vulkan.lib'
+        $vulkanLibDir = if ($env:VULKAN_SDK) { [System.IO.Path]::Combine($env:VULKAN_SDK, 'Lib') } else { '' }
+        Add-RequiredLibraryPath -Libraries $libraries -Path (Join-Path $vulkanLibDir 'vulkan-1.lib') -Description 'Vulkan vulkan-1.lib'
+    }
+
+    New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+
+    $cmakeIncludeDir = Convert-ToCMakePath $includeDir
+    $cmakeLibraryEntries = ($libraries | ForEach-Object { '    "' + (Convert-ToCMakePath $_) + '"' }) -join "`n"
+    $configPath = Join-Path $packageDir 'ggml-config.cmake'
+    $versionPath = Join-Path $packageDir 'ggml-version.cmake'
+
+    $configContent = @"
+include_guard(GLOBAL)
+
+set(ggml_FOUND TRUE)
+set(_ofxggml_include_dir "$cmakeIncludeDir")
+set(_ofxggml_libraries
+$cmakeLibraryEntries
+)
+
+if (NOT TARGET ggml::ggml)
+    add_library(ggml::ggml INTERFACE IMPORTED)
+    set_target_properties(ggml::ggml PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "`${_ofxggml_include_dir}"
+        INTERFACE_COMPILE_DEFINITIONS "GGML_MAX_NAME=128"
+        INTERFACE_LINK_LIBRARIES "`${_ofxggml_libraries}"
+    )
+endif()
+"@
+
+    $versionContent = @"
+set(PACKAGE_VERSION "ofxGgml")
+set(PACKAGE_VERSION_COMPATIBLE TRUE)
+"@
+
+    Set-Content -LiteralPath $configPath -Value $configContent -Encoding ASCII
+    Set-Content -LiteralPath $versionPath -Value $versionContent -Encoding ASCII
+    return $packageDir
+}
+
 function Test-CudaAvailable {
     if ($env:CUDA_PATH -and (Test-Path -LiteralPath $env:CUDA_PATH)) {
         return $true
@@ -477,10 +562,12 @@ function Copy-DirectoryContents {
             Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
         }
 }
-if ([string]::IsNullOrWhiteSpace($InstallGgmlIncludeDir)) {
+$stageBundledGgml = -not $UseSystemGgml
+
+if ($stageBundledGgml -and [string]::IsNullOrWhiteSpace($InstallGgmlIncludeDir)) {
     $InstallGgmlIncludeDir = Join-Path $addonRoot 'libs\ggml\include'
 }
-if ([string]::IsNullOrWhiteSpace($InstallGgmlLibDir)) {
+if ($stageBundledGgml -and [string]::IsNullOrWhiteSpace($InstallGgmlLibDir)) {
     $InstallGgmlLibDir = Join-Path $addonRoot 'libs\ggml\lib\vs'
 }
 if ([string]::IsNullOrWhiteSpace($VariantRootDir)) {
@@ -674,7 +761,7 @@ if (-not (Test-Path -LiteralPath $sourceCmakeLists)) {
 if ($UseSystemGgml) {
     # Set default ofxGgml path if not provided
     if ([string]::IsNullOrWhiteSpace($OfxGgmlPath)) {
-        $OfxGgmlPath = Join-Path $AddonRoot '..' 'ofxGgml'
+        $OfxGgmlPath = [System.IO.Path]::Combine($AddonRoot, '..', 'ofxGgml')
     }
 
     # Convert to absolute path
@@ -690,8 +777,8 @@ Use -OfxGgmlPath to specify the correct location.
 "@
     }
 
-    $ofxGgmlIncludeDir = Join-Path $OfxGgmlPath 'libs' 'ggml' 'include'
-    $ofxGgmlLibDir = Join-Path $OfxGgmlPath 'libs' 'ggml' 'lib'
+    $ofxGgmlIncludeDir = [System.IO.Path]::Combine($OfxGgmlPath, 'libs', 'ggml', 'include')
+    $ofxGgmlLibDir = [System.IO.Path]::Combine($OfxGgmlPath, 'libs', 'ggml', 'lib')
 
     # Check for GGML headers
     if (-not (Test-Path -LiteralPath $ofxGgmlIncludeDir)) {
@@ -719,8 +806,10 @@ if (-not $DryRun) {
     New-Item -ItemType Directory -Force -Path $InstallIncludeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallLibDir | Out-Null
     New-Item -ItemType Directory -Force -Path $InstallBinDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $InstallGgmlIncludeDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $InstallGgmlLibDir | Out-Null
+    if ($stageBundledGgml) {
+        New-Item -ItemType Directory -Force -Path $InstallGgmlIncludeDir | Out-Null
+        New-Item -ItemType Directory -Force -Path $InstallGgmlLibDir | Out-Null
+    }
     New-Item -ItemType Directory -Force -Path $VariantRootDir | Out-Null
     if ($ExampleBinDir) {
         New-Item -ItemType Directory -Force -Path $ExampleBinDir | Out-Null
@@ -770,8 +859,15 @@ $configureArgs += @(
 
 # Add system GGML configuration if requested
 if ($UseSystemGgml) {
-    $ofxGgmlCmakeDir = Join-Path $OfxGgmlPath 'libs' 'ggml' 'lib' 'cmake'
+    $ofxGgmlCmakeDir = [System.IO.Path]::Combine($BuildDir, 'ofxggml-cmake')
     $ofxGgmlGgmlDir = Join-Path $ofxGgmlCmakeDir 'ggml'
+    if (-not $DryRun) {
+        $ofxGgmlGgmlDir = New-OfxGgmlCmakePackage `
+            -OfxGgmlPath $OfxGgmlPath `
+            -PackageRoot $ofxGgmlCmakeDir `
+            -EnableCuda:$enableCuda `
+            -EnableVulkan:$enableVulkan
+    }
 
     $configureArgs += @(
         '-DSD_USE_SYSTEM_GGML=ON',
@@ -868,34 +964,42 @@ if ($ExampleBinDir) {
     Copy-IfPresent -Path $dllPath -Destination $ExampleBinDir -AllowLockedDestination
 }
 
-Write-Step "Staging ggml artifacts into the addon"
-if (Test-Path -LiteralPath $ggmlIncludeSourceDir) {
-    Get-ChildItem -LiteralPath $ggmlIncludeSourceDir -File |
-        ForEach-Object {
-            Copy-IfPresent -Path $_.FullName -Destination $InstallGgmlIncludeDir
-        }
+if ($stageBundledGgml) {
+    Write-Step "Staging ggml artifacts into the addon"
+    if (Test-Path -LiteralPath $ggmlIncludeSourceDir) {
+        Get-ChildItem -LiteralPath $ggmlIncludeSourceDir -File |
+            ForEach-Object {
+                Copy-IfPresent -Path $_.FullName -Destination $InstallGgmlIncludeDir
+            }
+    } else {
+        Write-Warning "ggml headers were not found under $ggmlIncludeSourceDir. Separate ggml headers will not be staged."
+    }
+    Copy-IfPresent -Path $ggmlLibPath -Destination $InstallGgmlLibDir
+    Copy-IfPresent -Path $ggmlBaseLibPath -Destination $InstallGgmlLibDir
+    Copy-IfPresent -Path $ggmlCpuLibPath -Destination $InstallGgmlLibDir
+    Copy-IfPresent -Path $ggmlCudaLibPath -Destination $InstallGgmlLibDir
+    Copy-IfPresent -Path $ggmlVulkanLibPath -Destination $InstallGgmlLibDir
+    Copy-IfPresent -Path $ggmlMetalLibPath -Destination $InstallGgmlLibDir
 } else {
-    Write-Warning "ggml headers were not found under $ggmlIncludeSourceDir. Separate ggml headers will not be staged."
+    Write-Step "Skipping bundled ggml staging because -UseSystemGgml is enabled"
 }
-Copy-IfPresent -Path $ggmlLibPath -Destination $InstallGgmlLibDir
-Copy-IfPresent -Path $ggmlBaseLibPath -Destination $InstallGgmlLibDir
-Copy-IfPresent -Path $ggmlCpuLibPath -Destination $InstallGgmlLibDir
-Copy-IfPresent -Path $ggmlCudaLibPath -Destination $InstallGgmlLibDir
-Copy-IfPresent -Path $ggmlVulkanLibPath -Destination $InstallGgmlLibDir
-Copy-IfPresent -Path $ggmlMetalLibPath -Destination $InstallGgmlLibDir
 
 $variantStableDiffusionIncludeDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\include"
 $variantStableDiffusionLibDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\lib\vs"
 $variantStableDiffusionBinDir = Join-Path $VariantRootDir "$backendMode\stable-diffusion\bin\vs"
-$variantGgmlIncludeDir = Join-Path $VariantRootDir "$backendMode\ggml\include"
-$variantGgmlLibDir = Join-Path $VariantRootDir "$backendMode\ggml\lib\vs"
+if ($stageBundledGgml) {
+    $variantGgmlIncludeDir = Join-Path $VariantRootDir "$backendMode\ggml\include"
+    $variantGgmlLibDir = Join-Path $VariantRootDir "$backendMode\ggml\lib\vs"
+}
 
 Write-Step "Snapshotting backend variant artifacts"
 Copy-DirectoryContents -Source $InstallIncludeDir -Destination $variantStableDiffusionIncludeDir
 Copy-DirectoryContents -Source $InstallLibDir -Destination $variantStableDiffusionLibDir
 Copy-DirectoryContents -Source $InstallBinDir -Destination $variantStableDiffusionBinDir
-Copy-DirectoryContents -Source $InstallGgmlIncludeDir -Destination $variantGgmlIncludeDir
-Copy-DirectoryContents -Source $InstallGgmlLibDir -Destination $variantGgmlLibDir
+if ($stageBundledGgml) {
+    Copy-DirectoryContents -Source $InstallGgmlIncludeDir -Destination $variantGgmlIncludeDir
+    Copy-DirectoryContents -Source $InstallGgmlLibDir -Destination $variantGgmlLibDir
+}
 
 Write-Host ""
 Write-Host "stable-diffusion native build complete."
@@ -904,8 +1008,12 @@ Write-Host "  build:   $BuildDir"
 Write-Host "  include: $InstallIncludeDir"
 Write-Host "  libs:    $InstallLibDir"
 Write-Host "  bins:    $InstallBinDir"
-Write-Host "  ggml include: $InstallGgmlIncludeDir"
-Write-Host "  ggml libs:    $InstallGgmlLibDir"
+if ($stageBundledGgml) {
+    Write-Host "  ggml include: $InstallGgmlIncludeDir"
+    Write-Host "  ggml libs:    $InstallGgmlLibDir"
+} else {
+    Write-Host "  ggml provider: $OfxGgmlPath"
+}
 Write-Host "  variant snapshot: $VariantRootDir\$backendMode"
 if ($ExampleBinDir) {
     Write-Host "  runtime: $ExampleBinDir"
