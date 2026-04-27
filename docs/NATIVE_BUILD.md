@@ -21,10 +21,10 @@ of relying on a global install.
   Snapshot of one built backend variant, kept so the canonical addon paths can
   be switched later without a full rebuild
 
-## Why It Is Standalone
+## Why It Is Standalone (By Default)
 
 This addon intentionally does **not** link against the `ggml` build bundled by
-`ofxGgml`.
+`ofxGgml` by default.
 
 Reasons:
 
@@ -33,6 +33,8 @@ Reasons:
 - a shared native binary would make addon upgrades more fragile
 
 The right place to integrate with `ofxGgml` is the addon/API layer.
+
+**However**, for advanced use cases, you can optionally build with system GGML from ofxGgml. See "System GGML Mode" below.
 
 ## Rebuild Workflow
 
@@ -87,6 +89,90 @@ detected GPU backends. On Windows that means:
 
 Because the builds run in that order, the final canonical runtime is left on
 the highest-priority available backend: `cuda` > `vulkan` > `cpu-only`.
+
+## System GGML Mode
+
+By default, ofxStableDiffusion builds with bundled GGML from the vendored `stable-diffusion.cpp` source. For advanced use cases where you want to share a single GGML binary across multiple addons (e.g., with ofxGgml for llama.cpp/whisper.cpp), you can enable system GGML mode.
+
+### Prerequisites
+
+1. Build and install ofxGgml first with the desired backend (CPU/CUDA/Vulkan)
+2. Ensure ofxGgml has GGML headers at `libs/ggml/include` and libraries at `libs/ggml/lib`
+3. Verify GGML version compatibility between ofxGgml and the stable-diffusion.cpp version you're using
+
+### Building with System GGML
+
+**Linux/macOS:**
+
+```bash
+# Use default path (../../ofxGgml)
+./scripts/build-stable-diffusion.sh --use-system-ggml
+
+# Specify custom ofxGgml path
+./scripts/build-stable-diffusion.sh --use-system-ggml --ofxggml-path /path/to/ofxGgml
+
+# Combine with backend selection
+./scripts/build-stable-diffusion.sh --use-system-ggml --cuda
+```
+
+**Windows:**
+
+```powershell
+# Use default path (..\..\ofxGgml)
+.\scripts\build-stable-diffusion.ps1 -UseSystemGgml
+
+# Specify custom ofxGgml path
+.\scripts\build-stable-diffusion.ps1 -UseSystemGgml -OfxGgmlPath C:\path\to\ofxGgml
+
+# Combine with backend selection
+.\scripts\build-stable-diffusion.ps1 -UseSystemGgml -Cuda
+```
+
+### What Happens
+
+When `-DSD_USE_SYSTEM_GGML=ON` is enabled:
+
+1. The build scripts validate that ofxGgml exists at the specified path
+2. CMake is configured to use `find_package(ggml)` instead of building bundled GGML
+3. The stable-diffusion library links against ofxGgml's GGML binaries
+4. At runtime, both ofxStableDiffusion and ofxGgml share the same GGML library
+
+### Important Considerations
+
+**Backend Alignment:**
+- ofxGgml and ofxStableDiffusion must use matching backends (both CPU, both CUDA, etc.)
+- The build script does not automatically enforce this—ensure consistency manually
+
+**Version Compatibility:**
+- stable-diffusion.cpp may require specific GGML versions or patches
+- Test thoroughly when updating either addon
+- Monitor for ABI changes between GGML versions
+
+**Dependency Management:**
+- When using system GGML, your application must ensure ofxGgml's GGML library is available at runtime
+- On openFrameworks projects, include both addons in your project
+
+**Fallback:**
+- System GGML mode is opt-in
+- The default standalone mode remains available if you encounter compatibility issues
+- Simply rebuild without `--use-system-ggml` to revert
+
+### Troubleshooting
+
+**Error: "ofxGgml not found"**
+- Verify the path to ofxGgml is correct
+- Use `--ofxggml-path` / `-OfxGgmlPath` to specify the correct location
+
+**Error: "ofxGgml GGML headers not found"**
+- Build ofxGgml first before building ofxStableDiffusion
+- Ensure ofxGgml's GGML headers exist at `libs/ggml/include`
+
+**Runtime linking errors:**
+- Ensure backend flags match between ofxGgml and ofxStableDiffusion
+- Verify GGML library versions are compatible
+- Check that GGML shared libraries are in your system's library path
+
+
 
 ## Variant Selection
 
