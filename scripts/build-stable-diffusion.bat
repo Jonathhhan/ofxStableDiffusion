@@ -131,6 +131,21 @@ if /i "%~1"=="--example-bin-dir" (
     shift
     goto parse_args
 )
+if /i "%~1"=="--use-system-ggml" (
+    set "PS_ARGS=!PS_ARGS! -UseSystemGgml"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="--ofxggml-path" (
+    if "%~2"=="" (
+        echo Error: --ofxggml-path requires a value.
+        exit /b 1
+    )
+    set "PS_ARGS=!PS_ARGS! -OfxGgmlPath ""%~2"""
+    shift
+    shift
+    goto parse_args
+)
 if /i "%~1"=="--help" goto usage
 if /i "%~1"=="-h" goto usage
 set "PS_ARGS=!PS_ARGS! %~1"
@@ -159,6 +174,8 @@ echo   --build-dir DIR        Override build directory
 echo   --install-include-dir  Override staged include directory
 echo   --install-lib-dir DIR  Override staged library directory
 echo   --example-bin-dir DIR  Override runtime staging directory
+echo   --use-system-ggml      Use system GGML from ofxGgml instead of bundled
+echo   --ofxggml-path PATH    Path to ofxGgml addon ^(default: ..\ofxGgml^)
 echo   --help                 Show this help message
 exit /b 0
 
