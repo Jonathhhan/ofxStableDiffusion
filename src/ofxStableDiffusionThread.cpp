@@ -229,6 +229,7 @@ std::string stableDiffusionThread::computeContextFingerprint(const ofxStableDiff
 		<< settings.stackedIdEmbedDir << "|"
 		<< (int)settings.vaeDecodeOnly << "|"
 		<< (int)settings.vaeTiling << "|"
+		<< (int)settings.freeParamsImmediately << "|"
 		<< settings.nThreads << "|"
 		<< (int)settings.weightType << "|"
 		<< (int)settings.rngType << "|"
@@ -376,6 +377,10 @@ void stableDiffusionThread::threadedFunction() {
 		}
 		isSdCtxLoaded = (sdCtx != nullptr);
 		generationContextNeedsRefresh = false;
+		lastContextFingerprint = isSdCtxLoaded ?
+			computeContextFingerprint(contextTaskData.contextSettings) :
+			std::string();
+		generationsSinceRebuild = 0;
 		{
 			std::lock_guard<std::mutex> lock(sd->stateMutex);
 			sd->refreshResolvedDefaultCachesNoLock(sdCtx);
@@ -449,7 +454,8 @@ void stableDiffusionThread::threadedFunction() {
 	std::string currentFingerprint = computeContextFingerprint(generationContextSettings);
 	bool needsRebuild = generationContextNeedsRefresh
 		|| (currentFingerprint != lastContextFingerprint)
-		|| (generationsSinceRebuild >= MAX_REUSE_COUNT)
+		|| (generationContextSettings.freeParamsImmediately &&
+			generationsSinceRebuild >= MAX_REUSE_COUNT)
 		|| !sdCtx;
 
 	if (needsRebuild) {
@@ -661,7 +667,8 @@ void stableDiffusionThread::threadedFunction() {
 				elapsedMs,
 				task,
 				videoTaskData.request);
-			generationContextNeedsRefresh = true;
+			generationContextNeedsRefresh =
+				generationContextSettings.freeParamsImmediately;
 			finishTask();
 			return;
 		}
@@ -712,7 +719,8 @@ void stableDiffusionThread::threadedFunction() {
 			elapsedMs,
 			task,
 			videoTaskData.request);
-		generationContextNeedsRefresh = true;
+		generationContextNeedsRefresh =
+			generationContextSettings.freeParamsImmediately;
 		finishTask();
 		return;
 	}
@@ -794,7 +802,8 @@ void stableDiffusionThread::threadedFunction() {
 		task,
 		imageTaskData.request,
 		imageTaskData.imageRankCallback);
-	generationContextNeedsRefresh = true;
+	generationContextNeedsRefresh =
+		generationContextSettings.freeParamsImmediately;
 	finishTask();
 }
 

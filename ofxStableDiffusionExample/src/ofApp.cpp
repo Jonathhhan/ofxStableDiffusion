@@ -1185,6 +1185,27 @@ void ofApp::draw() {
 		} else {
 			ImGui::TextWrapped("Status: %s", stableDiffusion.getLastError().c_str());
 		}
+		if (stableDiffusion.isGenerating()) {
+			if (isBusy) {
+				ImGui::EndDisabled();
+			}
+			ImGui::Dummy(ImVec2(0, 10));
+			const bool cancellationPending = stableDiffusion.isCancellationRequested();
+			if (cancellationPending) {
+				ImGui::BeginDisabled();
+			}
+			if (ImGui::Button(cancellationPending ? "Stopping..." : "Stop Generating")) {
+				if (stableDiffusion.requestCancellation()) {
+					ofLogNotice("ofApp") << "Requested generation stop";
+				}
+			}
+			if (cancellationPending) {
+				ImGui::EndDisabled();
+			}
+			if (isBusy) {
+				ImGui::BeginDisabled();
+			}
+		}
 		ImGui::Dummy(ImVec2(0, 10));
 		if (ImGui::BeginCombo("Logging", nativeLogLevelLabels[nativeLogLevelIndex], ImGuiComboFlags_NoArrowButton)) {
 			for (int n = 0; n < IM_ARRAYSIZE(nativeLogLevelLabels); ++n) {
@@ -1403,6 +1424,8 @@ void ofApp::draw() {
 		ImGui::Checkbox("Diffusion Flash Attention", &diffusionFlashAttn);
 		ImGui::Dummy(ImVec2(0, 10));
 		ImGui::Checkbox("VAE Tiling", &vaeTiling);
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Checkbox("Free Params Immediately", &freeParamsImmediately);
 		if (usesInputImageMode() || currentVideoModeUsesInputImage()) {
 			ImGui::Dummy(ImVec2(0, 10));
 			if (ImGui::Button("Load Image")) {
@@ -2040,7 +2063,6 @@ void ofApp::applyRecommendedImageParameters() {
 	imageParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveImageProfile(
 		stableDiffusion.getContextSettings(),
 		imageModeEnum);
-	freeParamsImmediately = true;
 	width = 512;
 	height = 512;
 	cfgScale = std::clamp(7.0f, imageParameterProfile.minCfgScale, imageParameterProfile.maxCfgScale);
@@ -2061,7 +2083,6 @@ void ofApp::applyRecommendedImageParameters() {
 void ofApp::applyRecommendedVideoParameters() {
 	videoParameterProfile = ofxStableDiffusionParameterTuningHelpers::resolveVideoProfile(
 		stableDiffusion.getContextSettings());
-	freeParamsImmediately = true;
 	width = 512;
 	height = 512;
 	cfgScale = std::clamp(7.0f, videoParameterProfile.minCfgScale, videoParameterProfile.maxCfgScale);
