@@ -193,3 +193,16 @@ add_executable(test_realtime_session
 )
 
 add_test(NAME realtime_session COMMAND test_realtime_session)
+
+add_executable(test_realtime_video_session
+    test_realtime_video_session.cpp
+    stubs/stable_diffusion_native_stub.cpp
+)
+
+target_include_directories(test_realtime_video_session PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME realtime_video_session COMMAND test_realtime_video_session)

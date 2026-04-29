@@ -44,15 +44,56 @@ session.start(settings);
 session.update();
 ```
 
+### ofxStableDiffusionRealtimeVideoSession
+
+Runway-inspired local creative-loop scaffold for interactive video-like streams.
+This is not a proprietary world model and does not promise sub-100ms HD output;
+it uses the addon’s existing image generation path to create low-step preview
+frames, coalesce prompt edits, and optionally feed the last generated frame back
+through img2img for temporal continuity.
+
+**Key Features:**
+- Latest-prompt-wins request coalescing while a frame is generating
+- Preview/refine quality tiers with separate step and strength budgets
+- Previous-frame feedback via img2img
+- Frame and latency callbacks for live UI surfaces
+
+**Usage:**
+```cpp
+ofxStableDiffusionRealtimeVideoSettings settings;
+settings.previewSteps = 4;
+settings.refineSteps = 16;
+settings.usePreviousFrameFeedback = true;
+
+ofxStableDiffusionRealtimeVideoSession liveVideo;
+liveVideo.start(settings, sd);
+
+ofxStableDiffusionRealtimeVideoRequest request;
+request.prompt = "a dancer in a neon studio, handheld camera";
+liveVideo.submit(request);
+
+// In update loop
+liveVideo.update();
+```
+
 ### ofxStableDiffusionBatchProcessor
 
-Batch processing utilities for systematic parameter exploration.
+Experimental batch-processing API scaffold for future parameter exploration.
+The request/result types, parameter helpers, metadata export, and scoring hooks
+are present, but generation methods currently return placeholder results and do
+not run native image generation yet.
 
-**Features:**
-- Grid generation (X/Y/Z plots)
-- Parameter sweeping
-- A/B comparison
-- Organized export
+**Implemented today:**
+- Batch/grid/sweep request and result data structures
+- Parameter value helpers for supported generation fields
+- Metadata export for batch results
+- Quality-scoring and progress-callback hooks
+
+**Not implemented yet:**
+- Native grid generation
+- Native parameter sweeps
+- Native A/B comparison image generation
+- Organized image export/gallery generation
 
 ### ofxStableDiffusionModelManager
 

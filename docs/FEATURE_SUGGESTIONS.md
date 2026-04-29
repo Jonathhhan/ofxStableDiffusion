@@ -393,9 +393,9 @@ auto templates = promptHelper.getTemplatesInCategory("portraits");
 - A/B testing different prompt formulations
 - Educational tools for prompt engineering
 
-### 12. Batch Processing Utilities ✅ IMPLEMENTED (v1.3.0)
+### 12. Batch Processing Utilities - EXPERIMENTAL SCAFFOLD
 
-**Status**: ✅ **COMPLETED** in version 1.3.0
+**Status**: API scaffold is present, but native generation is **not implemented** yet.
 
 **Overview**:
 Batch processing utilities would enable systematic exploration of generation parameters through grid generation, parameter sweeps, and automated comparison workflows. This feature is essential for testing, experimentation, and finding optimal parameter combinations.
@@ -425,10 +425,13 @@ Batch processing utilities would enable systematic exploration of generation par
   - CSV/JSON export of all parameters
   - Automatic gallery generation
 
-**Potential API**:
+**Current API Shape**:
 ```cpp
-// Create X/Y grid (CFG scale vs. sample steps)
 ofxStableDiffusionBatchProcessor batchProcessor;
+// Data structures and helper hooks exist, but generation methods currently
+// return placeholder results and log that native generation is not implemented.
+
+// Planned X/Y grid (CFG scale vs. sample steps)
 ofxStableDiffusionGridSettings gridSettings;
 gridSettings.baseRequest = baseRequest;
 gridSettings.xAxis = ofxStableDiffusionParameter::CfgScale;
@@ -438,7 +441,7 @@ gridSettings.yValues = {10, 20, 30, 40, 50};
 gridSettings.outputPath = "output/grid_cfg_steps.png";
 
 auto gridResult = batchProcessor.generateGrid(gridSettings);
-// Creates 5x5 grid (25 images) with labeled axes
+// Experimental: does not create images yet.
 
 // Parameter sweep
 ofxStableDiffusionSweepSettings sweepSettings;
@@ -450,10 +453,7 @@ sweepSettings.steps = 10;
 sweepSettings.stepMode = ofxStableDiffusionStepMode::Linear;
 
 auto sweepResults = batchProcessor.parameterSweep(sweepSettings);
-for (const auto& result : sweepResults.results) {
-    ofLogNotice() << "Strength: " << result.parameterValue
-                  << " Quality: " << result.qualityScore;
-}
+// Experimental: result list is empty until generation is implemented.
 
 // A/B comparison
 ofxStableDiffusionImageRequest requestA = baseRequest;
@@ -464,6 +464,7 @@ requestB.samplerMethod = DPMPP2Mv2_SAMPLE_METHOD;
 
 auto comparison = batchProcessor.compareAB(requestA, requestB);
 comparison.exportComparison("output/sampler_comparison.png");
+// Experimental: comparison export is a placeholder.
 
 // Batch with custom variations
 std::vector<ofxStableDiffusionImageRequest> requests;
@@ -475,19 +476,20 @@ for (float cfg : {1.5f, 3.0f, 5.0f, 7.5f}) {
 
 auto batchResult = batchProcessor.processBatch(requests, "output/cfg_sweep/");
 batchResult.exportMetadata("output/cfg_sweep/metadata.json");
+// Metadata export exists; image generation/export does not yet run.
 ```
 
 **Integration Points**:
-- Uses existing queue system (Feature #3) for batch management
-- Leverages performance profiler (Feature #16) for batch timing
-- Works with prompt helpers (Feature #11) for prompt variations
-- Compatible with existing metadata export (Feature #19)
+- Should use the existing queue system (Feature #3) for batch management
+- Should leverage performance profiler (Feature #16) for batch timing
+- Should work with prompt helpers (Feature #11) for prompt variations
+- Metadata export hooks already exist
 
 **Export Formats**:
-- Grid images with parameter labels
-- Individual images with systematic naming
-- JSON/CSV metadata files
-- HTML gallery pages
+- JSON metadata files are partially supported
+- Grid images with parameter labels are planned
+- Individual images with systematic naming are planned
+- CSV metadata and HTML gallery pages are planned
 - Comparison reports with statistics
 
 **Use Cases**:
@@ -845,13 +847,13 @@ This section is reserved for features requested by addon users. Please submit fe
 9. ✅ Real-time Generation Modes (v1.3.0)
 10. ✅ Model Quantization Support (v1.3.0)
 11. ✅ Prompt Engineering Helpers (v1.3.0)
-12. ✅ Batch Processing Utilities (v1.3.0)
 13. ✅ Advanced Sampling Options (v1.2.0)
 16. ✅ Performance Profiling (v1.2.0)
 18. ✅ Animation and Interpolation (v1.2.0)
 19. ✅ Export and Metadata (v1.2.0)
 
 ### 🚧 Partially Completed
+12. Batch Processing Utilities - API scaffold only; generation/export methods are placeholders.
 6. 🚧 LoRA Management System (v1.2.0 - discovery implemented, convenience methods pending)
 
 ### 📋 Planned

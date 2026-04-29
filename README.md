@@ -27,6 +27,7 @@ The addon is now structured more like a production addon:
 - Native image modes: `TextToImage`, `ImageToImage`, and `Inpainting`
 - Best-of-N image reranking through a callback seam that can be driven by `ofxGgml` CLIP scoring
 - Image-to-video generation with `Standard`, `Loop`, `PingPong`, and `Boomerang` presentation modes
+- `ofxStableDiffusionRealtimeVideoSession` for live creative-loop previews using prompt coalescing, low-step frames, and optional previous-frame img2img feedback
 - ESRGAN upscaling support
 - Progress callbacks for diffusion steps
 - `getCapabilities()` plus capability/model-family helpers for UI gating and backend-aware workflows
@@ -176,6 +177,39 @@ Each error code automatically provides an actionable suggestion to help resolve 
 The older `newSdCtx`, `txt2img`, `img2img`, and `img2vid` entry points are still
 available so existing call sites, including addon-to-addon bridges, do not have
 to migrate immediately.
+
+### Realtime Creative Loop
+
+`ofxStableDiffusionRealtimeVideoSession` adapts the interaction pattern of
+realtime video tools to the local stable-diffusion.cpp backend. It keeps only the
+latest prompt while a frame is generating, uses low-step preview requests for
+responsiveness, can refine an idle prompt with a higher step budget, and can feed
+the previous output frame back through img2img for visual continuity.
+
+```cpp
+#include "ofxStableDiffusion.h"
+
+ofxStableDiffusionRealtimeVideoSettings liveSettings;
+liveSettings.previewSteps = 4;
+liveSettings.refineSteps = 16;
+liveSettings.previewStrength = 0.68f;
+liveSettings.refineStrength = 0.35f;
+liveSettings.usePreviousFrameFeedback = true;
+
+ofxStableDiffusionRealtimeVideoSession liveVideo;
+liveVideo.start(liveSettings, sd);
+
+ofxStableDiffusionRealtimeVideoRequest liveRequest;
+liveRequest.prompt = "a fashion portrait reacting to colored stage lights";
+liveVideo.submit(liveRequest);
+
+// In update():
+liveVideo.update();
+```
+
+This is a near-realtime preview workflow, not a proprietary HD world model. For
+best results use fast models, modest preview dimensions, and low preview step
+counts.
 
 ## Video Behavior
 
