@@ -7,9 +7,13 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <limits>
 #include <mutex>
+#include <random>
 #include <ctime>
 #include <vector>
 #include <sstream>
@@ -177,10 +181,23 @@ int64_t resolveNativeGenerationSeed(int64_t seed) {
 		return seed;
 	}
 
-	// Match the backend's one-time auto-seed resolution so the addon can
-	// report and reproduce the exact seed handed to native generation.
-	std::srand(static_cast<unsigned int>(std::time(nullptr)));
-	return static_cast<int64_t>(std::rand());
+	static std::atomic<uint64_t> autoSeedCounter{0};
+	uint64_t entropy = static_cast<uint64_t>(
+		std::chrono::high_resolution_clock::now().time_since_epoch().count());
+	entropy ^= autoSeedCounter.fetch_add(1, std::memory_order_relaxed) +
+		0x9e3779b97f4a7c15ull;
+	try {
+		std::random_device rd;
+		entropy ^= static_cast<uint64_t>(rd()) << 32;
+		entropy ^= static_cast<uint64_t>(rd());
+	} catch (...) {
+	}
+
+	std::mt19937_64 rng(entropy);
+	std::uniform_int_distribution<int64_t> dist(
+		0,
+		(std::numeric_limits<int64_t>::max)());
+	return dist(rng);
 }
 
 } // namespace
@@ -197,6 +214,7 @@ stableDiffusionThread::~stableDiffusionThread() {
 }
 
 void stableDiffusionThread::clearContexts() {
+	isSdCtxLoaded.store(false, std::memory_order_release);
 	if (sdCtx) {
 		free_sd_ctx(sdCtx);
 		sdCtx = nullptr;
@@ -205,11 +223,14 @@ void stableDiffusionThread::clearContexts() {
 		free_upscaler_ctx(upscalerCtx);
 		upscalerCtx = nullptr;
 	}
-	isSdCtxLoaded = false;
 	isUpscalerCtxLoaded = false;
 	generationContextNeedsRefresh = false;
 	lastContextFingerprint.clear();
 	generationsSinceRebuild = 0;
+}
+
+bool stableDiffusionThread::hasLoadedContext() const {
+	return isSdCtxLoaded.load(std::memory_order_acquire);
 }
 
 std::string stableDiffusionThread::computeContextFingerprint(const ofxStableDiffusionContextSettings& settings) {
@@ -290,6 +311,7 @@ void stableDiffusionThread::threadedFunction() {
 		}
 
 		if (sdCtx) {
+			isSdCtxLoaded.store(false, std::memory_order_release);
 			free_sd_ctx(sdCtx);
 			sdCtx = nullptr;
 		}
@@ -331,7 +353,7 @@ void stableDiffusionThread::threadedFunction() {
 				free_sd_ctx(sdCtx);
 				sdCtx = nullptr;
 			}
-			isSdCtxLoaded = false;
+			isSdCtxLoaded.store(false, std::memory_order_release);
 			finishTask(true, "Model loading cancelled");
 			return;
 		}
@@ -375,9 +397,9 @@ void stableDiffusionThread::threadedFunction() {
 				0);
 			isUpscalerCtxLoaded = (upscalerCtx != nullptr);
 		}
-		isSdCtxLoaded = (sdCtx != nullptr);
+		isSdCtxLoaded.store(sdCtx != nullptr, std::memory_order_release);
 		generationContextNeedsRefresh = false;
-		lastContextFingerprint = isSdCtxLoaded ?
+		lastContextFingerprint = isSdCtxLoaded.load(std::memory_order_acquire) ?
 			computeContextFingerprint(contextTaskData.contextSettings) :
 			std::string();
 		generationsSinceRebuild = 0;
@@ -397,7 +419,7 @@ void stableDiffusionThread::threadedFunction() {
 			contextTaskData.upscalerSettings.modelPath.clear();
 			sd->setLastError(ofxStableDiffusionErrorCode::UpscaleFailed, "Failed to create upscaler context");
 		}
-		if (!isSdCtxLoaded && !contextErrorReported) {
+		if (!isSdCtxLoaded.load(std::memory_order_acquire) && !contextErrorReported) {
 			sd->setLastError("Failed to create stable-diffusion context");
 		}
 		finishTask();
@@ -407,6 +429,7 @@ void stableDiffusionThread::threadedFunction() {
 	const auto rebuildSdContextForGeneration =
 		[this, &sd, &finishTask](const ofxStableDiffusionContextSettings& currentContextSettings) -> bool {
 			if (sdCtx) {
+				isSdCtxLoaded.store(false, std::memory_order_release);
 				free_sd_ctx(sdCtx);
 				sdCtx = nullptr;
 			}
@@ -423,12 +446,12 @@ void stableDiffusionThread::threadedFunction() {
 					embeddingPaths,
 					embeddings);
 			sdCtx = new_sd_ctx(&ctxParams);
-			isSdCtxLoaded = (sdCtx != nullptr);
+			isSdCtxLoaded.store(sdCtx != nullptr, std::memory_order_release);
 			{
 				std::lock_guard<std::mutex> lock(sd->stateMutex);
 				sd->refreshResolvedDefaultCachesNoLock(sdCtx);
 			}
-			if (!isSdCtxLoaded) {
+			if (!isSdCtxLoaded.load(std::memory_order_acquire)) {
 				sd->setLastError("Failed to recreate stable-diffusion context for generation");
 				finishTask();
 				return false;

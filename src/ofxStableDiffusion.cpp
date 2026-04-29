@@ -739,7 +739,7 @@ bool ofxStableDiffusion::hasVideoResult() const {
 }
 
 bool ofxStableDiffusion::hasLoadedContext() const {
-	return thread.sdCtx != nullptr;
+	return thread.hasLoadedContext();
 }
 
 int ofxStableDiffusion::getOutputCount() const {

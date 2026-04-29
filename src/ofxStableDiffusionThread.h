@@ -165,6 +165,7 @@ public:
 	VideoTaskData videoTaskData;
 	~stableDiffusionThread() override;
 	void clearContexts();
+	bool hasLoadedContext() const;
 	void prepareContextTask(const ContextTaskData& data);
 	void prepareImageTask(const ImageTaskData& data);
 	void prepareVideoTask(const VideoTaskData& data);
@@ -181,7 +182,7 @@ public:
 private:
 	void threadedFunction();
 	std::string computeContextFingerprint(const ofxStableDiffusionContextSettings& settings);
-	bool isSdCtxLoaded = false;
+	std::atomic<bool> isSdCtxLoaded{false};
 	bool isUpscalerCtxLoaded = false;
 	bool generationContextNeedsRefresh = false;
 	std::vector<sd_lora_t> loraBuffer;

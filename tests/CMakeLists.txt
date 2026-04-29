@@ -68,6 +68,7 @@ add_test(NAME ranking_helpers_extended COMMAND test_ranking_helpers_extended)
 
 add_executable(test_video_helpers_extended
     test_video_helpers_extended.cpp
+    stubs/stable_diffusion_native_stub.cpp
 )
 
 target_include_directories(test_video_helpers_extended PRIVATE
@@ -104,6 +105,7 @@ add_test(NAME parameter_tuning_helpers COMMAND test_parameter_tuning_helpers)
 
 add_executable(test_long_video_workflow
     test_long_video_workflow.cpp
+    stubs/stable_diffusion_native_stub.cpp
 )
 
 target_include_directories(test_long_video_workflow PRIVATE
