@@ -471,6 +471,204 @@ void ofApp::drawHoloscanBridgeSection() {
 }
 
 //--------------------------------------------------------------
+void ofApp::setupCreativeLoop() {
+	creativeLoopPrompt = prompt;
+	creativeLoopNegativePrompt = negativePrompt;
+	creativeLoopStatus = "Idle";
+	creativeLoop.setFrameCallback([this](const ofxStableDiffusionRealtimeVideoFrame& frame) {
+		if (!frame.frame.pixels.isAllocated()) {
+			return;
+		}
+		const int channels = frame.frame.pixels.getNumChannels();
+		const int glFormat = channels == 4 ? GL_RGBA : GL_RGB;
+		if (!creativeLoopTexture.isAllocated() ||
+			creativeLoopTexture.getWidth() != frame.frame.pixels.getWidth() ||
+			creativeLoopTexture.getHeight() != frame.frame.pixels.getHeight()) {
+			creativeLoopTexture.allocate(
+				frame.frame.pixels.getWidth(),
+				frame.frame.pixels.getHeight(),
+				glFormat);
+		}
+		creativeLoopTexture.loadData(frame.frame.pixels);
+		creativeLoopLastLatencyMs = frame.latencyMs;
+		creativeLoopFrameIndex = frame.frameIndex;
+		creativeLoopLastQuality = frame.quality;
+		creativeLoopStatus =
+			std::string("Generated ") +
+			ofxStableDiffusionRealtimeVideoQualityLabel(frame.quality) +
+			" frame " +
+			ofToString(frame.frameIndex + 1);
+	});
+	creativeLoop.setLatencyCallback([this](
+		float latencyMs,
+		ofxStableDiffusionRealtimeVideoQuality quality) {
+		creativeLoopLastLatencyMs = latencyMs;
+		creativeLoopLastQuality = quality;
+	});
+}
+
+//--------------------------------------------------------------
+ofxStableDiffusionRealtimeVideoSettings ofApp::buildCreativeLoopSettings() const {
+	ofxStableDiffusionRealtimeVideoSettings settings;
+	settings.previewWidth = width;
+	settings.previewHeight = height;
+	settings.previewSteps = creativeLoopPreviewSteps;
+	settings.refineSteps = creativeLoopRefineSteps;
+	settings.previewStrength = creativeLoopPreviewStrength;
+	settings.refineStrength = creativeLoopRefineStrength;
+	settings.cfgScale = creativeLoopCfgScale;
+	settings.sampleMethod = sampleMethodEnum;
+	settings.seed = seed;
+	settings.lockSeed = creativeLoopLockSeed;
+	settings.usePreviousFrameFeedback = creativeLoopUseFeedback;
+	settings.coalescePromptUpdates = true;
+	settings.dropIfBusy = creativeLoopDropIfBusy;
+	settings.enableRefineOnIdle = creativeLoopRefineOnIdle;
+	return settings;
+}
+
+//--------------------------------------------------------------
+ofxStableDiffusionRealtimeVideoRequest ofApp::buildCreativeLoopRequest() const {
+	ofxStableDiffusionRealtimeVideoRequest request;
+	request.prompt = creativeLoopUseCurrentPrompts ? prompt : creativeLoopPrompt;
+	request.negativePrompt =
+		creativeLoopUseCurrentPrompts ? negativePrompt : creativeLoopNegativePrompt;
+	request.width = width;
+	request.height = height;
+	request.previewSteps = creativeLoopPreviewSteps;
+	request.refineSteps = creativeLoopRefineSteps;
+	request.previewStrength = creativeLoopPreviewStrength;
+	request.refineStrength = creativeLoopRefineStrength;
+	request.cfgScale = creativeLoopCfgScale;
+	request.sampleMethod = sampleMethodEnum;
+	request.seed = seed;
+	request.lockSeed = creativeLoopLockSeed;
+	return request;
+}
+
+//--------------------------------------------------------------
+bool ofApp::startCreativeLoop() {
+	if (creativeLoopRunning) {
+		return true;
+	}
+	creativeLoopSettings = buildCreativeLoopSettings();
+	creativeLoopRunning = creativeLoop.start(creativeLoopSettings, stableDiffusion);
+	creativeLoopStatus = creativeLoopRunning
+		? "Creative loop started"
+		: "Creative loop is already active";
+	return creativeLoopRunning;
+}
+
+//--------------------------------------------------------------
+void ofApp::submitCreativeLoopPrompt() {
+	if (!creativeLoopRunning && !startCreativeLoop()) {
+		return;
+	}
+	if (creativeLoop.submit(buildCreativeLoopRequest())) {
+		creativeLoopStatus = "Queued latest prompt";
+	} else {
+		creativeLoopStatus = "Prompt was dropped";
+	}
+}
+
+//--------------------------------------------------------------
+void ofApp::drawCreativeLoopSection() {
+	if (!ImGui::TreeNodeEx("Creative Loop", ImGuiStyleVar_WindowPadding)) {
+		return;
+	}
+
+	const auto stats = creativeLoop.getStats();
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::Checkbox("Use current prompts", &creativeLoopUseCurrentPrompts);
+	if (!creativeLoopUseCurrentPrompts) {
+		ImGui::Dummy(ImVec2(0, 10));
+		InputTextMultilineString(
+			"Loop Prompt",
+			&creativeLoopPrompt,
+			ImVec2(512, 80),
+			ImGuiInputTextFlags_CallbackResize);
+		ImGui::Dummy(ImVec2(0, 10));
+		InputTextMultilineString(
+			"Loop Negative",
+			&creativeLoopNegativePrompt,
+			ImVec2(512, 50),
+			ImGuiInputTextFlags_CallbackResize);
+	}
+
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::SliderInt("Preview Steps", &creativeLoopPreviewSteps, 1, 12);
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::SliderInt("Refine Steps", &creativeLoopRefineSteps, 1, 48);
+	creativeLoopRefineSteps =
+		std::max(creativeLoopPreviewSteps, creativeLoopRefineSteps);
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::SliderFloat("Loop CFG", &creativeLoopCfgScale, 0.1f, 12.0f);
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::SliderFloat("Preview Strength", &creativeLoopPreviewStrength, 0.0f, 1.0f);
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::SliderFloat("Refine Strength", &creativeLoopRefineStrength, 0.0f, 1.0f);
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::Checkbox("Previous-frame feedback", &creativeLoopUseFeedback);
+	ImGui::SameLine(0, 10);
+	ImGui::Checkbox("Refine on idle", &creativeLoopRefineOnIdle);
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::Checkbox("Lock seed", &creativeLoopLockSeed);
+	ImGui::SameLine(0, 10);
+	ImGui::Checkbox("Drop while busy", &creativeLoopDropIfBusy);
+
+	ImGui::Dummy(ImVec2(0, 10));
+	if (!creativeLoopRunning) {
+		if (ImGui::Button("Start Loop")) {
+			startCreativeLoop();
+		}
+	} else {
+		if (ImGui::Button("Stop Loop")) {
+			creativeLoop.stop();
+			creativeLoopRunning = false;
+			creativeLoopStatus = "Creative loop stopped";
+		}
+	}
+	ImGui::SameLine(0, 10);
+	if (ImGui::Button("Send Prompt")) {
+		submitCreativeLoopPrompt();
+	}
+	ImGui::SameLine(0, 10);
+	if (ImGui::Button("Clear Feedback")) {
+		creativeLoop.clearFeedbackFrame();
+		creativeLoopStatus = "Feedback frame cleared";
+	}
+
+	ImGui::Dummy(ImVec2(0, 10));
+	ImGui::Text("Status: %s", creativeLoopStatus.c_str());
+	ImGui::Text(
+		"Frames %d | Preview %d | Refine %d | Latency %.1f ms | %s",
+		stats.framesGenerated,
+		stats.previewFrames,
+		stats.refineFrames,
+		creativeLoopLastLatencyMs,
+		ofxStableDiffusionRealtimeVideoQualityLabel(creativeLoopLastQuality));
+	if (stats.coalescedUpdates > 0 || stats.droppedUpdates > 0) {
+		ImGui::Text(
+			"Queued %d | Coalesced %d | Dropped %d",
+			stats.promptUpdates,
+			stats.coalescedUpdates,
+			stats.droppedUpdates);
+	}
+	if (creativeLoopTexture.isAllocated()) {
+		ImGui::Dummy(ImVec2(0, 10));
+		const float previewEdge = 192.0f;
+		const float aspect =
+			creativeLoopTexture.getHeight() > 0
+				? creativeLoopTexture.getWidth() / creativeLoopTexture.getHeight()
+				: 1.0f;
+		ImGui::Image(
+			(ImTextureID)(uintptr_t)creativeLoopTexture.getTextureData().textureID,
+			ImVec2(previewEdge, previewEdge / std::max(0.01f, aspect)));
+	}
+	ImGui::TreePop();
+}
+
+//--------------------------------------------------------------
 ofxStableDiffusionContextSettings ofApp::buildContextSettings() const {
 	ofxStableDiffusionContextSettings settings;
 	settings.modelPath = modelPath;
@@ -812,6 +1010,7 @@ void ofApp::setup() {
 	stableDiffusion.setNativeLogLevel(SD_LOG_DEBUG);
 	configureExampleRanker();
 	setupHoloscanBridge();
+	setupCreativeLoop();
 
 	// Initial embedding enumeration (best-effort).
 	auto embeds = stableDiffusion.listEmbeddings();
@@ -819,6 +1018,10 @@ void ofApp::setup() {
 
 //--------------------------------------------------------------
 void ofApp::update() {
+	if (creativeLoopRunning || creativeLoop.isGenerating() || creativeLoop.hasPendingRequest()) {
+		creativeLoop.update();
+	}
+
 	if (holoscanBridgeRunning) {
 		holoscanBridge.update();
 		auto completedFrames = holoscanBridge.consumeFinishedImages();
@@ -1879,6 +2082,9 @@ void ofApp::draw() {
 		}
 		ImGui::TreePop();
 	}
+	ImGui::Dummy(ImVec2(0, 10));
+	drawCreativeLoopSection();
+	ImGui::Dummy(ImVec2(0, 10));
 	if (isBusy) {
 		ImGui::BeginDisabled();
 	}
