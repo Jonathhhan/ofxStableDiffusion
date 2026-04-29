@@ -1488,7 +1488,8 @@ bool ofxStableDiffusion::isGenerating() const {
 }
 
 bool ofxStableDiffusion::isBusy() const {
-	return isGenerating() || isModelLoading;
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return thread.isThreadRunning() || isModelLoading;
 }
 
 bool ofxStableDiffusion::requestCancellation() {
