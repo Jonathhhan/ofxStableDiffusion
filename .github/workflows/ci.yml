@@ -7,8 +7,8 @@ on:
     branches: [ main, master, develop ]
   workflow_dispatch:
     inputs:
-      run_integration_tests:
-        description: 'Run integration tests (requires models)'
+      run_integration_examples:
+        description: 'Build and run mock integration examples (no native model execution)'
         required: false
         default: 'false'
 
@@ -40,10 +40,10 @@ jobs:
     - name: Run unit tests
       run: ctest --test-dir tests/build -C ${{ matrix.build_type }} --output-on-failure
 
-  integration-tests:
-    name: Integration Tests
+  integration-examples:
+    name: Mock Integration Examples
     runs-on: ubuntu-latest
-    if: github.event.inputs.run_integration_tests == 'true' || contains(github.event.head_commit.message, '[test:integration]')
+    if: github.event.inputs.run_integration_examples == 'true' || contains(github.event.head_commit.message, '[test:integration-examples]')
 
     steps:
     - name: Checkout repository
@@ -52,24 +52,22 @@ jobs:
     - name: Setup CMake
       uses: jwlawson/actions-setup-cmake@v2
 
-    - name: Note about integration tests
+    - name: Note about integration example scope
       run: |
-        echo "Integration tests require:"
-        echo "  - Model files (not included in repo)"
-        echo "  - Sufficient VRAM/RAM"
-        echo "  - stable-diffusion.cpp library"
-        echo ""
-        echo "Skipping actual execution - setup only"
+        echo "These examples exercise the integration harness with mock generation."
+        echo "They do not perform native stable-diffusion.cpp model execution."
 
     - name: Configure integration tests
       run: |
         cmake -S tests/integration -B tests/integration/build
-      continue-on-error: true
 
     - name: Build integration tests
       run: |
         cmake --build tests/integration/build --config Release
-      continue-on-error: true
+
+    - name: Run integration examples
+      run: |
+        ctest --test-dir tests/integration/build -C Release --output-on-failure
 
   lint:
     name: Code Formatting Check

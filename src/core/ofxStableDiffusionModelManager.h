@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -98,7 +99,7 @@ public:
 	void clearCache();
 
 	/// Get info for a cached model
-	const ofxStableDiffusionModelInfo* getCachedModelInfo(const std::string& modelPath) const;
+	std::optional<ofxStableDiffusionModelInfo> getCachedModelInfo(const std::string& modelPath) const;
 
 	/// Get all cached model info
 	std::vector<ofxStableDiffusionModelInfo> getCachedModels() const;

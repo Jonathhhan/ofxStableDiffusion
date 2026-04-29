@@ -264,24 +264,31 @@ bool ofxStableDiffusionModelManager::unloadModel(const std::string& modelPath) {
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::clearCache() {
 	std::lock_guard<std::recursive_mutex> lock(mutex_);
-	for (auto& pair : modelCache) {
-		if (pair.second.sdCtx) {
-			free_sd_ctx(pair.second.sdCtx);
-			pair.second.sdCtx = nullptr;
+	for (auto it = modelCache.begin(); it != modelCache.end();) {
+		if (it->second.referenceCount > 0) {
+			ofLogWarning("ofxStableDiffusionModelManager")
+				<< "Skipping in-use model during cache clear: "
+				<< it->second.info.modelName;
+			++it;
+			continue;
 		}
+		if (it->second.sdCtx) {
+			free_sd_ctx(it->second.sdCtx);
+			it->second.sdCtx = nullptr;
+		}
+		it = modelCache.erase(it);
 	}
-	modelCache.clear();
 	ofLogNotice("ofxStableDiffusionModelManager") << "Model cache cleared";
 }
 
 //--------------------------------------------------------------
-const ofxStableDiffusionModelInfo* ofxStableDiffusionModelManager::getCachedModelInfo(const std::string& modelPath) const {
+std::optional<ofxStableDiffusionModelInfo> ofxStableDiffusionModelManager::getCachedModelInfo(const std::string& modelPath) const {
 	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	auto it = modelCache.find(modelPath);
 	if (it != modelCache.end()) {
-		return &it->second.info;
+		return it->second.info;
 	}
-	return nullptr;
+	return std::nullopt;
 }
 
 //--------------------------------------------------------------
@@ -304,11 +311,13 @@ bool ofxStableDiffusionModelManager::isModelLoaded(const std::string& modelPath)
 
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::setProgressCallback(ofxModelLoadProgressCallback cb) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	progressCallback = cb;
 }
 
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::setAutoEviction(bool enabled) {
+	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	autoEvictionEnabled = enabled;
 }
 
@@ -420,8 +429,13 @@ sd_ctx_t* ofxStableDiffusionModelManager::loadModelContext(const ofxStableDiffus
 
 //--------------------------------------------------------------
 void ofxStableDiffusionModelManager::reportProgress(const std::string& modelPath, float progress, const std::string& stage) {
-	if (progressCallback) {
-		progressCallback(modelPath, progress, stage);
+	ofxModelLoadProgressCallback callback;
+	{
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		callback = progressCallback;
+	}
+	if (callback) {
+		callback(modelPath, progress, stage);
 	}
 }
 
