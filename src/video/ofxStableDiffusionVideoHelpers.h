@@ -208,6 +208,19 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 		}
 		const int64_t maxValue = std::numeric_limits<int64_t>::max();
 		const int64_t minValue = std::numeric_limits<int64_t>::min();
+#if defined(__SIZEOF_INT128__)
+		const __int128 expandedSeed = static_cast<__int128>(request.seed);
+		const __int128 expandedOffset = static_cast<__int128>(frameOffset);
+		const __int128 expandedIncrement = static_cast<__int128>(increment);
+		const __int128 expandedValue = expandedSeed + (expandedOffset * expandedIncrement);
+		if (expandedValue > static_cast<__int128>(maxValue)) {
+			return maxValue;
+		}
+		if (expandedValue < static_cast<__int128>(minValue)) {
+			return minValue;
+		}
+		return static_cast<int64_t>(expandedValue);
+#else
 		int64_t delta = 0;
 		if (frameOffset > 0) {
 			if (increment > 0 && frameOffset > maxValue / increment) {
@@ -233,6 +246,7 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 			return minValue;
 		}
 		return request.seed + delta;
+#endif
 	}
 
 	return request.seed;
