@@ -221,31 +221,16 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 		}
 		return static_cast<int64_t>(expandedValue);
 #else
-		int64_t delta = 0;
-		if (frameOffset > 0) {
-			if (increment > 0 && frameOffset > maxValue / increment) {
-				delta = maxValue;
-			} else if (increment < 0 && increment < minValue / frameOffset) {
-				delta = minValue;
-			} else {
-				delta = frameOffset * increment;
-			}
-		} else {
-			if (increment > 0 && frameOffset < minValue / increment) {
-				delta = minValue;
-			} else if (increment < 0 && frameOffset < maxValue / increment) {
-				delta = maxValue;
-			} else {
-				delta = frameOffset * increment;
-			}
-		}
-		if (delta > 0 && request.seed > maxValue - delta) {
+		const long double expandedValue =
+			static_cast<long double>(request.seed) +
+			(static_cast<long double>(frameOffset) * static_cast<long double>(increment));
+		if (expandedValue > static_cast<long double>(maxValue)) {
 			return maxValue;
 		}
-		if (delta < 0 && request.seed < minValue - delta) {
+		if (expandedValue < static_cast<long double>(minValue)) {
 			return minValue;
 		}
-		return request.seed + delta;
+		return static_cast<int64_t>(expandedValue);
 #endif
 	}
 

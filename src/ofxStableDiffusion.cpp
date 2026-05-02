@@ -137,8 +137,8 @@ ValidationResult validateCfgScale(float cfgScale) {
 	using namespace ofxStableDiffusionLimits;
 	if (cfgScale < MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter,
-			"CFG scale must be greater than or equal to " + std::to_string(static_cast<int>(MIN_CFG_SCALE)) +
-				" and no more than " + std::to_string(static_cast<int>(MAX_CFG_SCALE))};
+			"CFG scale must be greater than or equal to 0 and no more than " +
+				std::to_string(static_cast<int>(MAX_CFG_SCALE))};
 	}
 	return {};
 }
@@ -1517,10 +1517,6 @@ void ofxStableDiffusion::freeUpscalerCtx() {
 
 sd_image_t ofxStableDiffusion::upscaleImage(sd_image_t inputImage_, uint32_t upscaleFactor) {
 	if (thread.isThreadRunning()) {
-		{
-			std::lock_guard<std::mutex> lock(stateMutex);
-			activeTask = ofxStableDiffusionTask::Upscale;
-		}
 		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "Cannot upscale while another task is running");
 		return {0, 0, 0, nullptr};
 	}
