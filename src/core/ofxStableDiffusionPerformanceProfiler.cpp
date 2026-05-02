@@ -33,12 +33,13 @@ void ofxStableDiffusionPerformanceProfiler::end(const std::string& name) {
 		return;
 	}
 
-	const uint64_t duration = endTime - it->second;
+	const uint64_t startTime = it->second;
+	const uint64_t duration = endTime - startTime;
 	activeTimers_.erase(it);
 
 	auto& entry = entries_[name];
 	entry.endMicros = endTime;
-	entry.startMicros = it->second;
+	entry.startMicros = startTime;
 	entry.durationMicros += duration;
 }
 

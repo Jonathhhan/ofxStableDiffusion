@@ -234,37 +234,44 @@ bool stableDiffusionThread::hasLoadedContext() const {
 }
 
 std::string stableDiffusionThread::computeContextFingerprint(const ofxStableDiffusionContextSettings& settings) {
-	// Create a fingerprint from settings that affect the native context
-	// Only include settings that require context rebuild when changed
-	std::ostringstream oss;
-	oss << settings.modelPath << "|"
-		<< settings.diffusionModelPath << "|"
-		<< settings.clipLPath << "|"
-		<< settings.clipGPath << "|"
-		<< settings.t5xxlPath << "|"
-		<< settings.vaePath << "|"
-		<< settings.taesdPath << "|"
-		<< settings.controlNetPath << "|"
-		<< settings.loraModelDir << "|"
-		<< settings.embedDir << "|"
-		<< settings.stackedIdEmbedDir << "|"
-		<< (int)settings.vaeDecodeOnly << "|"
-		<< (int)settings.vaeTiling << "|"
-		<< (int)settings.freeParamsImmediately << "|"
-		<< settings.nThreads << "|"
-		<< (int)settings.weightType << "|"
-		<< (int)settings.rngType << "|"
-		<< (int)settings.schedule << "|"
-		<< (int)settings.prediction << "|"
-		<< (int)settings.loraApplyMode << "|"
-		<< (int)settings.keepClipOnCpu << "|"
-		<< (int)settings.keepControlNetCpu << "|"
-		<< (int)settings.keepVaeOnCpu << "|"
-		<< (int)settings.offloadParamsToCpu << "|"
-		<< (int)settings.flashAttn << "|"
-		<< (int)settings.diffusionFlashAttn << "|"
-		<< (int)settings.enableMmap;
-	return oss.str();
+	// Create a fingerprint from settings that affect the native context.
+	// Only include settings that require context rebuild when changed.
+	// Use '\0' as the field separator – it cannot appear in file paths, preventing
+	// false collisions that could occur with printable separators like '|'.
+	std::string fp;
+	fp.reserve(512);
+	const auto sep = [&fp]() { fp += '\0'; };
+	fp += settings.modelPath;          sep();
+	fp += settings.diffusionModelPath; sep();
+	fp += settings.clipLPath;          sep();
+	fp += settings.clipGPath;          sep();
+	fp += settings.t5xxlPath;          sep();
+	fp += settings.vaePath;            sep();
+	fp += settings.taesdPath;          sep();
+	fp += settings.controlNetPath;     sep();
+	fp += settings.loraModelDir;       sep();
+	fp += settings.embedDir;           sep();
+	fp += settings.stackedIdEmbedDir;  sep();
+	fp += static_cast<char>(settings.vaeDecodeOnly);
+	fp += static_cast<char>(settings.vaeTiling);
+	fp += static_cast<char>(settings.freeParamsImmediately);
+	fp += static_cast<char>(settings.nThreads & 0xFF);
+	fp += static_cast<char>((settings.nThreads >> 8) & 0xFF);
+	fp += static_cast<char>((settings.nThreads >> 16) & 0xFF);
+	fp += static_cast<char>((settings.nThreads >> 24) & 0xFF);
+	fp += static_cast<char>(settings.weightType);
+	fp += static_cast<char>(settings.rngType);
+	fp += static_cast<char>(settings.schedule);
+	fp += static_cast<char>(settings.prediction);
+	fp += static_cast<char>(settings.loraApplyMode);
+	fp += static_cast<char>(settings.keepClipOnCpu);
+	fp += static_cast<char>(settings.keepControlNetCpu);
+	fp += static_cast<char>(settings.keepVaeOnCpu);
+	fp += static_cast<char>(settings.offloadParamsToCpu);
+	fp += static_cast<char>(settings.flashAttn);
+	fp += static_cast<char>(settings.diffusionFlashAttn);
+	fp += static_cast<char>(settings.enableMmap);
+	return fp;
 }
 
 void stableDiffusionThread::prepareContextTask(const ContextTaskData& data) {
@@ -587,13 +594,11 @@ void stableDiffusionThread::threadedFunction() {
 						pmImageViews);
 
 					sd_image_t* frameOutput = nullptr;
-					if (videoTaskData.progressCallback) {
+					{
 						ProgressCallbackGuard progressGuard(
 							generationCallbackMutex(),
-							threadProgressCallback,
-							this);
-						frameOutput = generate_image(sdCtx, &frameParams);
-					} else {
+							videoTaskData.progressCallback ? threadProgressCallback : nullptr,
+							videoTaskData.progressCallback ? this : nullptr);
 						frameOutput = generate_image(sdCtx, &frameParams);
 					}
 					if (!frameOutput || !frameOutput[0].data) {
@@ -712,13 +717,11 @@ void stableDiffusionThread::threadedFunction() {
 			<< resolvedVideoSummary;
 		int generatedFrameCount = 0;
 		sd_image_t* output = nullptr;
-		if (videoTaskData.progressCallback) {
+		{
 			ProgressCallbackGuard progressGuard(
 				generationCallbackMutex(),
-				threadProgressCallback,
-				this);
-			output = generate_video(sdCtx, &params, &generatedFrameCount);
-		} else {
+				videoTaskData.progressCallback ? threadProgressCallback : nullptr,
+				videoTaskData.progressCallback ? this : nullptr);
 			output = generate_video(sdCtx, &params, &generatedFrameCount);
 		}
 		const float elapsedMs = static_cast<float>(ofGetElapsedTimeMicros() - sd->taskStartMicros) / 1000.0f;
@@ -772,13 +775,11 @@ void stableDiffusionThread::threadedFunction() {
 			pmImageViews);
 	params.seed = resolveNativeGenerationSeed(params.seed);
 	sd_image_t* output = nullptr;
-	if (imageTaskData.progressCallback) {
+	{
 		ProgressCallbackGuard progressGuard(
 			generationCallbackMutex(),
-			threadProgressCallback,
-			this);
-		output = generate_image(sdCtx, &params);
-	} else {
+			imageTaskData.progressCallback ? threadProgressCallback : nullptr,
+			imageTaskData.progressCallback ? this : nullptr);
 		output = generate_image(sdCtx, &params);
 	}
 

@@ -76,6 +76,40 @@ struct ofxStableDiffusionContextSettings {
 	bool flashAttn = false;
 	bool diffusionFlashAttn = false;
 	bool enableMmap = true;
+
+	bool operator==(const ofxStableDiffusionContextSettings& rhs) const {
+		return modelPath == rhs.modelPath &&
+			diffusionModelPath == rhs.diffusionModelPath &&
+			clipLPath == rhs.clipLPath &&
+			clipGPath == rhs.clipGPath &&
+			t5xxlPath == rhs.t5xxlPath &&
+			vaePath == rhs.vaePath &&
+			taesdPath == rhs.taesdPath &&
+			controlNetPath == rhs.controlNetPath &&
+			loraModelDir == rhs.loraModelDir &&
+			embedDir == rhs.embedDir &&
+			stackedIdEmbedDir == rhs.stackedIdEmbedDir &&
+			vaeDecodeOnly == rhs.vaeDecodeOnly &&
+			vaeTiling == rhs.vaeTiling &&
+			freeParamsImmediately == rhs.freeParamsImmediately &&
+			nThreads == rhs.nThreads &&
+			weightType == rhs.weightType &&
+			rngType == rhs.rngType &&
+			schedule == rhs.schedule &&
+			prediction == rhs.prediction &&
+			loraApplyMode == rhs.loraApplyMode &&
+			keepClipOnCpu == rhs.keepClipOnCpu &&
+			keepControlNetCpu == rhs.keepControlNetCpu &&
+			keepVaeOnCpu == rhs.keepVaeOnCpu &&
+			offloadParamsToCpu == rhs.offloadParamsToCpu &&
+			flashAttn == rhs.flashAttn &&
+			diffusionFlashAttn == rhs.diffusionFlashAttn &&
+			enableMmap == rhs.enableMmap;
+	}
+
+	bool operator!=(const ofxStableDiffusionContextSettings& rhs) const {
+		return !(*this == rhs);
+	}
 };
 
 struct ofxStableDiffusionLora {

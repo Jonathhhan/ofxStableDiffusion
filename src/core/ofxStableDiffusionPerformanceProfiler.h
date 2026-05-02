@@ -53,7 +53,7 @@ public:
 
 	~ofxStableDiffusionScopedTimer() {
 		entry_.endMicros = ofGetElapsedTimeMicros();
-		entry_.durationMicros = entry_.endMicros - entry_.startMicros;
+		entry_.durationMicros += entry_.endMicros - entry_.startMicros;
 	}
 
 private:
