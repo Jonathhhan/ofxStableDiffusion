@@ -206,3 +206,16 @@ target_include_directories(test_realtime_video_session PRIVATE
 )
 
 add_test(NAME realtime_video_session COMMAND test_realtime_video_session)
+
+add_executable(test_scheduler_override
+    test_scheduler_override.cpp
+    stubs/stable_diffusion_native_stub.cpp
+)
+
+target_include_directories(test_scheduler_override PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME scheduler_override COMMAND test_scheduler_override)
