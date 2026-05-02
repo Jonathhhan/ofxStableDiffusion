@@ -1279,7 +1279,6 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	sd_image_t* controlCond_,
 	float controlStrength_,
 	float styleStrength_,
-	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
 	if (thread.isThreadRunning()) {
 		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
@@ -1321,7 +1320,6 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	request.controlCond = controlCond_;
 	request.controlStrength = controlStrength_;
 	request.styleStrength = styleStrength_;
-	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
 	generate(request);
 }
@@ -1341,7 +1339,6 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	sd_image_t* controlCond_,
 	float controlStrength_,
 	float styleStrength_,
-	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
 	if (thread.isThreadRunning()) {
 		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
@@ -1392,7 +1389,6 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	request.controlCond = controlCond_;
 	request.controlStrength = controlStrength_;
 	request.styleStrength = styleStrength_;
-	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
 	generate(request);
 }
@@ -1819,7 +1815,6 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		controlCond = nullptr;
 		controlStrength = taskData.request.controlStrength;
 		styleStrength = request.styleStrength;
-		normalizeInput = request.normalizeInput;
 		inputIdImagesPath = request.inputIdImagesPath;
 		loras = request.loras;
 	} catch (const std::exception& e) {

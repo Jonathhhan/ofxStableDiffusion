@@ -353,7 +353,6 @@ public:
 		sd_image_t* controlCond,
 		float controlStrength,
 		float styleStrength,
-		bool normalizeInput,
 		const std::string& inputIdImagesPath);
 
 	void img2img(sd_image_t initImage,
@@ -371,7 +370,6 @@ public:
 		sd_image_t* controlCond,
 		float controlStrength,
 		float styleStrength,
-		bool normalizeInput,
 		const std::string& inputIdImagesPath);
 	void img2vid(sd_image_t init_image,
 		int width,
@@ -487,7 +485,6 @@ public:
 	bool diffusionFlashAttn = false;
 	bool enableMmap = true;
 	float styleStrength = 20.0f;
-	bool normalizeInput = true;
 	int nThreads = -1;
 	int esrganMultiplier = 4;
 	sd_type_t wType = SD_TYPE_COUNT;
