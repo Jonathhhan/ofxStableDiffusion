@@ -1,5 +1,6 @@
 #include "../core/ofxStableDiffusionTypes.h"
 #include "../core/ofxStableDiffusionImageHelpers.h"
+#include "../core/ofxStableDiffusionValidationHelpers.h"
 #include "ofxStableDiffusionVideoHelpers.h"
 #include "ofxStableDiffusionNativeVideoExport.h"
 
@@ -57,6 +58,9 @@ bool ofxStableDiffusionVideoClip::saveFrameSequence(
 	if (frames.empty()) {
 		return false;
 	}
+	if (directory.empty() || ofxSdPathHasParentTraversal(directory) || !ofxSdIsSafeChildPathComponent(prefix)) {
+		return false;
+	}
 
 	ofDirectory::createDirectory(directory, true, true);
 	for (std::size_t i = 0; i < frames.size(); ++i) {
@@ -76,6 +80,9 @@ bool ofxStableDiffusionVideoClip::saveFrameSequence(
 
 bool ofxStableDiffusionVideoClip::saveMetadataJson(const std::string & path) const {
 	if (frames.empty()) {
+		return false;
+	}
+	if (path.empty() || ofxSdPathHasParentTraversal(path)) {
 		return false;
 	}
 
@@ -118,6 +125,9 @@ bool ofxStableDiffusionVideoClip::saveFrameSequenceWithMetadata(
 	const std::string & directory,
 	const std::string & prefix,
 	const std::string & metadataFilename) const {
+	if (!ofxSdIsSafeChildPathComponent(metadataFilename)) {
+		return false;
+	}
 	if (!saveFrameSequence(directory, prefix)) {
 		return false;
 	}

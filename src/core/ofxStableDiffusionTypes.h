@@ -217,7 +217,6 @@ struct ofxStableDiffusionImageRequest {
 	// Multi-ControlNet support
 	std::vector<ofxStableDiffusionControlNet> controlNets;
 	float styleStrength = 20.0f;
-	bool normalizeInput = true;
 	std::string inputIdImagesPath;
 	std::vector<ofxStableDiffusionLora> loras;
 };

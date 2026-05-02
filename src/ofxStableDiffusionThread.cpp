@@ -312,7 +312,7 @@ void stableDiffusionThread::threadedFunction() {
 			return true;
 		};
 
-	if (task == ofxStableDiffusionTask::LoadModel || sd->isModelLoading) {
+	if (task == ofxStableDiffusionTask::LoadModel || sd->isModelLoading.load(std::memory_order_acquire)) {
 		if (cancelRequested("Model loading cancelled before the native context was created")) {
 			return;
 		}

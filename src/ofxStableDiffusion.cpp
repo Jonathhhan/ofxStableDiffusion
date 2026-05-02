@@ -3,6 +3,7 @@
 #include "core/ofxStableDiffusionLimits.h"
 #include "core/ofxStableDiffusionMemoryHelpers.h"
 #include "core/ofxStableDiffusionNativeAdapter.h"
+#include "core/ofxStableDiffusionValidationHelpers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -99,6 +100,17 @@ struct ValidationResult {
 	}
 };
 
+std::string formatValidationFloat(float value) {
+	std::string formatted = ofToString(value, 3);
+	while (!formatted.empty() && formatted.back() == '0') {
+		formatted.pop_back();
+	}
+	if (!formatted.empty() && formatted.back() == '.') {
+		formatted.pop_back();
+	}
+	return formatted.empty() ? "0" : formatted;
+}
+
 ValidationResult validateDimensions(int width, int height) {
 	using namespace ofxStableDiffusionLimits;
 	if (width <= 0 || height <= 0) {
@@ -134,9 +146,10 @@ ValidationResult validateSampleSteps(int sampleSteps) {
 
 ValidationResult validateCfgScale(float cfgScale) {
 	using namespace ofxStableDiffusionLimits;
-	if (cfgScale <= MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
+	if (cfgScale < MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter,
-			"CFG scale must be greater than 0 and no more than " + std::to_string(static_cast<int>(MAX_CFG_SCALE))};
+			"CFG scale must be greater than or equal to " + formatValidationFloat(MIN_CFG_SCALE) +
+				" and no more than " + formatValidationFloat(MAX_CFG_SCALE)};
 	}
 	return {};
 }
@@ -203,6 +216,16 @@ ValidationResult validateUnitInterval(float value, const std::string& label) {
 	return {};
 }
 
+ValidationResult validateOptionalFinite(float value, const std::string& label) {
+	if (!ofxSdOptionalFloatIsFiniteWhenProvided(value)) {
+		return {
+			ofxStableDiffusionErrorCode::InvalidParameter,
+			label + " must be finite when provided"
+		};
+	}
+	return {};
+}
+
 bool isNativeWanVideoFamily(ofxStableDiffusionModelFamily family) {
 	return family == ofxStableDiffusionModelFamily::WAN ||
 		family == ofxStableDiffusionModelFamily::WANI2V ||
@@ -264,11 +287,18 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 		if (!stepsResult.ok()) return stepsResult;
 	}
 
+	const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
+	if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 	if (std::isfinite(request.cfgScale)) {
 		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
 		if (!cfgResult.ok()) return cfgResult;
 	}
 
+	const ValidationResult flowShiftFiniteResult = validateOptionalFinite(request.flowShift, "Flow shift");
+	if (!flowShiftFiniteResult.ok()) return flowShiftFiniteResult;
+
+	const ValidationResult strengthFiniteResult = validateOptionalFinite(request.strength, "Strength");
+	if (!strengthFiniteResult.ok()) return strengthFiniteResult;
 	if (std::isfinite(request.strength)) {
 		const ValidationResult strengthResult = validateStrength(request.strength);
 		if (!strengthResult.ok()) return strengthResult;
@@ -314,16 +344,29 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
 	if (!clipResult.ok()) return clipResult;
 
+	const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
+	if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 	if (std::isfinite(request.cfgScale)) {
 		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
 		if (!cfgResult.ok()) return cfgResult;
 	}
+
+	const ValidationResult guidanceFiniteResult = validateOptionalFinite(request.guidance, "Guidance");
+	if (!guidanceFiniteResult.ok()) return guidanceFiniteResult;
+
+	const ValidationResult etaFiniteResult = validateOptionalFinite(request.eta, "Eta");
+	if (!etaFiniteResult.ok()) return etaFiniteResult;
+
+	const ValidationResult flowShiftFiniteResult = validateOptionalFinite(request.flowShift, "Flow shift");
+	if (!flowShiftFiniteResult.ok()) return flowShiftFiniteResult;
 
 	if (request.sampleSteps > 0) {
 		const ValidationResult stepsResult = validateSampleSteps(request.sampleSteps);
 		if (!stepsResult.ok()) return stepsResult;
 	}
 
+	const ValidationResult strengthFiniteResult = validateOptionalFinite(request.strength, "Strength");
+	if (!strengthFiniteResult.ok()) return strengthFiniteResult;
 	if (std::isfinite(request.strength)) {
 		const ValidationResult strengthResult = validateStrength(request.strength);
 		if (!strengthResult.ok()) return strengthResult;
@@ -338,6 +381,13 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 			return {
 				ofxStableDiffusionErrorCode::InvalidParameter,
 				"Control frame " + ofToString(static_cast<int>(i)) + " is not allocated"
+			};
+		}
+		if (frame.width != static_cast<uint32_t>(request.width) ||
+			frame.height != static_cast<uint32_t>(request.height)) {
+			return {
+				ofxStableDiffusionErrorCode::InvalidDimensions,
+				"Control frame " + ofToString(static_cast<int>(i)) + " dimensions must match the request dimensions"
 			};
 		}
 	}
@@ -361,15 +411,42 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 		}
 	}
 
+	const ValidationResult moeBoundaryFiniteResult = validateOptionalFinite(request.moeBoundary, "MoE boundary");
+	if (!moeBoundaryFiniteResult.ok()) return moeBoundaryFiniteResult;
 	if (std::isfinite(request.moeBoundary)) {
 		const ValidationResult moeBoundaryResult =
 			validateUnitInterval(request.moeBoundary, "MoE boundary");
 		if (!moeBoundaryResult.ok()) return moeBoundaryResult;
 	}
 
+	const ValidationResult vaceStrengthFiniteResult = validateOptionalFinite(request.vaceStrength, "VACE strength");
+	if (!vaceStrengthFiniteResult.ok()) return vaceStrengthFiniteResult;
 	if (std::isfinite(request.vaceStrength)) {
 		const ValidationResult vaceResult = validateVaceStrength(request.vaceStrength);
 		if (!vaceResult.ok()) return vaceResult;
+	}
+
+	if (request.useHighNoiseOverrides) {
+		const ValidationResult highNoiseCfgFiniteResult = validateOptionalFinite(request.highNoiseCfgScale, "High-noise CFG scale");
+		if (!highNoiseCfgFiniteResult.ok()) return highNoiseCfgFiniteResult;
+		if (std::isfinite(request.highNoiseCfgScale)) {
+			const ValidationResult highNoiseCfgResult = validateCfgScale(request.highNoiseCfgScale);
+			if (!highNoiseCfgResult.ok()) return highNoiseCfgResult;
+		}
+
+		const ValidationResult highNoiseGuidanceFiniteResult = validateOptionalFinite(request.highNoiseGuidance, "High-noise guidance");
+		if (!highNoiseGuidanceFiniteResult.ok()) return highNoiseGuidanceFiniteResult;
+
+		const ValidationResult highNoiseEtaFiniteResult = validateOptionalFinite(request.highNoiseEta, "High-noise eta");
+		if (!highNoiseEtaFiniteResult.ok()) return highNoiseEtaFiniteResult;
+
+		const ValidationResult highNoiseFlowShiftFiniteResult = validateOptionalFinite(request.highNoiseFlowShift, "High-noise flow shift");
+		if (!highNoiseFlowShiftFiniteResult.ok()) return highNoiseFlowShiftFiniteResult;
+
+		if (request.highNoiseSampleSteps > 0) {
+			const ValidationResult highNoiseStepsResult = validateSampleSteps(request.highNoiseSampleSteps);
+			if (!highNoiseStepsResult.ok()) return highNoiseStepsResult;
+		}
 	}
 
 	if (request.hasAnimation()) {
@@ -487,6 +564,9 @@ void appendSearchRootsForModelPath(std::vector<fs::path>& roots, const std::stri
 	if (modelPath.empty()) {
 		return;
 	}
+	if (ofxSdPathHasParentTraversal(modelPath)) {
+		return;
+	}
 
 	const fs::path path(modelPath);
 	const fs::path dir = path.has_parent_path() ? path.parent_path() : fs::path();
@@ -514,15 +594,29 @@ std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContext
 	for (const auto& root : roots) {
 		for (const auto& subfolder : subfolders) {
 			const fs::path candidateDir = root / subfolder;
-			if (!fs::exists(candidateDir) || !fs::is_directory(candidateDir)) {
+			std::error_code ec;
+			if (!fs::exists(candidateDir, ec) || ec) {
+				continue;
+			}
+			ec.clear();
+			if (!fs::is_directory(candidateDir, ec) || ec) {
 				continue;
 			}
 
 			std::vector<fs::path> preferredFiles;
 			std::vector<fs::path> fallbackFiles;
-			for (const auto& entry : fs::directory_iterator(candidateDir)) {
+			fs::directory_iterator it(candidateDir, ec);
+			if (ec) {
+				continue;
+			}
+			for (fs::directory_iterator end; it != end;) {
+				const auto& entry = *it;
 				const fs::path candidatePath = entry.path();
 				if (!isResolvableModelFile(candidatePath)) {
+					it.increment(ec);
+					if (ec) {
+						break;
+					}
 					continue;
 				}
 
@@ -539,6 +633,13 @@ std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContext
 				} else {
 					fallbackFiles.push_back(candidatePath);
 				}
+				it.increment(ec);
+				if (ec) {
+					break;
+				}
+			}
+			if (ec) {
+				continue;
 			}
 
 			auto byFilename = [](const fs::path& a, const fs::path& b) {
@@ -651,7 +752,10 @@ void ofxStableDiffusion::generateVideo(const ofxStableDiffusionVideoRequest& req
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToVideo)) {
 		return;
 	}
-	applyVideoRequest(request);
+	if (!applyVideoRequest(request)) {
+		finishBackgroundTask();
+		return;
+	}
 	thread.startThread();
 }
 
@@ -1186,7 +1290,6 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	sd_image_t* controlCond_,
 	float controlStrength_,
 	float styleStrength_,
-	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
 	if (thread.isThreadRunning()) {
 		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
@@ -1228,7 +1331,6 @@ void ofxStableDiffusion::txt2img(const std::string& prompt_,
 	request.controlCond = controlCond_;
 	request.controlStrength = controlStrength_;
 	request.styleStrength = styleStrength_;
-	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
 	generate(request);
 }
@@ -1248,7 +1350,6 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	sd_image_t* controlCond_,
 	float controlStrength_,
 	float styleStrength_,
-	bool normalizeInput_,
 	const std::string& inputIdImagesPath_) {
 	if (thread.isThreadRunning()) {
 		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "A task is already running");
@@ -1299,7 +1400,6 @@ void ofxStableDiffusion::img2img(sd_image_t initImage_,
 	request.controlCond = controlCond_;
 	request.controlStrength = controlStrength_;
 	request.styleStrength = styleStrength_;
-	request.normalizeInput = normalizeInput_;
 	request.inputIdImagesPath = inputIdImagesPath_;
 	generate(request);
 }
@@ -1423,7 +1523,14 @@ void ofxStableDiffusion::freeUpscalerCtx() {
 }
 
 sd_image_t ofxStableDiffusion::upscaleImage(sd_image_t inputImage_, uint32_t upscaleFactor) {
-	activeTask = ofxStableDiffusionTask::Upscale;
+	if (thread.isThreadRunning()) {
+		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "Cannot upscale while another task is running");
+		return {0, 0, 0, nullptr};
+	}
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		activeTask = ofxStableDiffusionTask::Upscale;
+	}
 	if (upscaleFactor == 0) {
 		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Upscale factor must be at least 1");
 		return {0, 0, 0, nullptr};
@@ -1463,7 +1570,7 @@ bool ofxStableDiffusion::isGenerating() const {
 
 bool ofxStableDiffusion::isBusy() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	return thread.isThreadRunning() || isModelLoading;
+	return thread.isThreadRunning() || isModelLoading.load(std::memory_order_acquire);
 }
 
 bool ofxStableDiffusion::requestCancellation() {
@@ -1514,21 +1621,27 @@ int64_t ofxStableDiffusion::hashStringToSeed(const std::string& text) {
 
 bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	if (thread.isThreadRunning()) {
-		activeTask = task;
+		{
+			std::lock_guard<std::mutex> lock(stateMutex);
+			activeTask = task;
+		}
 		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "Another task is still running");
 		return false;
 	}
 
-	activeTask = task;
 	taskStartMicros = ofGetElapsedTimeMicros();
-	isModelLoading = (task == ofxStableDiffusionTask::LoadModel);
+	isModelLoading.store(task == ofxStableDiffusionTask::LoadModel, std::memory_order_release);
 	isTextToImage.store(task == ofxStableDiffusionTask::TextToImage, std::memory_order_relaxed);
 	isImageToVideo.store(task == ofxStableDiffusionTask::ImageToVideo, std::memory_order_relaxed);
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		activeTask = task;
+		lastOperationCancelled = false;
+	}
 	clearLastError();
 	clearOutputState();
 	thread.userData = this;
 	thread.resetCancellation();  // Reset cancellation flag for new task
-	lastOperationCancelled = false;
 	return true;
 }
 
@@ -1537,14 +1650,15 @@ void ofxStableDiffusion::finishBackgroundTask(bool cancelled, const std::string&
 		setLastError(
 			ofxStableDiffusionErrorCode::Cancelled,
 			cancelMessage.empty() ? "Operation cancelled" : cancelMessage);
-		std::lock_guard<std::mutex> lock(stateMutex);
-		lastOperationCancelled = true;
 	}
-
-	isModelLoading = false;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		lastOperationCancelled = cancelled;
+		activeTask = ofxStableDiffusionTask::None;
+	}
+	isModelLoading.store(false, std::memory_order_release);
 	isTextToImage.store(false, std::memory_order_relaxed);
 	isImageToVideo.store(false, std::memory_order_relaxed);
-	activeTask = ofxStableDiffusionTask::None;
 }
 
 void ofxStableDiffusion::clearResolvedDefaultCachesNoLock() {
@@ -1712,7 +1826,6 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 		controlCond = nullptr;
 		controlStrength = taskData.request.controlStrength;
 		styleStrength = request.styleStrength;
-		normalizeInput = request.normalizeInput;
 		inputIdImagesPath = request.inputIdImagesPath;
 		loras = request.loras;
 	} catch (const std::exception& e) {
@@ -1748,7 +1861,7 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 	return true;
 }
 
-void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
+bool ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
 	stableDiffusionThread::VideoTaskData taskData;
 
 	try {
@@ -1791,11 +1904,11 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 	} catch (const std::exception& e) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			std::string("Exception while preparing video request: ") + e.what());
-		return;
+		return false;
 	} catch (...) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			"Unknown exception while preparing video request");
-		return;
+		return false;
 	}
 
 	try {
@@ -1803,10 +1916,13 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 	} catch (const std::exception& e) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			std::string("Exception while starting video task: ") + e.what());
+		return false;
 	} catch (...) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			"Unknown exception while starting video task");
+		return false;
 	}
+	return true;
 }
 
 bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task) {

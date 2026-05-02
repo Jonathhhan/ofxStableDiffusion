@@ -24,7 +24,6 @@ sd.txt2img(
     nullptr,  // controlCond
     0.9f,     // controlStrength
     0.0f,     // styleStrength
-    false,    // normalizeInput
     ""        // inputIdImagesPath
 );
 ```
@@ -202,7 +201,7 @@ The new API should produce identical results, but always test:
 // Must specify all parameters, even defaults
 sd.txt2img(prompt, "", -1, 7.0f, 512, 512,
            EULER_A_SAMPLE_METHOD, 20, -1, 1,
-           nullptr, 0.9f, 0.0f, false, "");
+           nullptr, 0.9f, 0.0f, "");
 ```
 
 **New:**

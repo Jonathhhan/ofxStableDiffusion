@@ -219,5 +219,25 @@ int main() {
 	ok &= expectEqual(ofxStableDiffusionGetFrameSeed(seedSequenceRequest, 2), static_cast<int64_t>(999), "keyframed seed overrides sequence");
 	ok &= expectEqual(ofxStableDiffusionGetFrameSeed(seedSequenceRequest, 3), static_cast<int64_t>(999), "keyframed seed persists after keyframe");
 
+	ofxStableDiffusionVideoRequest overflowSeedRequest =
+		ofxStableDiffusionCreateSeedSequenceRequest(
+			std::numeric_limits<int64_t>::max() - 2,
+			4,
+			2);
+	ok &= expectEqual(
+		ofxStableDiffusionGetFrameSeed(overflowSeedRequest, 3),
+		std::numeric_limits<int64_t>::max(),
+		"seed sequence clamps on positive overflow");
+
+	ofxStableDiffusionVideoRequest underflowSeedRequest =
+		ofxStableDiffusionCreateSeedSequenceRequest(
+			5,
+			4,
+			std::numeric_limits<int64_t>::min() / 2);
+	ok &= expectEqual(
+		ofxStableDiffusionGetFrameSeed(underflowSeedRequest, 3),
+		std::numeric_limits<int64_t>::min(),
+		"seed sequence clamps on negative overflow");
+
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

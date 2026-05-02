@@ -154,6 +154,10 @@ public:
 			}
 			request.controlFrames = controlFrameViews;
 		}
+
+		sd_image_t* getMutableControlFramesData() {
+			return controlFrameViews.empty() ? nullptr : controlFrameViews.data();
+		}
 	};
 
 	void* userData = nullptr;

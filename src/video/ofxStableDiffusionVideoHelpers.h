@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 inline const char * ofxStableDiffusionVideoModeName(ofxStableDiffusionVideoMode mode) {
@@ -35,6 +36,51 @@ inline int ofxStableDiffusionVideoFrameIndexForTime(std::size_t frameCount, int 
 	const float clampedSeconds = std::max(0.0f, seconds);
 	const int index = static_cast<int>(std::floor(clampedSeconds * static_cast<float>(fps)));
 	return std::min<int>(index, static_cast<int>(frameCount) - 1);
+}
+
+inline bool ofxStableDiffusionTryMultiplyInt64(int64_t a, int64_t b, int64_t& result) {
+	const int64_t maxValue = std::numeric_limits<int64_t>::max();
+	const int64_t minValue = std::numeric_limits<int64_t>::min();
+	if (a == 0 || b == 0) {
+		result = 0;
+		return true;
+	}
+	if (a > 0) {
+		if (b > 0) {
+			if (a > maxValue / b) {
+				return false;
+			}
+		} else if (b < minValue / a) {
+			return false;
+		}
+	} else if (b > 0) {
+		if (a < minValue / b) {
+			return false;
+		}
+	} else if (a < maxValue / b) {
+		return false;
+	}
+	result = a * b;
+	return true;
+}
+
+inline bool ofxStableDiffusionTryAddInt64(int64_t a, int64_t b, int64_t& result) {
+	const int64_t maxValue = std::numeric_limits<int64_t>::max();
+	const int64_t minValue = std::numeric_limits<int64_t>::min();
+	if (b > 0 && a > maxValue - b) {
+		return false;
+	}
+	if (b < 0) {
+		if (b == minValue) {
+			if (a < 0) {
+				return false;
+			}
+		} else if (a < minValue - b) {
+			return false;
+		}
+	}
+	result = a + b;
+	return true;
 }
 
 inline std::vector<int> ofxStableDiffusionBuildVideoFrameSequence(
@@ -200,9 +246,47 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 	}
 
 	if (request.animationSettings.useSeedSequence && request.seed >= 0) {
-		return request.seed + (static_cast<int64_t>(frameNumber) * request.animationSettings.seedIncrement);
+		const int64_t frameOffset = static_cast<int64_t>(frameNumber);
+		const int64_t increment = request.animationSettings.seedIncrement;
+		if (frameOffset == 0 || increment == 0) {
+			return request.seed;
+		}
+		const int64_t maxValue = std::numeric_limits<int64_t>::max();
+		const int64_t minValue = std::numeric_limits<int64_t>::min();
+#if defined(__SIZEOF_INT128__)
+		const __int128 expandedSeed = static_cast<__int128>(request.seed);
+		const __int128 expandedOffset = static_cast<__int128>(frameOffset);
+		const __int128 expandedIncrement = static_cast<__int128>(increment);
+		const __int128 expandedValue = expandedSeed + (expandedOffset * expandedIncrement);
+		if (expandedValue > static_cast<__int128>(maxValue)) {
+			return maxValue;
+		}
+		if (expandedValue < static_cast<__int128>(minValue)) {
+			return minValue;
+		}
+		return static_cast<int64_t>(expandedValue);
+#elif defined(__GNUC__) || defined(__clang__)
+		int64_t delta = 0;
+		if (__builtin_mul_overflow(frameOffset, increment, &delta)) {
+			return ((frameOffset < 0) != (increment < 0)) ? minValue : maxValue;
+		}
+		int64_t expandedValue = 0;
+		if (__builtin_add_overflow(request.seed, delta, &expandedValue)) {
+			return delta < 0 ? minValue : maxValue;
+		}
+		return expandedValue;
+#else
+		int64_t delta = 0;
+		if (!ofxStableDiffusionTryMultiplyInt64(frameOffset, increment, delta)) {
+			return ((frameOffset < 0) != (increment < 0)) ? minValue : maxValue;
+		}
+		int64_t expandedValue = 0;
+		if (!ofxStableDiffusionTryAddInt64(request.seed, delta, expandedValue)) {
+			return delta < 0 ? minValue : maxValue;
+		}
+		return expandedValue;
+#endif
 	}
 
 	return request.seed;
 }
-

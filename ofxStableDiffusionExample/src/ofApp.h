@@ -142,7 +142,6 @@ class ofApp : public ofBaseApp {
 		float highNoiseEta;
 		float highNoiseFlowShift;
 		float styleStrength;
-		bool normalizeInput;
 		int nThreads;
 		int esrganMultiplier;
 		sd_type_t wType;

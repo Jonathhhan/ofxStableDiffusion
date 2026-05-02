@@ -936,7 +936,6 @@ void ofApp::setup() {
 	highNoiseEta = 0.0f;
 	highNoiseFlowShift = 5.0f;
 	styleStrength = 20;
-	normalizeInput = true;
 	width = 512;
 	height = 512;
 	cfgScale = 7.0f;
@@ -2157,7 +2156,6 @@ void ofApp::draw() {
 					nullptr;
 			request.controlStrength = controlStrength;
 			request.styleStrength = styleStrength;
-			request.normalizeInput = normalizeInput;
 			request.inputIdImagesPath = inputIdImagesPath;
 			stableDiffusion.generate(request);
 		}
