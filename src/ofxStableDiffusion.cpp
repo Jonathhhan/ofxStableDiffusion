@@ -138,7 +138,7 @@ ValidationResult validateCfgScale(float cfgScale) {
 	if (cfgScale < MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter,
 			"CFG scale must be greater than or equal to " + ofToString(MIN_CFG_SCALE, 0) + " and no more than " +
-				std::to_string(static_cast<int>(MAX_CFG_SCALE))};
+				ofToString(MAX_CFG_SCALE, 0)};
 	}
 	return {};
 }

@@ -38,6 +38,45 @@ inline int ofxStableDiffusionVideoFrameIndexForTime(std::size_t frameCount, int 
 	return std::min<int>(index, static_cast<int>(frameCount) - 1);
 }
 
+inline bool ofxStableDiffusionTryMultiplyInt64(int64_t a, int64_t b, int64_t& result) {
+	const int64_t maxValue = std::numeric_limits<int64_t>::max();
+	const int64_t minValue = std::numeric_limits<int64_t>::min();
+	if (a == 0 || b == 0) {
+		result = 0;
+		return true;
+	}
+	if (a > 0) {
+		if (b > 0) {
+			if (a > maxValue / b) {
+				return false;
+			}
+		} else if (b < minValue / a) {
+			return false;
+		}
+	} else if (b > 0) {
+		if (a < minValue / b) {
+			return false;
+		}
+	} else if (a < maxValue / b) {
+		return false;
+	}
+	result = a * b;
+	return true;
+}
+
+inline bool ofxStableDiffusionTryAddInt64(int64_t a, int64_t b, int64_t& result) {
+	const int64_t maxValue = std::numeric_limits<int64_t>::max();
+	const int64_t minValue = std::numeric_limits<int64_t>::min();
+	if (b > 0 && a > maxValue - b) {
+		return false;
+	}
+	if (b < 0 && a < minValue - b) {
+		return false;
+	}
+	result = a + b;
+	return true;
+}
+
 inline std::vector<int> ofxStableDiffusionBuildVideoFrameSequence(
 	int sourceFrameCount,
 	ofxStableDiffusionVideoMode mode) {
@@ -231,23 +270,15 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 		}
 		return expandedValue;
 #else
-		if (increment > 0 && frameOffset > 0 &&
-			frameOffset > (maxValue - request.seed) / increment) {
-			return maxValue;
+		int64_t delta = 0;
+		if (!ofxStableDiffusionTryMultiplyInt64(frameOffset, increment, delta)) {
+			return ((frameOffset < 0) != (increment < 0)) ? minValue : maxValue;
 		}
-		if (increment < 0 && frameOffset > 0 &&
-			frameOffset > (request.seed - minValue) / (-increment)) {
-			return minValue;
+		int64_t expandedValue = 0;
+		if (!ofxStableDiffusionTryAddInt64(request.seed, delta, expandedValue)) {
+			return delta < 0 ? minValue : maxValue;
 		}
-		if (increment > 0 && frameOffset < 0 &&
-			frameOffset < (minValue - request.seed) / increment) {
-			return minValue;
-		}
-		if (increment < 0 && frameOffset < 0 &&
-			frameOffset < (maxValue - request.seed) / increment) {
-			return maxValue;
-		}
-		return request.seed + (frameOffset * increment);
+		return expandedValue;
 #endif
 	}
 
