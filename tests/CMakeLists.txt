@@ -219,3 +219,15 @@ target_include_directories(test_scheduler_override PRIVATE
 )
 
 add_test(NAME scheduler_override COMMAND test_scheduler_override)
+
+add_executable(test_validation_helpers
+    test_validation_helpers.cpp
+)
+
+target_include_directories(test_validation_helpers PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME validation_helpers COMMAND test_validation_helpers)

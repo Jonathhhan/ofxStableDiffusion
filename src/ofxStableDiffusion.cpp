@@ -3,6 +3,7 @@
 #include "core/ofxStableDiffusionLimits.h"
 #include "core/ofxStableDiffusionMemoryHelpers.h"
 #include "core/ofxStableDiffusionNativeAdapter.h"
+#include "core/ofxStableDiffusionValidationHelpers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -203,6 +204,16 @@ ValidationResult validateUnitInterval(float value, const std::string& label) {
 	return {};
 }
 
+ValidationResult validateOptionalFinite(float value, const std::string& label) {
+	if (!ofxSdOptionalFloatIsFiniteWhenProvided(value)) {
+		return {
+			ofxStableDiffusionErrorCode::InvalidParameter,
+			label + " must be finite when provided"
+		};
+	}
+	return {};
+}
+
 bool isNativeWanVideoFamily(ofxStableDiffusionModelFamily family) {
 	return family == ofxStableDiffusionModelFamily::WAN ||
 		family == ofxStableDiffusionModelFamily::WANI2V ||
@@ -265,10 +276,17 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	}
 
 	if (std::isfinite(request.cfgScale)) {
+		const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
+		if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
 		if (!cfgResult.ok()) return cfgResult;
 	}
 
+	const ValidationResult flowShiftFiniteResult = validateOptionalFinite(request.flowShift, "Flow shift");
+	if (!flowShiftFiniteResult.ok()) return flowShiftFiniteResult;
+
+	const ValidationResult strengthFiniteResult = validateOptionalFinite(request.strength, "Strength");
+	if (!strengthFiniteResult.ok()) return strengthFiniteResult;
 	if (std::isfinite(request.strength)) {
 		const ValidationResult strengthResult = validateStrength(request.strength);
 		if (!strengthResult.ok()) return strengthResult;
@@ -315,15 +333,28 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 	if (!clipResult.ok()) return clipResult;
 
 	if (std::isfinite(request.cfgScale)) {
+		const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
+		if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
 		if (!cfgResult.ok()) return cfgResult;
 	}
+
+	const ValidationResult guidanceFiniteResult = validateOptionalFinite(request.guidance, "Guidance");
+	if (!guidanceFiniteResult.ok()) return guidanceFiniteResult;
+
+	const ValidationResult etaFiniteResult = validateOptionalFinite(request.eta, "Eta");
+	if (!etaFiniteResult.ok()) return etaFiniteResult;
+
+	const ValidationResult flowShiftFiniteResult = validateOptionalFinite(request.flowShift, "Flow shift");
+	if (!flowShiftFiniteResult.ok()) return flowShiftFiniteResult;
 
 	if (request.sampleSteps > 0) {
 		const ValidationResult stepsResult = validateSampleSteps(request.sampleSteps);
 		if (!stepsResult.ok()) return stepsResult;
 	}
 
+	const ValidationResult strengthFiniteResult = validateOptionalFinite(request.strength, "Strength");
+	if (!strengthFiniteResult.ok()) return strengthFiniteResult;
 	if (std::isfinite(request.strength)) {
 		const ValidationResult strengthResult = validateStrength(request.strength);
 		if (!strengthResult.ok()) return strengthResult;
@@ -361,15 +392,42 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 		}
 	}
 
+	const ValidationResult moeBoundaryFiniteResult = validateOptionalFinite(request.moeBoundary, "MoE boundary");
+	if (!moeBoundaryFiniteResult.ok()) return moeBoundaryFiniteResult;
 	if (std::isfinite(request.moeBoundary)) {
 		const ValidationResult moeBoundaryResult =
 			validateUnitInterval(request.moeBoundary, "MoE boundary");
 		if (!moeBoundaryResult.ok()) return moeBoundaryResult;
 	}
 
+	const ValidationResult vaceStrengthFiniteResult = validateOptionalFinite(request.vaceStrength, "VACE strength");
+	if (!vaceStrengthFiniteResult.ok()) return vaceStrengthFiniteResult;
 	if (std::isfinite(request.vaceStrength)) {
 		const ValidationResult vaceResult = validateVaceStrength(request.vaceStrength);
 		if (!vaceResult.ok()) return vaceResult;
+	}
+
+	if (request.useHighNoiseOverrides) {
+		const ValidationResult highNoiseCfgFiniteResult = validateOptionalFinite(request.highNoiseCfgScale, "High-noise CFG scale");
+		if (!highNoiseCfgFiniteResult.ok()) return highNoiseCfgFiniteResult;
+		if (std::isfinite(request.highNoiseCfgScale)) {
+			const ValidationResult highNoiseCfgResult = validateCfgScale(request.highNoiseCfgScale);
+			if (!highNoiseCfgResult.ok()) return highNoiseCfgResult;
+		}
+
+		const ValidationResult highNoiseGuidanceFiniteResult = validateOptionalFinite(request.highNoiseGuidance, "High-noise guidance");
+		if (!highNoiseGuidanceFiniteResult.ok()) return highNoiseGuidanceFiniteResult;
+
+		const ValidationResult highNoiseEtaFiniteResult = validateOptionalFinite(request.highNoiseEta, "High-noise eta");
+		if (!highNoiseEtaFiniteResult.ok()) return highNoiseEtaFiniteResult;
+
+		const ValidationResult highNoiseFlowShiftFiniteResult = validateOptionalFinite(request.highNoiseFlowShift, "High-noise flow shift");
+		if (!highNoiseFlowShiftFiniteResult.ok()) return highNoiseFlowShiftFiniteResult;
+
+		if (request.highNoiseSampleSteps > 0) {
+			const ValidationResult highNoiseStepsResult = validateSampleSteps(request.highNoiseSampleSteps);
+			if (!highNoiseStepsResult.ok()) return highNoiseStepsResult;
+		}
 	}
 
 	if (request.hasAnimation()) {
@@ -512,15 +570,20 @@ std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContext
 	const std::vector<std::string> preferredNameParts = {"umt5", "t5xxl", "encoder"};
 
 	for (const auto& root : roots) {
+		if (ofxSdPathHasParentTraversal(root.string())) {
+			continue;
+		}
 		for (const auto& subfolder : subfolders) {
 			const fs::path candidateDir = root / subfolder;
-			if (!fs::exists(candidateDir) || !fs::is_directory(candidateDir)) {
+			std::error_code ec;
+			if (!fs::exists(candidateDir, ec) || ec || !fs::is_directory(candidateDir, ec) || ec) {
 				continue;
 			}
 
 			std::vector<fs::path> preferredFiles;
 			std::vector<fs::path> fallbackFiles;
-			for (const auto& entry : fs::directory_iterator(candidateDir)) {
+			for (fs::directory_iterator it(candidateDir, ec), end; !ec && it != end; it.increment(ec)) {
+				const auto& entry = *it;
 				const fs::path candidatePath = entry.path();
 				if (!isResolvableModelFile(candidatePath)) {
 					continue;
@@ -539,6 +602,9 @@ std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContext
 				} else {
 					fallbackFiles.push_back(candidatePath);
 				}
+			}
+			if (ec) {
+				continue;
 			}
 
 			auto byFilename = [](const fs::path& a, const fs::path& b) {
