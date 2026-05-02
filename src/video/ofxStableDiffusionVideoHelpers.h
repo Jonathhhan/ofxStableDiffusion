@@ -220,17 +220,34 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 			return minValue;
 		}
 		return static_cast<int64_t>(expandedValue);
+#elif defined(__GNUC__) || defined(__clang__)
+		int64_t delta = 0;
+		if (__builtin_mul_overflow(frameOffset, increment, &delta)) {
+			return ((frameOffset < 0) != (increment < 0)) ? minValue : maxValue;
+		}
+		int64_t expandedValue = 0;
+		if (__builtin_add_overflow(request.seed, delta, &expandedValue)) {
+			return delta < 0 ? minValue : maxValue;
+		}
+		return expandedValue;
 #else
-		const long double expandedValue =
-			static_cast<long double>(request.seed) +
-			(static_cast<long double>(frameOffset) * static_cast<long double>(increment));
-		if (expandedValue > static_cast<long double>(maxValue)) {
+		if (increment > 0 && frameOffset > 0 &&
+			frameOffset > (maxValue - request.seed) / increment) {
 			return maxValue;
 		}
-		if (expandedValue < static_cast<long double>(minValue)) {
+		if (increment < 0 && frameOffset > 0 &&
+			frameOffset > (request.seed - minValue) / (-increment)) {
 			return minValue;
 		}
-		return static_cast<int64_t>(expandedValue);
+		if (increment > 0 && frameOffset < 0 &&
+			frameOffset < (minValue - request.seed) / increment) {
+			return minValue;
+		}
+		if (increment < 0 && frameOffset < 0 &&
+			frameOffset < (maxValue - request.seed) / increment) {
+			return maxValue;
+		}
+		return request.seed + (frameOffset * increment);
 #endif
 	}
 
