@@ -171,6 +171,7 @@ struct ofxStableDiffusionImageRequest {
 	int width = 512;
 	int height = 512;
 	sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;
+	scheduler_t schedule = SCHEDULER_COUNT;
 	int sampleSteps = -1;
 	float flowShift = std::numeric_limits<float>::infinity();
 	float strength = std::numeric_limits<float>::infinity();
@@ -203,6 +204,7 @@ struct ofxStableDiffusionVideoRequest {
 	float cfgScale = std::numeric_limits<float>::infinity();
 	float guidance = std::numeric_limits<float>::infinity();
 	sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;
+	scheduler_t schedule = SCHEDULER_COUNT;
 	int sampleSteps = -1;
 	float eta = std::numeric_limits<float>::infinity();
 	float flowShift = std::numeric_limits<float>::infinity();
@@ -210,6 +212,7 @@ struct ofxStableDiffusionVideoRequest {
 	float highNoiseCfgScale = std::numeric_limits<float>::infinity();
 	float highNoiseGuidance = std::numeric_limits<float>::infinity();
 	sample_method_t highNoiseSampleMethod = SAMPLE_METHOD_COUNT;
+	scheduler_t highNoiseSchedule = SCHEDULER_COUNT;
 	int highNoiseSampleSteps = -1;
 	float highNoiseEta = std::numeric_limits<float>::infinity();
 	float highNoiseFlowShift = std::numeric_limits<float>::infinity();

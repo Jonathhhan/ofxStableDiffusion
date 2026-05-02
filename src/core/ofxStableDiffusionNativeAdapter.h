@@ -260,6 +260,8 @@ inline sd_img_gen_params_t buildImageParams(
 	const auto& settings = taskData.contextSettings;
 
 	const sample_method_t sampleMethod = resolveSampleMethod(sdCtx, request.sampleMethod);
+	const scheduler_t effectiveSchedule =
+		(request.schedule != SCHEDULER_COUNT) ? request.schedule : settings.schedule;
 
 	params.prompt = emptyToNull(effectivePrompt);
 	params.negative_prompt = emptyToNull(request.negativePrompt);
@@ -269,7 +271,7 @@ inline sd_img_gen_params_t buildImageParams(
 	params.width = request.width;
 	params.height = request.height;
 	params.sample_params.sample_method = sampleMethod;
-	params.sample_params.scheduler = resolveScheduler(sdCtx, sampleMethod, settings.schedule);
+	params.sample_params.scheduler = resolveScheduler(sdCtx, sampleMethod, effectiveSchedule);
 	if (request.sampleSteps > 0) {
 		params.sample_params.sample_steps = request.sampleSteps;
 	}
@@ -325,7 +327,9 @@ inline sd_vid_gen_params_t buildVideoParams(
 	const auto& settings = taskData.contextSettings;
 
 	const sample_method_t sampleMethod = resolveSampleMethod(sdCtx, request.sampleMethod);
-	const scheduler_t scheduler = resolveScheduler(sdCtx, sampleMethod, settings.schedule);
+	const scheduler_t effectiveSchedule =
+		(request.schedule != SCHEDULER_COUNT) ? request.schedule : settings.schedule;
+	const scheduler_t scheduler = resolveScheduler(sdCtx, sampleMethod, effectiveSchedule);
 
 	params.prompt = emptyToNull(request.prompt);
 	params.negative_prompt = emptyToNull(request.negativePrompt);
@@ -360,9 +364,13 @@ inline sd_vid_gen_params_t buildVideoParams(
 			(request.highNoiseSampleMethod == SAMPLE_METHOD_COUNT)
 				? sampleMethod
 				: resolveSampleMethod(sdCtx, request.highNoiseSampleMethod);
+		const scheduler_t effectiveHighNoiseSchedule =
+			(request.highNoiseSchedule != SCHEDULER_COUNT) ? request.highNoiseSchedule
+			: (request.schedule != SCHEDULER_COUNT) ? request.schedule
+			: settings.schedule;
 		params.high_noise_sample_params.sample_method = highNoiseSampleMethod;
 		params.high_noise_sample_params.scheduler =
-			resolveScheduler(sdCtx, highNoiseSampleMethod, settings.schedule);
+			resolveScheduler(sdCtx, highNoiseSampleMethod, effectiveHighNoiseSchedule);
 		if (request.highNoiseSampleSteps > 0) {
 			params.high_noise_sample_params.sample_steps = request.highNoiseSampleSteps;
 		}
