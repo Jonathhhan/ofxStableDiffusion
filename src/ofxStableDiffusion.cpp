@@ -293,23 +293,23 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 	return {};
 }
 
-	ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoRequest& request) {
-		const ValidationResult dimResult = validateDimensions(request.width, request.height);
-		if (!dimResult.ok()) return dimResult;
+ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoRequest& request) {
+	const ValidationResult dimResult = validateDimensions(request.width, request.height);
+	if (!dimResult.ok()) return dimResult;
 
-		if (!ofxStableDiffusionLimits::isValidFrameCount(request.frameCount)) {
-			return {ofxStableDiffusionErrorCode::InvalidFrameCount,
-				"Frame count must be between " +
-				std::to_string(ofxStableDiffusionLimits::MIN_FRAME_COUNT) + " and " +
-				std::to_string(ofxStableDiffusionLimits::MAX_FRAME_COUNT)};
-		}
+	if (!ofxStableDiffusionLimits::isValidFrameCount(request.frameCount)) {
+		return {ofxStableDiffusionErrorCode::InvalidFrameCount,
+			"Frame count must be between " +
+			std::to_string(ofxStableDiffusionLimits::MIN_FRAME_COUNT) + " and " +
+			std::to_string(ofxStableDiffusionLimits::MAX_FRAME_COUNT)};
+	}
 
-		if (!ofxStableDiffusionLimits::isValidFps(request.fps)) {
-			return {ofxStableDiffusionErrorCode::InvalidParameter,
-				"FPS must be between " +
-				std::to_string(ofxStableDiffusionLimits::MIN_FPS) + " and " +
-				std::to_string(ofxStableDiffusionLimits::MAX_FPS)};
-		}
+	if (!ofxStableDiffusionLimits::isValidFps(request.fps)) {
+		return {ofxStableDiffusionErrorCode::InvalidParameter,
+			"FPS must be between " +
+			std::to_string(ofxStableDiffusionLimits::MIN_FPS) + " and " +
+			std::to_string(ofxStableDiffusionLimits::MAX_FPS)};
+	}
 
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
 	if (!clipResult.ok()) return clipResult;
@@ -573,33 +573,7 @@ ofxStableDiffusionContextSettings resolveContextModelPaths(
 bool contextSettingsEquivalent(
 	const ofxStableDiffusionContextSettings& lhs,
 	const ofxStableDiffusionContextSettings& rhs) {
-	return lhs.modelPath == rhs.modelPath &&
-		lhs.diffusionModelPath == rhs.diffusionModelPath &&
-		lhs.clipLPath == rhs.clipLPath &&
-		lhs.clipGPath == rhs.clipGPath &&
-		lhs.t5xxlPath == rhs.t5xxlPath &&
-		lhs.vaePath == rhs.vaePath &&
-		lhs.taesdPath == rhs.taesdPath &&
-		lhs.controlNetPath == rhs.controlNetPath &&
-		lhs.loraModelDir == rhs.loraModelDir &&
-		lhs.embedDir == rhs.embedDir &&
-		lhs.stackedIdEmbedDir == rhs.stackedIdEmbedDir &&
-		lhs.vaeDecodeOnly == rhs.vaeDecodeOnly &&
-		lhs.vaeTiling == rhs.vaeTiling &&
-		lhs.freeParamsImmediately == rhs.freeParamsImmediately &&
-		lhs.nThreads == rhs.nThreads &&
-		lhs.weightType == rhs.weightType &&
-		lhs.rngType == rhs.rngType &&
-		lhs.schedule == rhs.schedule &&
-		lhs.prediction == rhs.prediction &&
-		lhs.loraApplyMode == rhs.loraApplyMode &&
-		lhs.keepClipOnCpu == rhs.keepClipOnCpu &&
-		lhs.keepControlNetCpu == rhs.keepControlNetCpu &&
-		lhs.keepVaeOnCpu == rhs.keepVaeOnCpu &&
-		lhs.offloadParamsToCpu == rhs.offloadParamsToCpu &&
-		lhs.flashAttn == rhs.flashAttn &&
-		lhs.diffusionFlashAttn == rhs.diffusionFlashAttn &&
-		lhs.enableMmap == rhs.enableMmap;
+	return lhs == rhs;
 }
 
 } // namespace

@@ -127,6 +127,32 @@ void testScopedTimer() {
 	std::cout << " ✓" << std::endl;
 }
 
+void testScopedTimerAccumulates() {
+	std::cout << "Testing scoped timer accumulation...";
+
+	ofxStableDiffusionPerformanceProfiler profiler;
+
+	// First invocation: 2ms
+	{
+		testTimeMicros = 0;
+		auto timer = profiler.scopedTimer("op");
+		testTimeMicros = 2000;
+	}
+
+	// Second invocation: 3ms
+	{
+		testTimeMicros = 5000;
+		auto timer = profiler.scopedTimer("op");
+		testTimeMicros = 8000;
+	}
+
+	auto entry = profiler.getEntry("op");
+	assert(entry.durationMicros == 5000);  // 2000 + 3000, not just 3000
+	assert(entry.callCount == 2);
+
+	std::cout << " ✓" << std::endl;
+}
+
 void testStats() {
 	std::cout << "Testing stats aggregation...";
 
@@ -320,6 +346,7 @@ int main() {
 		testMultipleCalls();
 		testMemoryRecording();
 		testScopedTimer();
+		testScopedTimerAccumulates();
 		testStats();
 		testBottleneckDetection();
 		testEnableDisable();
