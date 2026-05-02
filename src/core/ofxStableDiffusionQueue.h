@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <atomic>
 
 /// Priority levels for generation requests
 enum class ofxStableDiffusionPriority {
@@ -216,7 +217,7 @@ private:
 	std::map<int, std::shared_ptr<ofxStableDiffusionQueueRequest>> allRequests;
 	std::shared_ptr<ofxStableDiffusionQueueRequest> currentRequest;
 
-	int nextRequestId = 1;
+	std::atomic<int> nextRequestId{1};
 	int queuedCount = 0;
 	bool enabled = true;
 	int maxQueueSize = 0;  // 0 = unlimited

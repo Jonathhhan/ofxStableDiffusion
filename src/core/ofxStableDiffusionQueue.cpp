@@ -487,7 +487,7 @@ bool ofxStableDiffusionQueue::saveToFile(const std::string &filepath) {
 		std::lock_guard<std::mutex> lock(mutex_);
 		json["version"] = "1.0";
 		json["timestamp"] = ofGetElapsedTimeMicros();
-		json["nextRequestId"] = nextRequestId;
+		json["nextRequestId"] = nextRequestId.load(std::memory_order_relaxed);
 
 		ofJson requestsJson = ofJson::array();
 		for (const auto &pair : allRequests) {
@@ -518,7 +518,7 @@ bool ofxStableDiffusionQueue::loadFromFile(const std::string &filepath) {
 
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
-		nextRequestId = json.value("nextRequestId", 1);
+		nextRequestId.store(json.value("nextRequestId", 1), std::memory_order_relaxed);
 	}
 
 	ofLogNotice("ofxStableDiffusionQueue") << "Loaded queue state from: " << filepath;
@@ -539,7 +539,7 @@ void ofxStableDiffusionQueue::setAutoSave(bool enabled_, const std::string &file
 }
 
 //--------------------------------------------------------------
-int ofxStableDiffusionQueue::generateRequestId() { return nextRequestId++; }
+int ofxStableDiffusionQueue::generateRequestId() { return nextRequestId.fetch_add(1, std::memory_order_relaxed); }
 
 //--------------------------------------------------------------
 void ofxStableDiffusionQueue::triggerAutoSave() {
