@@ -100,6 +100,17 @@ struct ValidationResult {
 	}
 };
 
+std::string formatValidationFloat(float value) {
+	std::string formatted = ofToString(value, 3);
+	while (!formatted.empty() && formatted.back() == '0') {
+		formatted.pop_back();
+	}
+	if (!formatted.empty() && formatted.back() == '.') {
+		formatted.pop_back();
+	}
+	return formatted.empty() ? "0" : formatted;
+}
+
 ValidationResult validateDimensions(int width, int height) {
 	using namespace ofxStableDiffusionLimits;
 	if (width <= 0 || height <= 0) {
@@ -137,8 +148,8 @@ ValidationResult validateCfgScale(float cfgScale) {
 	using namespace ofxStableDiffusionLimits;
 	if (cfgScale < MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter,
-			"CFG scale must be greater than or equal to " + ofToString(MIN_CFG_SCALE, 0) + " and no more than " +
-				ofToString(MAX_CFG_SCALE, 0)};
+			"CFG scale must be greater than or equal to " + formatValidationFloat(MIN_CFG_SCALE) +
+				" and no more than " + formatValidationFloat(MAX_CFG_SCALE)};
 	}
 	return {};
 }
