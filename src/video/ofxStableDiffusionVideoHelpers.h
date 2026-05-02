@@ -70,8 +70,14 @@ inline bool ofxStableDiffusionTryAddInt64(int64_t a, int64_t b, int64_t& result)
 	if (b > 0 && a > maxValue - b) {
 		return false;
 	}
-	if (b < 0 && a < minValue - b) {
-		return false;
+	if (b < 0) {
+		if (b == minValue) {
+			if (a < 0) {
+				return false;
+			}
+		} else if (a < minValue - b) {
+			return false;
+		}
 	}
 	result = a + b;
 	return true;
