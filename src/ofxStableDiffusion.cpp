@@ -275,9 +275,9 @@ ValidationResult validateImageRequestNumbers(const ofxStableDiffusionImageReques
 		if (!stepsResult.ok()) return stepsResult;
 	}
 
+	const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
+	if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 	if (std::isfinite(request.cfgScale)) {
-		const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
-		if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
 		if (!cfgResult.ok()) return cfgResult;
 	}
@@ -332,9 +332,9 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 	const ValidationResult clipResult = validateClipSkip(request.clipSkip);
 	if (!clipResult.ok()) return clipResult;
 
+	const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
+	if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 	if (std::isfinite(request.cfgScale)) {
-		const ValidationResult cfgFiniteResult = validateOptionalFinite(request.cfgScale, "CFG scale");
-		if (!cfgFiniteResult.ok()) return cfgFiniteResult;
 		const ValidationResult cfgResult = validateCfgScale(request.cfgScale);
 		if (!cfgResult.ok()) return cfgResult;
 	}

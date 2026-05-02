@@ -1,6 +1,7 @@
 #include "core/ofxStableDiffusionValidationHelpers.h"
 
 #include <iostream>
+#include <limits>
 #include <string>
 
 namespace {
