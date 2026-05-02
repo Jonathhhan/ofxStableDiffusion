@@ -135,6 +135,34 @@ int main() {
 
 	{
 		ofxStableDiffusionContextSettings settings;
+		settings.modelPath = "models/sdxl/checkpoints/base-model.gguf";
+		ofxStableDiffusionUpscalerSettings upscaler;
+
+		const auto capabilities =
+			ofxStableDiffusionCapabilityHelpers::resolveCapabilities(settings, upscaler);
+
+		ok &= expectFamily(
+			capabilities.modelFamily,
+			ofxStableDiffusionModelFamily::Unknown,
+			"directory name alone does not force sdxl family");
+	}
+
+	{
+		ofxStableDiffusionContextSettings settings;
+		settings.modelPath = "models/checkpoints/notwanvideohelper.gguf";
+		ofxStableDiffusionUpscalerSettings upscaler;
+
+		const auto capabilities =
+			ofxStableDiffusionCapabilityHelpers::resolveCapabilities(settings, upscaler);
+
+		ok &= expectFamily(
+			capabilities.modelFamily,
+			ofxStableDiffusionModelFamily::Unknown,
+			"unbounded wan substring does not force wan family");
+	}
+
+	{
+		ofxStableDiffusionContextSettings settings;
 		settings.diffusionModelPath = "models/flux/flux1-dev-Q8_0.gguf";
 		settings.clipLPath = "models/flux/clip_l.safetensors";
 		settings.t5xxlPath = "models/flux/t5xxl_fp16.safetensors";

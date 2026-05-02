@@ -149,7 +149,7 @@ namespace ofxStableDiffusionLimits {
 	/// @param scale Guidance scale value
 	/// @return true if scale is within valid range
 	inline constexpr bool isValidCfgScale(float scale) {
-		return scale > MIN_CFG_SCALE && scale <= MAX_CFG_SCALE;
+		return scale >= MIN_CFG_SCALE && scale <= MAX_CFG_SCALE;
 	}
 
 	/// @brief Check if control strength is valid

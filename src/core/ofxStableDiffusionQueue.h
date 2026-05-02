@@ -8,6 +8,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 
 /// Priority levels for generation requests
 enum class ofxStableDiffusionPriority {
@@ -207,6 +208,7 @@ public:
 	void setAutoSave(bool enabled, const std::string& filepath = "");
 
 private:
+	mutable std::mutex mutex_;
 	std::priority_queue<std::shared_ptr<ofxStableDiffusionQueueRequest>,
 						std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>>,
 						ofxStableDiffusionRequestComparator> requestQueue;

@@ -135,9 +135,9 @@ ValidationResult validateSampleSteps(int sampleSteps) {
 
 ValidationResult validateCfgScale(float cfgScale) {
 	using namespace ofxStableDiffusionLimits;
-	if (cfgScale <= MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
+	if (cfgScale < MIN_CFG_SCALE || cfgScale > MAX_CFG_SCALE) {
 		return {ofxStableDiffusionErrorCode::InvalidParameter,
-			"CFG scale must be greater than 0 and no more than " + std::to_string(static_cast<int>(MAX_CFG_SCALE))};
+			"CFG scale must be greater than or equal to 0 and no more than " + std::to_string(static_cast<int>(MAX_CFG_SCALE))};
 	}
 	return {};
 }
@@ -369,6 +369,13 @@ ValidationResult validateVideoRequestNumbers(const ofxStableDiffusionVideoReques
 			return {
 				ofxStableDiffusionErrorCode::InvalidParameter,
 				"Control frame " + ofToString(static_cast<int>(i)) + " is not allocated"
+			};
+		}
+		if (frame.width != static_cast<uint32_t>(request.width) ||
+			frame.height != static_cast<uint32_t>(request.height)) {
+			return {
+				ofxStableDiffusionErrorCode::InvalidDimensions,
+				"Control frame " + ofToString(static_cast<int>(i)) + " dimensions must match the request dimensions"
 			};
 		}
 	}
@@ -733,7 +740,10 @@ void ofxStableDiffusion::generateVideo(const ofxStableDiffusionVideoRequest& req
 	if (!beginBackgroundTask(ofxStableDiffusionTask::ImageToVideo)) {
 		return;
 	}
-	applyVideoRequest(request);
+	if (!applyVideoRequest(request)) {
+		finishBackgroundTask();
+		return;
+	}
 	thread.startThread();
 }
 
@@ -1506,6 +1516,10 @@ void ofxStableDiffusion::freeUpscalerCtx() {
 
 sd_image_t ofxStableDiffusion::upscaleImage(sd_image_t inputImage_, uint32_t upscaleFactor) {
 	activeTask = ofxStableDiffusionTask::Upscale;
+	if (thread.isThreadRunning()) {
+		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "Cannot upscale while another task is running");
+		return {0, 0, 0, nullptr};
+	}
 	if (upscaleFactor == 0) {
 		setLastError(ofxStableDiffusionErrorCode::InvalidParameter, "Upscale factor must be at least 1");
 		return {0, 0, 0, nullptr};
@@ -1545,7 +1559,7 @@ bool ofxStableDiffusion::isGenerating() const {
 
 bool ofxStableDiffusion::isBusy() const {
 	std::lock_guard<std::mutex> lock(stateMutex);
-	return thread.isThreadRunning() || isModelLoading;
+	return thread.isThreadRunning() || isModelLoading.load(std::memory_order_acquire);
 }
 
 bool ofxStableDiffusion::requestCancellation() {
@@ -1596,21 +1610,27 @@ int64_t ofxStableDiffusion::hashStringToSeed(const std::string& text) {
 
 bool ofxStableDiffusion::beginBackgroundTask(ofxStableDiffusionTask task) {
 	if (thread.isThreadRunning()) {
-		activeTask = task;
+		{
+			std::lock_guard<std::mutex> lock(stateMutex);
+			activeTask = task;
+		}
 		setLastError(ofxStableDiffusionErrorCode::ThreadBusy, "Another task is still running");
 		return false;
 	}
 
-	activeTask = task;
 	taskStartMicros = ofGetElapsedTimeMicros();
-	isModelLoading = (task == ofxStableDiffusionTask::LoadModel);
+	isModelLoading.store(task == ofxStableDiffusionTask::LoadModel, std::memory_order_release);
 	isTextToImage.store(task == ofxStableDiffusionTask::TextToImage, std::memory_order_relaxed);
 	isImageToVideo.store(task == ofxStableDiffusionTask::ImageToVideo, std::memory_order_relaxed);
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		activeTask = task;
+		lastOperationCancelled = false;
+	}
 	clearLastError();
 	clearOutputState();
 	thread.userData = this;
 	thread.resetCancellation();  // Reset cancellation flag for new task
-	lastOperationCancelled = false;
 	return true;
 }
 
@@ -1619,14 +1639,15 @@ void ofxStableDiffusion::finishBackgroundTask(bool cancelled, const std::string&
 		setLastError(
 			ofxStableDiffusionErrorCode::Cancelled,
 			cancelMessage.empty() ? "Operation cancelled" : cancelMessage);
-		std::lock_guard<std::mutex> lock(stateMutex);
-		lastOperationCancelled = true;
 	}
-
-	isModelLoading = false;
+	{
+		std::lock_guard<std::mutex> lock(stateMutex);
+		lastOperationCancelled = cancelled;
+		activeTask = ofxStableDiffusionTask::None;
+	}
+	isModelLoading.store(false, std::memory_order_release);
 	isTextToImage.store(false, std::memory_order_relaxed);
 	isImageToVideo.store(false, std::memory_order_relaxed);
-	activeTask = ofxStableDiffusionTask::None;
 }
 
 void ofxStableDiffusion::clearResolvedDefaultCachesNoLock() {
@@ -1830,7 +1851,7 @@ bool ofxStableDiffusion::applyImageRequest(const ofxStableDiffusionImageRequest&
 	return true;
 }
 
-void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
+bool ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest& request) {
 	stableDiffusionThread::VideoTaskData taskData;
 
 	try {
@@ -1873,11 +1894,11 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 	} catch (const std::exception& e) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			std::string("Exception while preparing video request: ") + e.what());
-		return;
+		return false;
 	} catch (...) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			"Unknown exception while preparing video request");
-		return;
+		return false;
 	}
 
 	try {
@@ -1885,10 +1906,13 @@ void ofxStableDiffusion::applyVideoRequest(const ofxStableDiffusionVideoRequest&
 	} catch (const std::exception& e) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			std::string("Exception while starting video task: ") + e.what());
+		return false;
 	} catch (...) {
 		setLastError(ofxStableDiffusionErrorCode::Unknown,
 			"Unknown exception while starting video task");
+		return false;
 	}
+	return true;
 }
 
 bool ofxStableDiffusion::validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task) {

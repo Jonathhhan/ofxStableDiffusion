@@ -510,7 +510,7 @@ public:
 	std::atomic<bool> isTextToImage{false};
 	/// @deprecated Internal state flags; use getLastResult().task instead. Thread-safe via atomic.
 	std::atomic<bool> isImageToVideo{false};
-	bool isModelLoading = false;
+	std::atomic<bool> isModelLoading{false};
 	bool diffused = false;
 
 	ofxSdProgressCallback progressCallback;
@@ -523,7 +523,7 @@ private:
 	void finishBackgroundTask(bool cancelled = false, const std::string& cancelMessage = "");
 	void applyContextSettings(const ofxStableDiffusionContextSettings& settings);
 	bool applyImageRequest(const ofxStableDiffusionImageRequest& request);
-	void applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
+	bool applyVideoRequest(const ofxStableDiffusionVideoRequest& request);
 	void clearResolvedDefaultCachesNoLock();
 	void refreshResolvedDefaultCachesNoLock(sd_ctx_t* ctx);
 	bool validateImageRequestAndSetError(const ofxStableDiffusionImageRequest& request, ofxStableDiffusionTask task);

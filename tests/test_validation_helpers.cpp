@@ -1,4 +1,5 @@
 #include "core/ofxStableDiffusionValidationHelpers.h"
+#include "core/ofxStableDiffusionLimits.h"
 
 #include <iostream>
 #include <limits>
@@ -28,6 +29,10 @@ int main() {
 		"NaN optional float is rejected");
 	ok &= expect(!ofxSdOptionalFloatIsFiniteWhenProvided(-std::numeric_limits<float>::infinity()),
 		"negative infinity optional float is rejected");
+	ok &= expect(ofxStableDiffusionLimits::isValidCfgScale(0.0f),
+		"cfg scale accepts zero");
+	ok &= expect(!ofxStableDiffusionLimits::isValidCfgScale(-0.01f),
+		"cfg scale rejects negative values");
 
 	ok &= expect(!ofxSdPathHasParentTraversal("models/model..gguf"),
 		"literal dots inside a filename are allowed");

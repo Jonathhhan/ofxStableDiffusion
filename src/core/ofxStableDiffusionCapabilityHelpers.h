@@ -3,8 +3,10 @@
 #include "ofxStableDiffusionStringUtils.h"
 #include "ofxStableDiffusionTypes.h"
 
+#include <cctype>
 #include <initializer_list>
 #include <string>
+#include <vector>
 
 inline const char * ofxStableDiffusionModelFamilyLabel(ofxStableDiffusionModelFamily family) {
 	switch (family) {
@@ -29,11 +31,49 @@ inline const char * ofxStableDiffusionModelFamilyLabel(ofxStableDiffusionModelFa
 
 namespace ofxStableDiffusionCapabilityHelpers {
 
+inline char descriptorBoundaryClass(char ch) {
+	if (!std::isalnum(static_cast<unsigned char>(ch))) {
+		return '\0';
+	}
+	return std::isdigit(static_cast<unsigned char>(ch)) ? 'd' : 'a';
+}
+
+inline bool containsBoundedToken(
+	const std::string& haystack,
+	const std::string& needle) {
+	if (needle.empty() || haystack.empty() || needle.size() > haystack.size()) {
+		return false;
+	}
+	std::size_t pos = haystack.find(needle);
+	while (pos != std::string::npos) {
+		const char beforeClass =
+			(pos == 0) ? '\0' : descriptorBoundaryClass(haystack[pos - 1]);
+		const std::size_t end = pos + needle.size();
+		const char afterClass =
+			(end >= haystack.size()) ? '\0' : descriptorBoundaryClass(haystack[end]);
+		const char needleFirstClass = descriptorBoundaryClass(needle.front());
+		const char needleLastClass = descriptorBoundaryClass(needle.back());
+		const bool startBounded =
+			beforeClass == '\0' ||
+			needleFirstClass == '\0' ||
+			beforeClass != needleFirstClass;
+		const bool endBounded =
+			afterClass == '\0' ||
+			needleLastClass == '\0' ||
+			afterClass != needleLastClass;
+		if (startBounded && endBounded) {
+			return true;
+		}
+		pos = haystack.find(needle, pos + 1);
+	}
+	return false;
+}
+
 inline bool containsAny(
 	const std::string& haystack,
 	std::initializer_list<const char*> needles) {
 	for (const char* needle : needles) {
-		if (haystack.find(needle) != std::string::npos) {
+		if (containsBoundedToken(haystack, needle)) {
 			return true;
 		}
 	}
@@ -48,36 +88,59 @@ inline bool hasConfiguredModelPaths(const ofxStableDiffusionContextSettings& set
 		!settings.t5xxlPath.empty();
 }
 
-inline std::string buildPrimaryModelDescriptor(const ofxStableDiffusionContextSettings& settings) {
-	if (!settings.modelPath.empty()) {
-		return ofxSdToLowerCopy(settings.modelPath);
+inline std::string buildModelFilenameDescriptor(const std::string& path) {
+	const std::string lower = ofxSdToLowerCopy(path);
+	const std::size_t separator = lower.find_last_of("/\\");
+	if (separator == std::string::npos) {
+		return lower;
 	}
-	if (!settings.diffusionModelPath.empty()) {
-		return ofxSdToLowerCopy(settings.diffusionModelPath);
-	}
-	if (!settings.clipLPath.empty()) {
-		return ofxSdToLowerCopy(settings.clipLPath);
-	}
-	if (!settings.clipGPath.empty()) {
-		return ofxSdToLowerCopy(settings.clipGPath);
-	}
-	return ofxSdToLowerCopy(settings.t5xxlPath);
+	return lower.substr(separator + 1);
 }
 
-inline std::string buildAllModelDescriptors(const ofxStableDiffusionContextSettings& settings) {
-	return ofxSdToLowerCopy(
-		settings.modelPath + " " +
-		settings.diffusionModelPath + " " +
-		settings.clipLPath + " " +
-		settings.clipGPath + " " +
-		settings.t5xxlPath);
+inline std::string buildPrimaryModelDescriptor(const ofxStableDiffusionContextSettings& settings) {
+	if (!settings.modelPath.empty()) {
+		return buildModelFilenameDescriptor(settings.modelPath);
+	}
+	if (!settings.diffusionModelPath.empty()) {
+		return buildModelFilenameDescriptor(settings.diffusionModelPath);
+	}
+	if (!settings.clipLPath.empty()) {
+		return buildModelFilenameDescriptor(settings.clipLPath);
+	}
+	if (!settings.clipGPath.empty()) {
+		return buildModelFilenameDescriptor(settings.clipGPath);
+	}
+	return buildModelFilenameDescriptor(settings.t5xxlPath);
+}
+
+inline std::vector<std::string> buildAllModelDescriptors(const ofxStableDiffusionContextSettings& settings) {
+	std::vector<std::string> descriptors;
+	const auto addDescriptor = [&descriptors](const std::string& path) {
+		if (!path.empty()) {
+			descriptors.push_back(buildModelFilenameDescriptor(path));
+		}
+	};
+	addDescriptor(settings.modelPath);
+	addDescriptor(settings.diffusionModelPath);
+	addDescriptor(settings.clipLPath);
+	addDescriptor(settings.clipGPath);
+	addDescriptor(settings.t5xxlPath);
+	return descriptors;
 }
 
 inline ofxStableDiffusionModelFamily inferModelFamily(const ofxStableDiffusionContextSettings& settings) {
 	const std::string primary = buildPrimaryModelDescriptor(settings);
-	const std::string all = buildAllModelDescriptors(settings);
+	const std::vector<std::string> all = buildAllModelDescriptors(settings);
 	const auto hasHint = [&primary, &all](std::initializer_list<const char*> hints) {
-		return containsAny(primary, hints) || containsAny(all, hints);
+		if (containsAny(primary, hints)) {
+			return true;
+		}
+		for (const auto& descriptor : all) {
+			if (containsAny(descriptor, hints)) {
+				return true;
+			}
+		}
+		return false;
 	};
 
 	if (hasHint({"wan", "wanvideo"})) {
@@ -114,15 +177,15 @@ inline ofxStableDiffusionModelFamily inferModelFamily(const ofxStableDiffusionCo
 		return ofxStableDiffusionModelFamily::SD3;
 	}
 
-	if (hasHint({"sdxl", "xl-base", "juggernautxl", "ponyxl", "xl\\", "xl/"})) {
+	if (hasHint({"sdxl", "xl-base", "juggernautxl", "ponyxl"})) {
 		return ofxStableDiffusionModelFamily::SDXL;
 	}
 
-	if (hasHint({"sd2", "v2-1", "v2.1", "2.1"})) {
+	if (hasHint({"sd2", "sd-2", "v2-1", "v2.1"})) {
 		return ofxStableDiffusionModelFamily::SD2;
 	}
 
-	if (hasHint({"sd1", "sd15", "v1-5", "v1.5", "1.5"})) {
+	if (hasHint({"sd1", "sd-1", "sd15", "sd-15", "v1-5", "v1.5"})) {
 		return ofxStableDiffusionModelFamily::SD1;
 	}
 

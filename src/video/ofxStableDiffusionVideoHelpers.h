@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 inline const char * ofxStableDiffusionVideoModeName(ofxStableDiffusionVideoMode mode) {
@@ -200,9 +201,39 @@ inline int64_t ofxStableDiffusionGetFrameSeed(
 	}
 
 	if (request.animationSettings.useSeedSequence && request.seed >= 0) {
-		return request.seed + (static_cast<int64_t>(frameNumber) * request.animationSettings.seedIncrement);
+		const int64_t frameOffset = static_cast<int64_t>(frameNumber);
+		const int64_t increment = request.animationSettings.seedIncrement;
+		if (frameOffset == 0 || increment == 0) {
+			return request.seed;
+		}
+		const int64_t maxValue = std::numeric_limits<int64_t>::max();
+		const int64_t minValue = std::numeric_limits<int64_t>::min();
+		int64_t delta = 0;
+		if (frameOffset > 0) {
+			if (increment > 0 && frameOffset > maxValue / increment) {
+				delta = maxValue;
+			} else if (increment < 0 && increment < minValue / frameOffset) {
+				delta = minValue;
+			} else {
+				delta = frameOffset * increment;
+			}
+		} else {
+			if (increment > 0 && frameOffset < minValue / increment) {
+				delta = minValue;
+			} else if (increment < 0 && frameOffset < maxValue / increment) {
+				delta = maxValue;
+			} else {
+				delta = frameOffset * increment;
+			}
+		}
+		if (delta > 0 && request.seed > maxValue - delta) {
+			return maxValue;
+		}
+		if (delta < 0 && request.seed < minValue - delta) {
+			return minValue;
+		}
+		return request.seed + delta;
 	}
 
 	return request.seed;
 }
-
