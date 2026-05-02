@@ -590,10 +590,14 @@ std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContext
 			if (ec) {
 				continue;
 			}
-			for (fs::directory_iterator end; it != end; it.increment(ec)) {
+			for (fs::directory_iterator end; it != end;) {
 				const auto& entry = *it;
 				const fs::path candidatePath = entry.path();
 				if (!isResolvableModelFile(candidatePath)) {
+					it.increment(ec);
+					if (ec) {
+						break;
+					}
 					continue;
 				}
 
@@ -609,6 +613,10 @@ std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContext
 					preferredFiles.push_back(candidatePath);
 				} else {
 					fallbackFiles.push_back(candidatePath);
+				}
+				it.increment(ec);
+				if (ec) {
+					break;
 				}
 			}
 			if (ec) {
