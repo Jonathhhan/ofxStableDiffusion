@@ -545,6 +545,9 @@ void appendSearchRootsForModelPath(std::vector<fs::path>& roots, const std::stri
 	if (modelPath.empty()) {
 		return;
 	}
+	if (ofxSdPathHasParentTraversal(modelPath)) {
+		return;
+	}
 
 	const fs::path path(modelPath);
 	const fs::path dir = path.has_parent_path() ? path.parent_path() : fs::path();
@@ -570,19 +573,24 @@ std::string resolveTextEncoderPathFromSubfolders(const ofxStableDiffusionContext
 	const std::vector<std::string> preferredNameParts = {"umt5", "t5xxl", "encoder"};
 
 	for (const auto& root : roots) {
-		if (ofxSdPathHasParentTraversal(root.string())) {
-			continue;
-		}
 		for (const auto& subfolder : subfolders) {
 			const fs::path candidateDir = root / subfolder;
 			std::error_code ec;
-			if (!fs::exists(candidateDir, ec) || ec || !fs::is_directory(candidateDir, ec) || ec) {
+			if (!fs::exists(candidateDir, ec) || ec) {
+				continue;
+			}
+			ec.clear();
+			if (!fs::is_directory(candidateDir, ec) || ec) {
 				continue;
 			}
 
 			std::vector<fs::path> preferredFiles;
 			std::vector<fs::path> fallbackFiles;
-			for (fs::directory_iterator it(candidateDir, ec), end; !ec && it != end; it.increment(ec)) {
+			fs::directory_iterator it(candidateDir, ec);
+			if (ec) {
+				continue;
+			}
+			for (fs::directory_iterator end; it != end; it.increment(ec)) {
 				const auto& entry = *it;
 				const fs::path candidatePath = entry.path();
 				if (!isResolvableModelFile(candidatePath)) {
