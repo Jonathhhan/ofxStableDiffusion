@@ -228,6 +228,14 @@ Useful video-export helpers:
 - `ofxStableDiffusion::saveVideoMetadata(...)`
 - `ofxStableDiffusion::saveVideoFramesWithMetadata(...)`
 
+Long video generation (chunked rendering):
+
+- `ofxStableDiffusionLongVideoManifest` + `ofxStableDiffusionLongVideoChunk`
+  describe a long-form timeline as multiple short clips.
+- `ofxStableDiffusion::renderLongVideo(...)` renders all chunks sequentially,
+  optionally handing off the previous chunk's last frame as the next init image,
+  and saves each chunk's frame sequence + `metadata.json`.
+
 Supported playback/presentation modes:
 
 - `Standard`

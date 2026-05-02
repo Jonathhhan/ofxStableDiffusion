@@ -12,7 +12,9 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <chrono>
 #include <mutex>
+#include <thread>
 
 namespace {
 
@@ -999,6 +1001,107 @@ bool ofxStableDiffusion::saveVideoFramesWithMetadata(
 
 bool ofxStableDiffusion::saveVideoWebm(const std::string& path, int quality) const {
 	return getVideoClip().saveWebm(path, quality);
+}
+
+ofxStableDiffusionLongVideoRunResult ofxStableDiffusion::renderLongVideo(
+	const ofxStableDiffusionLongVideoManifest& manifest,
+	const std::string& framePrefix,
+	const std::string& metadataFilename,
+	int pollIntervalMs) {
+	ofxStableDiffusionLongVideoRunResult runResult;
+
+	const auto validation = ofxStableDiffusionLongVideoWorkflow::validate(manifest);
+	if (!validation.ok) {
+		runResult.success = false;
+		runResult.error = validation.errors.empty()
+			? "Long-video manifest validation failed."
+			: validation.errors.front();
+		return runResult;
+	}
+
+	const ofxStableDiffusionCapabilities capabilities = getCapabilities();
+	if (!capabilities.contextConfigured) {
+		runResult.success = false;
+		runResult.error = "Long-video rendering requires a loaded model.";
+		return runResult;
+	}
+	if (!capabilities.imageToVideo) {
+		runResult.success = false;
+		runResult.error = "Current model does not support image-to-video generation.";
+		return runResult;
+	}
+
+	const int sleepMs = pollIntervalMs <= 0 ? 10 : pollIntervalMs;
+
+		ofPixels previousLastFrame;
+	bool hasPreviousLastFrame = false;
+
+	runResult.chunks.reserve(manifest.chunks.size());
+	for (std::size_t i = 0; i < manifest.chunks.size(); ++i) {
+		const auto& chunk = manifest.chunks[i];
+		ofxStableDiffusionLongVideoChunkResult chunkResult;
+		chunkResult.chunkId = chunk.id.empty() ? ("chunk-" + std::to_string(i + 1)) : chunk.id;
+
+		ofxStableDiffusionVideoRequest request =
+			ofxStableDiffusionLongVideoWorkflow::buildChunkRequest(manifest, chunk);
+
+		stableDiffusionThread::OwnedImage initImage;
+		if (chunk.usePreviousLastFrame && hasPreviousLastFrame) {
+			const sd_image_t initView{
+				static_cast<uint32_t>(previousLastFrame.getWidth()),
+				static_cast<uint32_t>(previousLastFrame.getHeight()),
+				static_cast<uint32_t>(previousLastFrame.getNumChannels()),
+				previousLastFrame.getData()};
+			initImage.assign(initView);
+			request.initImage = initImage.image;
+		}
+
+		generateVideo(request);
+		while (isGenerating()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+		}
+
+		const ofxStableDiffusionResult result = getLastResult();
+		if (!result.success || !result.hasVideo()) {
+			chunkResult.success = false;
+			chunkResult.error = getLastError();
+			runResult.chunks.push_back(chunkResult);
+			runResult.success = false;
+			runResult.error = chunkResult.error.empty() ? "Chunk generation failed." : chunkResult.error;
+			return runResult;
+		}
+
+		const std::string clipDirectory =
+			ofxStableDiffusionLongVideoWorkflow::buildChunkOutputDirectory(manifest, chunk);
+		if (!saveVideoFramesWithMetadata(clipDirectory, framePrefix, metadataFilename)) {
+			chunkResult.success = false;
+			chunkResult.error = "Failed to save chunk frame sequence.";
+			runResult.chunks.push_back(chunkResult);
+			runResult.success = false;
+			runResult.error = chunkResult.error;
+			return runResult;
+		}
+
+		chunkResult.success = true;
+		chunkResult.clipDirectory = clipDirectory;
+		chunkResult.metadataPath = ofxStableDiffusionLongVideoWorkflow::joinPath(clipDirectory, metadataFilename);
+		chunkResult.actualSeed = result.actualSeedUsed;
+		chunkResult.renderedFrameCount = static_cast<int>(result.video.frames.size());
+		runResult.chunks.push_back(chunkResult);
+
+		const auto clip = getVideoClip();
+		if (!clip.frames.empty() && clip.frames.back().pixels.isAllocated()) {
+			previousLastFrame = clip.frames.back().pixels;
+			hasPreviousLastFrame = true;
+		} else {
+			hasPreviousLastFrame = false;
+		}
+	}
+
+	runResult.success = true;
+	runResult.playlistManifestJson =
+		ofxStableDiffusionLongVideoWorkflow::buildPlaylistManifestJson(manifest, runResult.chunks);
+	return runResult;
 }
 
 void ofxStableDiffusion::setVideoGenerationMode(ofxStableDiffusionVideoMode mode) {

@@ -212,6 +212,24 @@ public:
 	/// @threadsafe Yes.
 	bool saveVideoWebm(const std::string& path, int quality = 90) const;
 
+	/// @brief Render a long video by generating multiple chunked clips sequentially.
+	///
+	/// This helper orchestrates the manifest-based long-video workflow:
+	/// - validates the manifest
+	/// - generates each chunk via generateVideo()
+	/// - optionally uses the previous chunk's last frame as the next initImage
+	/// - saves each chunk's PNG sequence + metadata JSON
+	/// - returns a playlist manifest JSON describing the rendered chunks
+	///
+	/// @threadsafe No. This method blocks and drives the worker thread.
+	/// @note Requires a loaded model context that supports image-to-video.
+	/// @warning This function spins a small sleep loop while waiting for generation.
+	ofxStableDiffusionLongVideoRunResult renderLongVideo(
+		const ofxStableDiffusionLongVideoManifest& manifest,
+		const std::string& framePrefix = "frame",
+		const std::string& metadataFilename = "metadata.json",
+		int pollIntervalMs = 10);
+
 	/// @brief Set video generation mode (Standard, Loop, PingPong, Boomerang).
 	/// @threadsafe Yes.
 	/// @note This affects frame sequence construction for video output modes.
