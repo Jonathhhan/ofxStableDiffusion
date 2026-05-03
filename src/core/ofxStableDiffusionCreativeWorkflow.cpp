@@ -2,7 +2,37 @@
 
 #include "../ofxStableDiffusion.h"
 
+#include <filesystem>
+
 namespace {
+
+bool pathIsSafeToRestore(const std::string& path) {
+	if (path.empty()) {
+		return true;
+	}
+	const std::filesystem::path fsPath(path);
+	for (const auto& component : fsPath) {
+		if (component == "..") {
+			return false;
+		}
+	}
+	return std::filesystem::exists(fsPath);
+}
+
+bool contextSettingsAreSafeToRestore(
+	const ofxStableDiffusionContextSettings& settings) {
+	return pathIsSafeToRestore(settings.modelPath) &&
+		pathIsSafeToRestore(settings.diffusionModelPath) &&
+		pathIsSafeToRestore(settings.clipLPath) &&
+		pathIsSafeToRestore(settings.clipGPath) &&
+		pathIsSafeToRestore(settings.t5xxlPath) &&
+		pathIsSafeToRestore(settings.vaePath) &&
+		pathIsSafeToRestore(settings.taesdPath) &&
+		pathIsSafeToRestore(settings.controlNetPath) &&
+		pathIsSafeToRestore(settings.loraModelDir) &&
+		pathIsSafeToRestore(settings.embedDir) &&
+		pathIsSafeToRestore(settings.stackedIdEmbedDir);
+}
 
 ofJson serializeContextSettings(const ofxStableDiffusionContextSettings& settings) {
 	return {
@@ -459,7 +489,14 @@ bool ofxStableDiffusionCreativeWorkflow::loadSession(const std::string& path) {
 	}
 
 	if (generator_ != nullptr && json.contains("context")) {
-		generator_->configureContext(parseContextSettings(json["context"]));
+		const auto restoredContext = parseContextSettings(json["context"]);
+		if (contextSettingsAreSafeToRestore(restoredContext)) {
+			generator_->configureContext(restoredContext);
+		} else {
+			ofLogWarning("ofxStableDiffusionCreativeWorkflow")
+				<< "Skipped restoring model context because one or more saved paths "
+				<< "were missing or unsafe";
+		}
 	}
 
 	if (json.contains("queuedImageRequests")) {
@@ -488,11 +525,13 @@ bool ofxStableDiffusionCreativeWorkflow::loadSession(const std::string& path) {
 
 void ofxStableDiffusionCreativeWorkflow::processQueue() {
 	ofxStableDiffusion* generator = nullptr;
+	bool active = false;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
+		active = active_;
 		generator = generator_;
 	}
-	if (!active_ || generator == nullptr) {
+	if (!active || generator == nullptr) {
 		return;
 	}
 

@@ -612,7 +612,12 @@ std::vector<float> ofxStableDiffusionBatchProcessor::generateStepValues(
 			break;
 		}
 		case ofxStableDiffusionStepMode::Logarithmic: {
-			if (minVal <= 0.0f) minVal = kMinimumPositiveLogValue;
+			if (minVal <= 0.0f) {
+				ofLogWarning("ofxStableDiffusionBatchProcessor")
+					<< "Logarithmic sweeps require positive values; clamping the minimum "
+					<< "to " << kMinimumPositiveLogValue;
+				minVal = kMinimumPositiveLogValue;
+			}
 			const float logMin = std::log(minVal);
 			const float logMax = std::log(maxVal);
 			const float step = (logMax - logMin) / static_cast<float>(steps - 1);
