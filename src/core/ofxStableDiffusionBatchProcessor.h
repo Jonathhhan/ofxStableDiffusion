@@ -2,9 +2,11 @@
 
 #include "ofMain.h"
 #include "ofxStableDiffusionTypes.h"
-#include <vector>
-#include <map>
 #include <functional>
+#include <map>
+#include <vector>
+
+class ofxStableDiffusion;
 
 /// Parameter types for batch processing
 enum class ofxStableDiffusionParameter {
@@ -101,20 +103,30 @@ public:
 	ofxStableDiffusionBatchProcessor();
 	~ofxStableDiffusionBatchProcessor();
 
+	/// Attach the generator used to execute batch requests.
+	/// @param sd Generator instance to use (not owned)
+	void setGenerator(ofxStableDiffusion* sd);
+
+	/// Get the attached generator.
+	ofxStableDiffusion* getGenerator() const;
+
+	/// Check whether a generator is attached.
+	bool hasGenerator() const;
+
 	/// Generate X/Y parameter grid
 	/// @param settings Grid generation settings
-	/// @return Placeholder batch result. Native grid generation is not implemented yet.
+	/// @return Batch result containing one entry per grid cell.
 	ofxStableDiffusionBatchResult generateGrid(const ofxStableDiffusionGridSettings& settings);
 
 	/// Perform parameter sweep
 	/// @param settings Sweep settings
-	/// @return Placeholder sweep result. Native parameter sweeps are not implemented yet.
+	/// @return Sweep result ordered by sweep value.
 	ofxStableDiffusionSweepResult parameterSweep(const ofxStableDiffusionSweepSettings& settings);
 
 	/// Compare two requests side-by-side
 	/// @param requestA First request
 	/// @param requestB Second request
-	/// @return Placeholder comparison result. Native A/B image generation is not implemented yet.
+	/// @return Comparison result with generated outputs and quality scores.
 	ofxStableDiffusionComparisonResult compareAB(
 		const ofxStableDiffusionImageRequest& requestA,
 		const ofxStableDiffusionImageRequest& requestB);
@@ -122,7 +134,7 @@ public:
 	/// Process multiple requests in batch
 	/// @param requests Vector of requests to process
 	/// @param outputDirectory Directory for output files
-	/// @return Placeholder batch result. Native batch execution/export is not implemented yet.
+	/// @return Batch result containing every generated request result.
 	ofxStableDiffusionBatchResult processBatch(
 		const std::vector<ofxStableDiffusionImageRequest>& requests,
 		const std::string& outputDirectory = "");
@@ -142,7 +154,32 @@ public:
 	/// @return True if running
 	bool isRunning() const;
 
+	/// Set how often blocking batch waits poll the async generator.
+	void setPollIntervalMs(int pollIntervalMs);
+	int getPollIntervalMs() const;
+
+	/// Set the maximum wait time for one batch request before it is marked failed.
+	void setExecutionTimeoutMs(int timeoutMs);
+	int getExecutionTimeoutMs() const;
+
 private:
+	bool runImageRequest(
+		const ofxStableDiffusionImageRequest& request,
+		ofxStableDiffusionResult& result,
+		std::string& errorMessage);
+	bool waitForCurrentGeneration(
+		ofxStableDiffusionResult& result,
+		std::string& errorMessage);
+	float scoreResult(const ofxStableDiffusionResult& result) const;
+	void recordBatchEntry(
+		ofxStableDiffusionBatchResult& batchResult,
+		const ofxStableDiffusionResult& result,
+		int entryIndex,
+		const std::map<std::string, std::string>& entryMetadata);
+	bool exportResultImage(
+		const ofxStableDiffusionResult& result,
+		const std::string& outputPath) const;
+
 	void applyParameterValue(
 		ofxStableDiffusionImageRequest& request,
 		ofxStableDiffusionParameter param,
@@ -166,6 +203,9 @@ private:
 
 	std::function<void(int, int, const std::string&)> progressCallback;
 	std::function<float(const ofxStableDiffusionResult&)> qualityScoreFunc;
+	ofxStableDiffusion* generator = nullptr;
 	bool running = false;
 	bool cancelRequested = false;
+	int pollIntervalMs = 10;
+	int executionTimeoutMs = 600000;
 };

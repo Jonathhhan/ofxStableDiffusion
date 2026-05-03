@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ofxStableDiffusionCapabilityHelpers.h"
+#include "ofxStableDiffusionRealtimeSession.h"
+#include "ofxStableDiffusionRealtimeVideoSession.h"
 #include "ofxStableDiffusionStringUtils.h"
 
 #include <string>
@@ -307,6 +309,69 @@ inline void clampImageParametersToProfile(
 	}
 }
 
+inline ofxStableDiffusionImageMode resolveSupportedImageMode(
+	ofxStableDiffusionImageMode requestedMode,
+	const ofxStableDiffusionCapabilities& capabilities) {
+	if (capabilities.supportsImageMode(requestedMode)) {
+		return requestedMode;
+	}
+	if (capabilities.textToImage) {
+		return ofxStableDiffusionImageMode::TextToImage;
+	}
+	if (capabilities.imageToImage) {
+		return ofxStableDiffusionImageMode::ImageToImage;
+	}
+	if (capabilities.inpainting) {
+		return ofxStableDiffusionImageMode::Inpainting;
+	}
+	return requestedMode;
+}
+
+inline void applyImageProfileDefaults(
+	const ofxStableDiffusionImageParameterProfile& profile,
+	ofxStableDiffusionImageRequest& request,
+	bool overwriteExplicitValues = false) {
+	if (overwriteExplicitValues || !std::isfinite(request.cfgScale)) {
+		request.cfgScale = profile.defaultCfgScale;
+	}
+	if (overwriteExplicitValues || request.sampleSteps <= 0) {
+		request.sampleSteps = profile.defaultSampleSteps;
+	}
+	if (profile.supportsStrength) {
+		if (overwriteExplicitValues || !std::isfinite(request.strength)) {
+			request.strength = profile.defaultStrength;
+		}
+	} else {
+		request.strength = std::numeric_limits<float>::infinity();
+	}
+	if (profile.supportsClipSkip) {
+		if (overwriteExplicitValues || request.clipSkip < profile.minClipSkip) {
+			request.clipSkip = profile.defaultClipSkip;
+		}
+	} else {
+		request.clipSkip = -1;
+	}
+
+	clampImageParametersToProfile(
+		profile,
+		request.cfgScale,
+		request.sampleSteps,
+		request.strength,
+		request.clipSkip);
+}
+
+inline void applyRecommendedImageRequest(
+	const ofxStableDiffusionContextSettings& settings,
+	ofxStableDiffusionImageRequest& request,
+	const ofxStableDiffusionCapabilities* capabilities = nullptr,
+	bool overwriteExplicitValues = false) {
+	if (capabilities != nullptr && capabilities->contextConfigured) {
+		request.mode = resolveSupportedImageMode(request.mode, *capabilities);
+	}
+	const auto profile = resolveImageProfile(settings, request.mode);
+	applyImageProfileDefaults(profile, request, overwriteExplicitValues);
+}
+
 inline void clampVideoParametersToProfile(
 	const ofxStableDiffusionVideoParameterProfile& profile,
 	float& cfgScale,
@@ -331,6 +396,110 @@ inline void clampVideoParametersToProfile(
 	} else {
 		vaceStrength = profile.defaultVaceStrength;
 	}
+}
+
+inline void applyVideoProfileDefaults(
+	const ofxStableDiffusionVideoParameterProfile& profile,
+	ofxStableDiffusionVideoRequest& request,
+	bool overwriteExplicitValues = false) {
+	if (overwriteExplicitValues || request.width <= 0) {
+		request.width = profile.defaultWidth;
+	}
+	if (overwriteExplicitValues || request.height <= 0) {
+		request.height = profile.defaultHeight;
+	}
+	if (overwriteExplicitValues || !std::isfinite(request.cfgScale)) {
+		request.cfgScale = profile.defaultCfgScale;
+	}
+	if (overwriteExplicitValues || request.sampleSteps <= 0) {
+		request.sampleSteps = profile.defaultSampleSteps;
+	}
+	if (overwriteExplicitValues || !std::isfinite(request.strength)) {
+		request.strength = profile.defaultStrength;
+	}
+	if (overwriteExplicitValues || request.frameCount <= 0) {
+		request.frameCount = profile.defaultFrameCount;
+	}
+	if (overwriteExplicitValues || request.fps <= 0) {
+		request.fps = profile.defaultFps;
+	}
+	if (profile.supportsClipSkip) {
+		if (overwriteExplicitValues || request.clipSkip < profile.minClipSkip) {
+			request.clipSkip = profile.defaultClipSkip;
+		}
+	} else {
+		request.clipSkip = -1;
+	}
+	if (profile.supportsVaceStrength) {
+		if (overwriteExplicitValues || !std::isfinite(request.vaceStrength)) {
+			request.vaceStrength = profile.defaultVaceStrength;
+		}
+	} else {
+		request.vaceStrength = std::numeric_limits<float>::infinity();
+	}
+
+	clampVideoParametersToProfile(
+		profile,
+		request.cfgScale,
+		request.sampleSteps,
+		request.strength,
+		request.clipSkip,
+		request.vaceStrength,
+		request.frameCount,
+		request.fps);
+}
+
+inline void applyRecommendedVideoRequest(
+	const ofxStableDiffusionContextSettings& settings,
+	ofxStableDiffusionVideoRequest& request,
+	const ofxStableDiffusionCapabilities* capabilities = nullptr,
+	bool overwriteExplicitValues = false) {
+	if (capabilities != nullptr && capabilities->contextConfigured && !capabilities->imageToVideo) {
+		request.frameCount = 0;
+		return;
+	}
+	const auto profile = resolveVideoProfile(settings);
+	applyVideoProfileDefaults(profile, request, overwriteExplicitValues);
+}
+
+inline ofxStableDiffusionRealtimeSettings resolveRecommendedRealtimeSettings(
+	const ofxStableDiffusionContextSettings& settings) {
+	ofxStableDiffusionRealtimeSettings realtime;
+	const auto imageProfile = resolveImageProfile(
+		settings,
+		ofxStableDiffusionImageMode::TextToImage);
+	realtime.cfgScale = imageProfile.defaultCfgScale;
+	realtime.minSampleSteps = std::max(1, imageProfile.minSampleSteps);
+	realtime.maxSampleSteps = std::max(
+		realtime.minSampleSteps,
+		std::min(imageProfile.maxSampleSteps, imageProfile.defaultSampleSteps + 4));
+	realtime.enableProgressiveRefinement =
+		realtime.maxSampleSteps > realtime.minSampleSteps;
+	realtime.targetLatencyMs = isTurboLikeModel(settings) ? 350 : 650;
+	realtime.mode = isTurboLikeModel(settings)
+		? ofxStableDiffusionRealtimeMode::LowLatency
+		: ofxStableDiffusionRealtimeMode::Streaming;
+	return realtime;
+}
+
+inline ofxStableDiffusionRealtimeVideoSettings resolveRecommendedRealtimeVideoSettings(
+	const ofxStableDiffusionContextSettings& settings) {
+	ofxStableDiffusionRealtimeVideoSettings realtime;
+	const auto videoProfile = resolveVideoProfile(settings);
+	realtime.previewWidth = videoProfile.defaultWidth;
+	realtime.previewHeight = videoProfile.defaultHeight;
+	realtime.cfgScale = videoProfile.defaultCfgScale;
+	realtime.previewSteps = std::max(1, videoProfile.minSampleSteps);
+	realtime.refineSteps = std::max(
+		realtime.previewSteps,
+		std::min(videoProfile.maxSampleSteps, videoProfile.defaultSampleSteps));
+	realtime.previewStrength = videoProfile.defaultStrength;
+	realtime.refineStrength = std::max(
+		videoProfile.minStrength,
+		std::min(videoProfile.maxStrength, videoProfile.defaultStrength * 0.8f));
+	realtime.dropIfBusy = isTurboLikeModel(settings);
+	realtime.refineAfterStableMs = isTurboLikeModel(settings) ? 450 : 700;
+	return realtime;
 }
 
 } // namespace ofxStableDiffusionParameterTuningHelpers

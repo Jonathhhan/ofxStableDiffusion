@@ -77,24 +77,62 @@ liveVideo.submit(request);
 liveVideo.update();
 ```
 
+### ofxStableDiffusionCreativeWorkflow
+
+Unified live workflow surface for “preview now, queue a higher-quality render for
+later” pipelines.
+
+**Key Features:**
+- Shares one `ofxStableDiffusion` generator across realtime preview and queued renders
+- Queues image/video renders while keeping the realtime preview session API
+- Builds model-aware queued render requests from the last realtime preview prompt
+- Saves/restores workflow snapshots with preview prompts, context settings, and queued work
+
+**Usage:**
+```cpp
+ofxStableDiffusionCreativeWorkflow workflow;
+ofxStableDiffusionCreativeWorkflowSettings workflowSettings;
+workflowSettings.renderSampleSteps = 24;
+workflowSettings.renderCfgScale = 6.0f;
+workflow.start(workflowSettings, sd);
+
+ofxStableDiffusionRealtimeRequest liveRequest;
+liveRequest.prompt = "liquid light projections";
+workflow.submitImagePreview(liveRequest);
+workflow.queueImageRenderFromPreview();
+
+// In update loop
+workflow.update();
+```
+
 ### ofxStableDiffusionBatchProcessor
 
-Experimental batch-processing scaffold for future parameter exploration.
-The request/result types, parameter helpers, metadata export, and scoring hooks
-are present, but generation methods currently return placeholder results, log a
-warning, and do not run native image generation yet.
+Generator-backed experimentation surface for parameter exploration and artifact export.
 
 **Implemented today:**
 - Batch/grid/sweep request and result data structures
+- Generator-backed grid generation, parameter sweeps, A/B comparisons, and batch execution
 - Parameter value helpers for supported generation fields
-- Metadata export for batch results
+- Metadata export plus representative image export for each run
 - Quality-scoring and progress-callback hooks
+- Configurable polling/timeout controls for the async generator
 
-**Not implemented yet:**
-- Native grid generation
-- Native parameter sweeps
-- Native A/B comparison image generation
-- Organized image export/gallery generation
+**Usage:**
+```cpp
+ofxStableDiffusionBatchProcessor batchProcessor;
+batchProcessor.setGenerator(&sd);
+
+ofxStableDiffusionGridSettings gridSettings;
+gridSettings.baseRequest = baseRequest;
+gridSettings.xAxis = ofxStableDiffusionParameter::CfgScale;
+gridSettings.xValues = {2.0f, 4.0f, 6.0f};
+gridSettings.yAxis = ofxStableDiffusionParameter::SampleSteps;
+gridSettings.yValues = {12.0f, 24.0f};
+gridSettings.outputPath = "output/grid";
+
+auto gridResult = batchProcessor.generateGrid(gridSettings);
+gridResult.exportMetadata("output/grid/metadata.json");
+```
 
 ### ofxStableDiffusionModelManager
 

@@ -103,6 +103,20 @@ target_include_directories(test_parameter_tuning_helpers PRIVATE
 
 add_test(NAME parameter_tuning_helpers COMMAND test_parameter_tuning_helpers)
 
+add_executable(test_batch_processor
+    test_batch_processor.cpp
+    ../src/core/ofxStableDiffusionBatchProcessor.cpp
+)
+
+target_include_directories(test_batch_processor PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/stubs_batch"
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME batch_processor COMMAND test_batch_processor)
+
 add_executable(test_long_video_workflow
     test_long_video_workflow.cpp
     stubs/stable_diffusion_native_stub.cpp

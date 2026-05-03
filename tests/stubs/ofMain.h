@@ -91,8 +91,13 @@ public:
 		return false;
 	}
 
-	bool save(const std::string&) const {
-		return true;
+	bool save(const std::string& path) const {
+		std::ofstream output(path, std::ios::binary);
+		if (!output.is_open()) {
+			return false;
+		}
+		output << "stub-image";
+		return output.good();
 	}
 
 	void resize(int width, int height) {

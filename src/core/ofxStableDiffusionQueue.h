@@ -7,6 +7,7 @@
 #include <queue>
 #include <deque>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <atomic>
@@ -157,10 +158,10 @@ public:
 	std::shared_ptr<ofxStableDiffusionQueueRequest> getRequest(int requestId);
 
 	/// Get all requests with a specific state
-	std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>> getRequestsByState(ofxStableDiffusionQueueState state);
+	std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>> getRequestsByState(ofxStableDiffusionQueueState state) const;
 
 	/// Get all requests with a specific tag
-	std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>> getRequestsByTag(const std::string& tag);
+	std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>> getRequestsByTag(const std::string& tag) const;
 
 	/// Get queue statistics
 	struct QueueStats {

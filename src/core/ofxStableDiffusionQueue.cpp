@@ -363,7 +363,7 @@ std::shared_ptr<ofxStableDiffusionQueueRequest> ofxStableDiffusionQueue::getRequ
 
 //--------------------------------------------------------------
 std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>>
-ofxStableDiffusionQueue::getRequestsByState(ofxStableDiffusionQueueState state) {
+ofxStableDiffusionQueue::getRequestsByState(ofxStableDiffusionQueueState state) const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>> requests;
 	for (const auto &pair : allRequests) {
@@ -376,7 +376,7 @@ ofxStableDiffusionQueue::getRequestsByState(ofxStableDiffusionQueueState state) 
 
 //--------------------------------------------------------------
 std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>>
-ofxStableDiffusionQueue::getRequestsByTag(const std::string &tag) {
+ofxStableDiffusionQueue::getRequestsByTag(const std::string &tag) const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	std::vector<std::shared_ptr<ofxStableDiffusionQueueRequest>> requests;
 	for (const auto &pair : allRequests) {
