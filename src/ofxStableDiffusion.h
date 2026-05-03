@@ -32,13 +32,15 @@ using ofxSdImageRankCallback = std::function<std::vector<ofxStableDiffusionImage
 
 /// @brief Main interface for Stable Diffusion image and video generation.
 ///
-/// This class wraps stable-diffusion.cpp and provides thread-safe generation with typed
-/// request/result objects, progress callbacks, and error handling.
+/// This class wraps stable-diffusion.cpp and provides typed request/result objects,
+/// internal background execution, progress callbacks, and error handling.
 ///
-/// @threadsafety Most methods are thread-safe and protected by internal locking.
-/// Generation methods (generate, generateVideo) can be called from any thread but only
-/// one generation can run at a time. Attempting concurrent generation will fail with
-/// ThreadBusy error. Callbacks are invoked from the worker thread.
+/// @threadsafety The public stateful API is internally synchronized unless a method
+/// explicitly says otherwise. Generation, context reload, and upscaling entry points may
+/// be called from any thread, but only one long-running task can run at a time;
+/// concurrent starts fail with ThreadBusy. Progress and image-ranking callbacks are
+/// invoked from the worker thread, so UI work should be deferred to the caller's
+/// update()/draw() thread.
 class ofxStableDiffusion {
 public:
 	ofxStableDiffusion();
@@ -349,6 +351,8 @@ public:
 	const char* getSystemInfo();
 
 	/// Set an optional progress callback that fires on each diffusion step.
+	/// The callback runs on the worker thread; keep it lightweight and avoid touching
+	/// UI/rendering objects directly.
 	void setProgressCallback(ofxSdProgressCallback cb);
 	void setNativeLoggingEnabled(bool enabled);
 	bool isNativeLoggingEnabled() const;

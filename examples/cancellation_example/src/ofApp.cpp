@@ -4,20 +4,21 @@
 void ofApp::setup() {
     generating = false;
     wasCancelled = false;
-    progress = 0.0f;
+    progress.store(0.0f);
     statusMessage = "Ready";
 
     // Configure SD context
     ofxStableDiffusionContextSettings settings;
     settings.modelPath = ofToDataPath("models/sd_v1.5.safetensors");
-    settings.wType = SD_TYPE_F16;
+    settings.weightType = SD_TYPE_F16;
     settings.nThreads = -1;
 
     sd.configureContext(settings);
 
-    // Progress callback
+    // Copy progress from the worker thread and keep UI/image work on update()/draw().
     sd.setProgressCallback([this](int step, int steps, float time) {
-        progress = (float)step / (float)steps;
+        const float value = steps > 0 ? static_cast<float>(step) / static_cast<float>(steps) : 0.0f;
+        progress.store(value);
     });
 
     ofLogNotice() << "Press SPACE to generate (long operation)";
@@ -82,7 +83,7 @@ void ofApp::draw() {
     ss << "Status: " << statusMessage << "\n\n";
 
     if (generating) {
-        ss << "Progress: " << ofToString(progress * 100.0f, 1) << "%\n";
+        ss << "Progress: " << ofToString(progress.load() * 100.0f, 1) << "%\n";
         ss << "Press 'C' to CANCEL\n\n";
 
         // Show cancellation status

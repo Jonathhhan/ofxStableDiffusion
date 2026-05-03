@@ -96,6 +96,7 @@ public:
 
 	/// Poll for completed generations and dispatch result/latency callbacks.
 	/// Call this every frame from the application update() method.
+	/// Result/latency callbacks run on the same thread that calls update().
 	void update();
 
 	/// Submit a real-time generation request
@@ -134,11 +135,11 @@ public:
 	/// @param height New output height in pixels
 	void updateDimensions(int width, int height);
 
-	/// Set result callback (called when generation completes)
+	/// Set result callback (called when generation completes from update())
 	/// @param callback Result callback function
 	void setResultCallback(ofxSdRealtimeResultCallback callback);
 
-	/// Set latency callback (called with generation latency)
+	/// Set latency callback (called with generation latency from update())
 	/// @param callback Latency callback function
 	void setLatencyCallback(ofxSdRealtimeLatencyCallback callback);
 

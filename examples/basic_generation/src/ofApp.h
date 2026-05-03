@@ -2,6 +2,7 @@
 
 #include "ofMain.h"
 #include "ofxStableDiffusion.h"
+#include <atomic>
 
 class ofApp : public ofBaseApp {
 public:
@@ -14,5 +15,5 @@ private:
     ofxStableDiffusion sd;
     ofImage resultImage;
     bool generating;
-    float progress;
+    std::atomic<float> progress{0.0f};
 };

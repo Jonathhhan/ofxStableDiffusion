@@ -155,6 +155,8 @@ public:
 	bool submit(const ofxStableDiffusionRealtimeVideoRequest & request);
 	void updatePrompt(const std::string & prompt);
 	void updateNegativePrompt(const std::string & negativePrompt);
+	/// Poll for completion and dispatch frame/latency callbacks.
+	/// Call this from the application's update() loop; callbacks run on that same thread.
 	void update();
 
 	bool isGenerating() const;
@@ -165,7 +167,9 @@ public:
 	ofxStableDiffusionRealtimeVideoFrame getLastFrame() const;
 	ofxStableDiffusionRealtimeVideoSettings getSettings() const;
 
+	/// Set the frame callback dispatched from update().
 	void setFrameCallback(ofxSdRealtimeVideoFrameCallback callback);
+	/// Set the latency callback dispatched from update().
 	void setLatencyCallback(ofxSdRealtimeVideoLatencyCallback callback);
 
 private:

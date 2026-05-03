@@ -24,7 +24,7 @@ This example demonstrates the simplest way to generate images with ofxStableDiff
 ```cpp
 ofxStableDiffusionContextSettings settings;
 settings.modelPath = ofToDataPath("models/sd_v1.5.safetensors");
-settings.wType = SD_TYPE_F16;
+settings.weightType = SD_TYPE_F16;
 sd.configureContext(settings);
 ```
 
@@ -53,6 +53,8 @@ sd.setProgressCallback([](int step, int steps, float time) {
 ```
 
 Callbacks fire on each diffusion step for progress updates.
+They run on the addon worker thread, so this example only copies lightweight
+progress state there and updates `ofImage` / UI later from `update()` / `draw()`.
 
 ### Get Results
 

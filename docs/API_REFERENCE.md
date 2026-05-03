@@ -22,7 +22,7 @@ The main class for Stable Diffusion generation. Provides methods for:
 - `requestCancellation()` - Best-effort cancellation at the earliest safe checkpoint
 - `isGenerating()` - Check if generation is in progress
 
-**Thread Safety:** Most methods are NOT thread-safe. Always call from the main thread unless otherwise documented.
+**Thread Safety:** The public stateful API is internally synchronized unless a method explicitly documents borrowed-pointer or blocking behavior. Long-running starts are serialized; overlapping starts fail with `ThreadBusy`.
 
 ### ofxStableDiffusionRealtimeSession
 
@@ -33,6 +33,7 @@ Real-time generation pipeline for interactive applications.
 - Low-latency mode for performance
 - Frame dropping when busy
 - Live parameter updates
+- Result/latency callbacks dispatched from `update()`
 
 **Usage:**
 ```cpp
@@ -56,7 +57,7 @@ through img2img for temporal continuity.
 - Latest-prompt-wins request coalescing while a frame is generating
 - Preview/refine quality tiers with separate step and strength budgets
 - Previous-frame feedback via img2img
-- Frame and latency callbacks for live UI surfaces
+- Frame and latency callbacks for live UI surfaces, dispatched from `update()`
 
 **Usage:**
 ```cpp
@@ -78,10 +79,10 @@ liveVideo.update();
 
 ### ofxStableDiffusionBatchProcessor
 
-Experimental batch-processing API scaffold for future parameter exploration.
+Experimental batch-processing scaffold for future parameter exploration.
 The request/result types, parameter helpers, metadata export, and scoring hooks
-are present, but generation methods currently return placeholder results and do
-not run native image generation yet.
+are present, but generation methods currently return placeholder results, log a
+warning, and do not run native image generation yet.
 
 **Implemented today:**
 - Batch/grid/sweep request and result data structures
@@ -160,7 +161,7 @@ Model and runtime configuration.
 - `controlNetPath` - ControlNet model
 - `stackedIdEmbedDir` - PhotoMaker embeddings
 - `schedule` - Noise scheduler
-- `wType` - Weight precision type
+- `weightType` - Weight precision type
 - `clipSkip` - CLIP layers to skip
 - `vaeDecodeOnly` - VAE decode-only mode
 - `vaeTiling` - Enable VAE tiling for large images
@@ -230,31 +231,11 @@ if (sd.wasCancelled()) {
 
 ## Platform Support
 
-### macOS
-
-Fully supported with Metal backend for optimal performance.
-
-**Requirements:**
-- macOS 10.15+
-- Xcode with Metal support
-- Build stable-diffusion.cpp with Metal backend
-
-### iOS
-
-Basic support available (static linking required).
-
-**Requirements:**
-- iOS 13.0+
-- Reduced model sizes recommended
-- Limited by device memory
-
-### Linux
-
-Fully supported with CUDA, Vulkan, or CPU backends.
-
-### Windows
-
-Fully supported with CUDA, Vulkan, or CPU backends.
+| Platform | Readiness | Notes |
+| --- | --- | --- |
+| Linux (x64) | Stable | CPU, CUDA, and Vulkan runtime paths are supported |
+| Windows (x64) | Stable | CPU, CUDA, and Vulkan runtime paths are supported |
+| macOS | Experimental | Addon surface is supported; Metal runtime validation is still maturing |
 
 ## Performance Tips
 
@@ -264,20 +245,30 @@ Fully supported with CUDA, Vulkan, or CPU backends.
 4. **Use LCM/Turbo models** - For real-time applications
 5. **Enable profiling** - To identify bottlenecks
 6. **Preload models** - Use ModelManager to cache frequently-used models
-7. **Batch processing** - Generate multiple images in one call
+7. **Batch count** - Keep `request.batchCount` low; the experimental batch processor scaffold does not execute native generations yet
 
 ## Thread Safety
 
-**Main Thread Only:**
-- `generate()`, `generateVideo()`
-- `configureContext()`
-- All model loading methods
+**Serialized long-running work:**
+- `generate()`, `generateVideo()`, `configureContext()`, and upscaler/context reloads can be called from any thread
+- Only one long-running task can run at a time; a second start fails with `ThreadBusy`
 
-**Thread-Safe:**
-- `isGenerating()`
-- `requestCancellation()`
-- `isCancellationRequested()`
-- `wasCancelled()`
+**Safe to query/copy from any thread:**
+- `isGenerating()`, `isBusy()`
+- `requestCancellation()`, `isCancellationRequested()`, `wasCancelled()`
+- `getLastResult()`, `getImages()`, `getVideoClip()`, and other copied accessors
+
+**Worker-thread callbacks:**
+- `setProgressCallback()`
+- `setImageRankCallback()`
+
+**Borrowed-pointer accessors (handle with care):**
+- `getImagePixels()`
+- `getVideoFramePixels()`
+- `returnImages()`
+
+`ofxStableDiffusionRealtimeSession` and `ofxStableDiffusionRealtimeVideoSession`
+dispatch their callbacks from the thread that calls `update()`.
 
 ## See Also
 
