@@ -26,6 +26,7 @@ void ofApp::setup() {
 
 //--------------------------------------------------------------
 void ofApp::update() {
+    // Track the previous state so result handling only runs once per completed generation.
     const bool wasGenerating = generating;
     generating = sd.isGenerating();
 

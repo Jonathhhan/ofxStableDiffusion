@@ -12,6 +12,9 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 jobs:
   unit-tests:
     name: Unit Tests + Public Surface Validation

@@ -257,9 +257,9 @@ inline std::uint64_t ofGetElapsedTimeMillis() {
 #endif
 
 inline std::string ofTrim(const std::string& value) {
-	const auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
-	auto first = std::find_if_not(value.begin(), value.end(), isSpace);
-	auto last = std::find_if_not(value.rbegin(), value.rend(), isSpace).base();
+	const auto isSpaceChar = [](unsigned char c) { return std::isspace(c) != 0; };
+	auto first = std::find_if_not(value.begin(), value.end(), isSpaceChar);
+	auto last = std::find_if_not(value.rbegin(), value.rend(), isSpaceChar).base();
 	if (first >= last) {
 		return {};
 	}
