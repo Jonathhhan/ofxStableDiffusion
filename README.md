@@ -66,8 +66,9 @@ The addon is now structured more like a production addon:
 | Legacy compatibility entry points | Supported | Kept for migration; new work should prefer typed requests |
 | `ofxStableDiffusionRealtimeSession` | Stable | Call `update()` every frame; callbacks fire from `update()` |
 | `ofxStableDiffusionRealtimeVideoSession` | Experimental | Useful preview workflow, but still evolving |
+| `ofxStableDiffusionCreativeWorkflow` | Experimental | Unifies realtime preview with queued higher-quality image/video renders and session snapshots |
 | `ofxStableDiffusionHoloscanBridge` | Experimental | Linux-first runtime path with fallback behavior elsewhere |
-| `ofxStableDiffusionBatchProcessor` | Scaffold only | Metadata/helpers exist, but generation methods return placeholder results |
+| `ofxStableDiffusionBatchProcessor` | Experimental | Runs generator-backed grids, sweeps, A/B comparisons, and batch artifact export |
 
 ## Threading Contract
 

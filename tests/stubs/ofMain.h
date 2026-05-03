@@ -91,7 +91,12 @@ public:
 		return false;
 	}
 
-	bool save(const std::string&) const {
+	bool save(const std::string& path) const {
+		std::ofstream output(path, std::ios::binary);
+		if (!output.is_open()) {
+			return false;
+		}
+		output << "stub-image";
 		return true;
 	}
 

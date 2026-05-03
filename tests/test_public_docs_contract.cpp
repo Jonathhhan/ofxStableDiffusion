@@ -67,7 +67,8 @@ int main() {
 	expectContains(readme, "## Threading Contract", readmePath);
 	expectContains(readme, "Recommended starting point", readmePath);
 	expectContains(apiReference, "`weightType` - Weight precision type", apiRefPath);
-	expectContains(apiReference, "placeholder results", apiRefPath);
+	expectContains(apiReference, "Generator-backed experimentation surface", apiRefPath);
+	expectContains(apiReference, "ofxStableDiffusionCreativeWorkflow", apiRefPath);
 	expectContains(apiReference, "dispatch their callbacks from the thread that calls `update()`", apiRefPath);
 	expectContains(troubleshooting, "**Safe from any thread:**", troubleshootingPath);
 	expectContains(basicReadme, "worker thread", basicReadmePath);
@@ -76,6 +77,7 @@ int main() {
 	expectContains(cancellationApp, "settings.weightType = SD_TYPE_F16", cancellationAppPath);
 
 	expectNotContains(apiReference, "`wType` - Weight precision type", apiRefPath);
+	expectNotContains(apiReference, "placeholder results", apiRefPath);
 	expectNotContains(troubleshooting, "settings.wType", troubleshootingPath);
 	expectNotContains(troubleshooting, "Not Thread-Safe (main thread only)", troubleshootingPath);
 	expectNotContains(readme, "All public API methods should be called from the main thread", readmePath);

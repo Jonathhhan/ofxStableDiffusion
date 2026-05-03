@@ -1,3 +1,4 @@
+#include "core/ofxStableDiffusionCreativeWorkflow.h"
 #include "core/ofxStableDiffusionParameterTuningHelpers.h"
 
 #include <cmath>
@@ -129,6 +130,83 @@ int main() {
 		ok &= expect(sampleSteps == profile.minSampleSteps, "image steps are clamped");
 		ok &= expect(strength == profile.minStrength, "image strength is clamped");
 		ok &= expect(clipSkip == profile.maxClipSkip, "image clip skip is clamped");
+	}
+
+	{
+		ofxStableDiffusionContextSettings settings;
+		settings.modelPath = "models/sd_turbo.safetensors";
+		ofxStableDiffusionCapabilities capabilities;
+		capabilities.contextConfigured = true;
+		capabilities.textToImage = true;
+
+		ofxStableDiffusionImageRequest request;
+		request.mode = ofxStableDiffusionImageMode::Inpainting;
+		ofxStableDiffusionParameterTuningHelpers::applyRecommendedImageRequest(
+			settings,
+			request,
+			&capabilities);
+
+		ok &= expect(
+			request.mode == ofxStableDiffusionImageMode::TextToImage,
+			"unsupported image modes fall back to a supported mode");
+		ok &= expect(std::isfinite(request.cfgScale), "recommended image request fills cfg");
+		ok &= expect(request.sampleSteps > 0, "recommended image request fills steps");
+	}
+
+	{
+		ofxStableDiffusionContextSettings settings;
+		settings.modelPath = "models/sd_turbo.safetensors";
+		const auto realtime =
+			ofxStableDiffusionParameterTuningHelpers::resolveRecommendedRealtimeSettings(
+				settings);
+		ok &= expect(
+			realtime.mode == ofxStableDiffusionRealtimeMode::LowLatency,
+			"turbo models prefer low-latency realtime mode");
+		ok &= expect(
+			realtime.targetLatencyMs <= 350,
+			"turbo realtime recommendations tighten latency targets");
+	}
+
+	{
+		ofxStableDiffusionContextSettings settings;
+		settings.modelPath = "models/video/Wan2.1-T2V-1.3B.gguf";
+		const auto realtimeVideo =
+			ofxStableDiffusionParameterTuningHelpers::resolveRecommendedRealtimeVideoSettings(
+				settings);
+		ok &= expect(realtimeVideo.previewWidth == 832, "wan realtime video keeps 832px width");
+		ok &= expect(realtimeVideo.previewHeight == 480, "wan realtime video keeps 480px height");
+		ok &= expect(
+			realtimeVideo.refineSteps >= realtimeVideo.previewSteps,
+			"realtime video refine budget is not below preview budget");
+	}
+
+	{
+		ofxStableDiffusionContextSettings settings;
+		settings.modelPath = "models/flux/flux1-dev-Q8_0.gguf";
+		ofxStableDiffusionCapabilities capabilities;
+		capabilities.contextConfigured = true;
+		capabilities.textToImage = true;
+
+		ofxStableDiffusionRealtimeRequest preview;
+		preview.prompt = "stage visuals";
+		preview.width = 640;
+		preview.height = 640;
+		preview.sampleSteps = 4;
+		preview.cfgScale = 1.5f;
+
+		ofxStableDiffusionCreativeWorkflowSettings workflow;
+		workflow.renderSampleSteps = 40;
+		workflow.renderCfgScale = 7.5f;
+
+		const auto request = ofxStableDiffusionBuildCreativeRenderRequest(
+			preview,
+			settings,
+			workflow,
+			&capabilities);
+
+		ok &= expect(request.prompt == preview.prompt, "creative render keeps prompt");
+		ok &= expect(request.sampleSteps == 40, "creative render overrides sample steps");
+		ok &= expectNear(request.cfgScale, 7.5f, 0.0001f, "creative render overrides cfg");
 	}
 
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
