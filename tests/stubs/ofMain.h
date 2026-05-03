@@ -97,7 +97,7 @@ public:
 			return false;
 		}
 		output << "stub-image";
-		return true;
+		return output.good();
 	}
 
 	void resize(int width, int height) {

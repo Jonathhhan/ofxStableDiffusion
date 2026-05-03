@@ -12,6 +12,8 @@
 
 namespace {
 
+constexpr float kMinimumPositiveLogValue = 0.001f;
+
 std::string formatBatchFloat(float value) {
 	std::ostringstream stream;
 	stream.setf(std::ios::fixed);
@@ -515,9 +517,16 @@ void ofxStableDiffusionBatchProcessor::applyParameterValue(
 		case ofxStableDiffusionParameter::Strength:
 			request.strength = value;
 			break;
-		case ofxStableDiffusionParameter::Seed:
-			request.seed = static_cast<int64_t>(value);
+		case ofxStableDiffusionParameter::Seed: {
+			const double rounded = std::llround(static_cast<double>(value));
+			const double minSeed =
+				static_cast<double>(std::numeric_limits<int64_t>::lowest());
+			const double maxSeed =
+				static_cast<double>(std::numeric_limits<int64_t>::max());
+			request.seed = static_cast<int64_t>(
+				std::max(minSeed, std::min(maxSeed, rounded)));
 			break;
+		}
 		case ofxStableDiffusionParameter::Width:
 			request.width = static_cast<int>(value);
 			break;
@@ -594,13 +603,16 @@ std::vector<float> ofxStableDiffusionBatchProcessor::generateStepValues(
 	switch (mode) {
 		case ofxStableDiffusionStepMode::Linear: {
 			const float step = (maxVal - minVal) / static_cast<float>(steps - 1);
+			float currentValue = minVal;
 			for (int i = 0; i < steps; ++i) {
-				values.push_back(minVal + static_cast<float>(i) * step);
+				values.push_back(currentValue);
+				currentValue += step;
 			}
+			values.back() = maxVal;
 			break;
 		}
 		case ofxStableDiffusionStepMode::Logarithmic: {
-			if (minVal <= 0.0f) minVal = 0.001f;
+			if (minVal <= 0.0f) minVal = kMinimumPositiveLogValue;
 			const float logMin = std::log(minVal);
 			const float logMax = std::log(maxVal);
 			const float step = (logMax - logMin) / static_cast<float>(steps - 1);
