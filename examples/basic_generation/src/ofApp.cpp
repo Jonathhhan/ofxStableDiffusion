@@ -3,20 +3,22 @@
 //--------------------------------------------------------------
 void ofApp::setup() {
     generating = false;
-    progress = 0.0f;
+    progress.store(0.0f);
 
     // Configure the SD context with a model
     ofxStableDiffusionContextSettings settings;
     settings.modelPath = ofToDataPath("models/sd_v1.5.safetensors");
-    settings.wType = SD_TYPE_F16;  // Half precision for faster performance
-    settings.nThreads = -1;        // Auto-detect optimal thread count
+    settings.weightType = SD_TYPE_F16;  // Half precision for faster performance
+    settings.nThreads = -1;             // Auto-detect optimal thread count
 
     sd.configureContext(settings);
 
-    // Set up progress callback
+    // Copy lightweight progress state from the worker thread;
+    // handle UI/image work later from update()/draw().
     sd.setProgressCallback([this](int step, int steps, float time) {
-        progress = (float)step / (float)steps;
-        ofLogNotice() << "Progress: " << (progress * 100.0f) << "%";
+        const float value = steps > 0 ? static_cast<float>(step) / static_cast<float>(steps) : 0.0f;
+        progress.store(value);
+        ofLogNotice() << "Progress: " << (value * 100.0f) << "%";
     });
 
     ofLogNotice() << "Ready! Press SPACE to generate an image.";
@@ -24,10 +26,12 @@ void ofApp::setup() {
 
 //--------------------------------------------------------------
 void ofApp::update() {
+    // Track the previous state so result handling only runs once per completed generation.
+    const bool wasGenerating = generating;
     generating = sd.isGenerating();
 
     // Check if generation just completed
-    if (!generating && sd.hasImageResult()) {
+    if (wasGenerating && !generating && sd.hasImageResult()) {
         // Get the first generated image
         auto images = sd.getImages();
         if (!images.empty()) {
@@ -66,7 +70,10 @@ void ofApp::draw() {
     // Draw status
     ofSetColor(255);
     if (generating) {
-        ofDrawBitmapString("Generating... " + ofToString(progress * 100.0f, 1) + "%", 20, 20);
+        ofDrawBitmapString(
+            "Generating... " + ofToString(progress.load() * 100.0f, 1) + "%",
+            20,
+            20);
     } else {
         ofDrawBitmapString("Press SPACE to generate\nPress 'S' to save", 20, 20);
     }

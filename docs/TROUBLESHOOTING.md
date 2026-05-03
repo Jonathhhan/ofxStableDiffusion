@@ -99,7 +99,7 @@ for (const auto& path : paths) {
 
 **Causes:**
 - Model family mismatch
-- Incorrect wType for model precision
+- Incorrect weight type for model precision
 - Missing required components (CLIP, VAE)
 
 **Solution:**
@@ -107,12 +107,12 @@ for (const auto& path : paths) {
 ```cpp
 // Get model info first
 auto modelInfo = sd.getModelInfo("data/models/sd_v1.5.safetensors");
-ofLogNotice() << "Model family: " << (int)modelInfo.family;
-ofLogNotice() << "Recommended wType: " << (int)modelInfo.recommendedWType;
+ofLogNotice() << "Model type: " << modelInfo.modelType;
+ofLogNotice() << "Model weightType: " << (int)modelInfo.weightType;
 
 // Apply recommended settings
-settings.modelPath = modelInfo.path;
-settings.wType = modelInfo.recommendedWType;
+settings.modelPath = modelInfo.modelPath;
+settings.weightType = modelInfo.weightType;
 
 // Check capabilities
 auto caps = sd.getCapabilities();
@@ -169,7 +169,7 @@ for (int i = 0; i < 4; i++) {
 
 #### 3. Use Lower Precision
 ```cpp
-settings.wType = SD_TYPE_F16;  // Instead of SD_TYPE_F32
+settings.weightType = SD_TYPE_F16;  // Instead of SD_TYPE_F32
 // Reduces memory by ~50% with minimal quality loss
 ```
 
@@ -404,7 +404,7 @@ settings.enableMmap = true;
 - Accessing results while generation in progress
 - Multiple simultaneous generations
 
-**Thread-Safe Methods:**
+**Safe from any thread:**
 ```cpp
 // Safe to call anytime from any thread:
 bool generating = sd.isGenerating();
@@ -412,32 +412,32 @@ bool busy = sd.isBusy();
 sd.requestCancellation();
 bool cancelRequested = sd.isCancellationRequested();
 bool cancelled = sd.wasCancelled();
+auto result = sd.getLastResult();  // Returns a copy
 ```
 
-**Not Thread-Safe (main thread only):**
+**Serialized long-running starts:**
 ```cpp
-sd.generate(request);              // Start generation
-sd.getImages();                    // Get results
-sd.getLastError();                 // Get error
-sd.configureContext(settings);     // Change settings
+sd.generate(request);              // Safe to call, but fails with ThreadBusy if another task is running
+sd.generateVideo(videoRequest);    // Same serialization rule
+sd.configureContext(settings);     // Safe to call, but not while another task is running
 ```
 
 **Safe Pattern:**
 ```cpp
-// Main thread: start generation
+// Start generation from whichever thread owns the request flow
 sd.generate(request);
 
-// Any thread: monitor progress
+// Poll from update() / app loop and move UI work there
 void update() {
     if (sd.isGenerating()) {
         // Show spinner
     } else {
-        // Generation done, fetch results on main thread
-        auto images = sd.getImages();
+        auto result = sd.getLastResult();
+        auto images = result.images;
     }
 }
 
-// UI thread: cancel button
+// Any thread: cancellation is safe
 void onCancelButton() {
     if (sd.isGenerating()) {
         sd.requestCancellation();
@@ -447,11 +447,10 @@ void onCancelButton() {
 
 **Wrong Pattern:**
 ```cpp
-// ❌ WRONG: Accessing results from background thread
-std::thread([&sd]() {
-    sd.generate(request);
-    auto images = sd.getImages();  // NOT THREAD-SAFE!
-}).detach();
+// ❌ WRONG: Doing UI / texture work directly in a worker-thread callback
+sd.setProgressCallback([&](int step, int steps, float) {
+    previewTexture.loadData(...);  // Avoid rendering/UI work here
+});
 ```
 
 ## Cancellation Issues

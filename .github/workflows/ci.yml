@@ -12,9 +12,12 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 jobs:
   unit-tests:
-    name: Unit Tests
+    name: Unit Tests + Public Surface Validation
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -128,5 +131,6 @@ jobs:
         echo "## Test Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "✅ Unit tests: ${{ needs.unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Public docs/example validation: included in unit test build + ctest" >> $GITHUB_STEP_SUMMARY
         echo "✅ Linting: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
         echo "✅ Documentation: ${{ needs.documentation.result }}" >> $GITHUB_STEP_SUMMARY

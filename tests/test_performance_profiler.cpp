@@ -11,6 +11,9 @@
 #include <algorithm>
 
 // Mock ofGetElapsedTimeMicros for testing
+#define OF_MAIN_STUB_CUSTOM_TIME_FUNCTIONS
+#define OF_MAIN_STUB_CUSTOM_LOG_FUNCTIONS
+
 uint64_t testTimeMicros = 0;
 uint64_t ofGetElapsedTimeMicros() {
 	return testTimeMicros;

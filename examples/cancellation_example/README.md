@@ -79,6 +79,10 @@ sd.isCancellationRequested()   // Safe
 sd.wasCancelled()              // Safe
 ```
 
+Progress callbacks still run on the addon worker thread. Copy lightweight state
+there, then update `ofImage`, textures, and UI later from your app's
+`update()` / `draw()` flow.
+
 ## Use Cases
 
 - **Long operations**: Cancel 50+ step generations

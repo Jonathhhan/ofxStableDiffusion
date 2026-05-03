@@ -176,6 +176,18 @@ target_include_directories(test_performance_profiler PRIVATE
 
 add_test(NAME performance_profiler COMMAND test_performance_profiler)
 
+add_executable(test_public_docs_contract
+    test_public_docs_contract.cpp
+)
+
+target_include_directories(test_public_docs_contract PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_test(NAME public_docs_contract COMMAND test_public_docs_contract)
+
 add_executable(test_sampling_helpers
     test_sampling_helpers.cpp
 )
@@ -231,3 +243,25 @@ target_include_directories(test_validation_helpers PRIVATE
 )
 
 add_test(NAME validation_helpers COMMAND test_validation_helpers)
+
+add_library(example_basic_generation_build OBJECT
+    ../examples/basic_generation/src/main.cpp
+    ../examples/basic_generation/src/ofApp.cpp
+)
+
+target_include_directories(example_basic_generation_build PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)
+
+add_library(example_cancellation_build OBJECT
+    ../examples/cancellation_example/src/main.cpp
+    ../examples/cancellation_example/src/ofApp.cpp
+)
+
+target_include_directories(example_cancellation_build PRIVATE
+    "${STUB_DIR}"
+    "${SRC_DIR}"
+    "${SD_INCLUDE_DIR}"
+)

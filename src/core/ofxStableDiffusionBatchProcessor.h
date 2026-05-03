@@ -91,7 +91,11 @@ struct ofxStableDiffusionComparisonResult {
 	bool exportComparison(const std::string& path) const;
 };
 
-/// Batch processing utilities for systematic parameter exploration
+/// Experimental batch-processing scaffold for systematic parameter exploration.
+///
+/// The request/result structs, parameter helpers, and metadata export are available
+/// today, but the generation methods below do not run native image generation yet.
+/// They currently return placeholder/empty results while logging a warning.
 class ofxStableDiffusionBatchProcessor {
 public:
 	ofxStableDiffusionBatchProcessor();
@@ -99,18 +103,18 @@ public:
 
 	/// Generate X/Y parameter grid
 	/// @param settings Grid generation settings
-	/// @return Grid result with composite image
+	/// @return Placeholder batch result. Native grid generation is not implemented yet.
 	ofxStableDiffusionBatchResult generateGrid(const ofxStableDiffusionGridSettings& settings);
 
 	/// Perform parameter sweep
 	/// @param settings Sweep settings
-	/// @return Sweep results with all generated images
+	/// @return Placeholder sweep result. Native parameter sweeps are not implemented yet.
 	ofxStableDiffusionSweepResult parameterSweep(const ofxStableDiffusionSweepSettings& settings);
 
 	/// Compare two requests side-by-side
 	/// @param requestA First request
 	/// @param requestB Second request
-	/// @return Comparison result
+	/// @return Placeholder comparison result. Native A/B image generation is not implemented yet.
 	ofxStableDiffusionComparisonResult compareAB(
 		const ofxStableDiffusionImageRequest& requestA,
 		const ofxStableDiffusionImageRequest& requestB);
@@ -118,7 +122,7 @@ public:
 	/// Process multiple requests in batch
 	/// @param requests Vector of requests to process
 	/// @param outputDirectory Directory for output files
-	/// @return Batch results
+	/// @return Placeholder batch result. Native batch execution/export is not implemented yet.
 	ofxStableDiffusionBatchResult processBatch(
 		const std::vector<ofxStableDiffusionImageRequest>& requests,
 		const std::string& outputDirectory = "");

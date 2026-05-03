@@ -57,6 +57,27 @@ The addon is now structured more like a production addon:
 - `docs/`
   Architecture and native-build notes
 
+## Feature Readiness
+
+| Surface | Status | Notes |
+| --- | --- | --- |
+| Typed image generation (`generate`) | Stable | Primary production-ready wrapper API |
+| Typed video generation (`generateVideo`) | Stable | Includes owned frame results and metadata export |
+| Legacy compatibility entry points | Supported | Kept for migration; new work should prefer typed requests |
+| `ofxStableDiffusionRealtimeSession` | Stable | Call `update()` every frame; callbacks fire from `update()` |
+| `ofxStableDiffusionRealtimeVideoSession` | Experimental | Useful preview workflow, but still evolving |
+| `ofxStableDiffusionHoloscanBridge` | Experimental | Linux-first runtime path with fallback behavior elsewhere |
+| `ofxStableDiffusionBatchProcessor` | Scaffold only | Metadata/helpers exist, but generation methods return placeholder results |
+
+## Threading Contract
+
+- `ofxStableDiffusion` is internally synchronized unless a method explicitly documents borrowed-pointer or blocking behavior.
+- `generate()`, `generateVideo()`, `configureContext()`, and `setUpscalerSettings()` may be called from any thread, but only one long-running task can run at a time.
+- `isGenerating()`, `isBusy()`, `requestCancellation()`, `isCancellationRequested()`, and copied-result accessors (`getLastResult()`, `getImages()`, `getVideoClip()`) are safe to query from any thread.
+- `getImagePixels()`, `getVideoFramePixels()`, and `returnImages()` expose borrowed buffers; use them only with care and never cache the returned pointers across generations.
+- `setProgressCallback()` and `setImageRankCallback()` run on the worker thread. Keep those callbacks lightweight and defer UI / texture updates to your main `update()` / `draw()` flow.
+- `ofxStableDiffusionRealtimeSession` and `ofxStableDiffusionRealtimeVideoSession` dispatch their callbacks from whichever thread calls `update()`.
+
 ## API Shape
 
 The addon now supports two layers of use:
@@ -267,7 +288,7 @@ preview clip without re-asking the native runtime for more frames.
 - Avoid exceptions; return `bool` or error codes and populate `ofxStableDiffusionError` for failures.
 - Keep small helpers inline in headers; move heavier logic to `.cpp` files to limit inline bloat.
 - Prefer RAII and STL containers over raw `new`/`delete`.
-- Keep generation calls on the main thread; callbacks should stay lightweight for the OF event loop.
+- Keep UI, textures, and other openFrameworks rendering objects on the main thread; worker-thread callbacks should only capture/copy lightweight state.
 - Favor openFrameworks core types at the API edge: `ofPixels`/`ofImage` for images, `ofJson` for metadata, `ofVec*`/`ofFloatColor`/`ofRectangle` where geometry or color is needed. Convert to STL or native structs internally only when necessary for performance or binding.
 
 ## Image Modes
@@ -473,7 +494,7 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 
 ### Thread Safety
 
-**Note**: The addon is designed for single-threaded use from the main thread. Do not call `generate()` or `generateVideo()` from multiple threads simultaneously. The background thread is managed internally.
+**Note**: The addon manages its own worker thread and internally serializes long-running work. You may call `generate()` / `generateVideo()` from any thread, but overlapping starts still fail with `ThreadBusy`.
 
 ### Invalid Input Dimensions
 
@@ -484,10 +505,10 @@ The example project lives in `ofxStableDiffusionExample/` and now exposes:
 ## Thread Safety Notes
 
 - The addon manages its own background thread for generation
-- All public API methods should be called from the main thread
-- Do not call `generate()` or `generateVideo()` while a previous generation is running
-- Use `isGenerating()` to check if generation is in progress
-- Progress callbacks are fired from the background thread - use thread-safe operations in callbacks
+- Only one long-running task can run at a time; overlapping starts fail with `ThreadBusy`
+- Use `isGenerating()` / `isBusy()` to observe state from any thread
+- Prefer copied accessors such as `getLastResult()`, `getImages()`, and `getVideoClip()` when crossing thread boundaries
+- Progress and ranking callbacks are fired from the worker thread; do not touch textures/UI directly inside them
 
 ## Documentation
 
@@ -503,7 +524,7 @@ Comprehensive documentation is available:
 
 The `examples/` directory contains working sample applications:
 
-- **[basic_generation](examples/basic_generation/)** - Simple text-to-image generation
+- **[basic_generation](examples/basic_generation/)** - Recommended starting point; minimal typed text-to-image flow
 - **[cancellation_example](examples/cancellation_example/)** - Cancelling long-running operations
 
 ### Quick Links
